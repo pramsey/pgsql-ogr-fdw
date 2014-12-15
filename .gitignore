@@ -1,0 +1,3 @@
+*.o
+*.so
+ogr_fdw_info
