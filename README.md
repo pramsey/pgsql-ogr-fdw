@@ -117,7 +117,7 @@ Since we can access any OGR data source as a table, how about a public WFS serve
           p_male real,
           p_female real,
           samp_pop real )
-          SERVER myserver
+          SERVER opengeo
           OPTIONS ( layer 'topp:states' );
 
 ### FGDB FDW
