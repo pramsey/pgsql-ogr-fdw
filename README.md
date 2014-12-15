@@ -28,7 +28,7 @@ First install the `postgis` and `ogr_fdw` extensions in your database.
 
 For a test data set, copy the `pt_two` example shape file from the `data` directory to a location where the PostgreSQL server can read it (like `/tmp/test/` for example). 
 
-Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility 
+Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility makes it a little more foolproof.)
 
     > ogr_fdw_info -s /tmp/test
     
