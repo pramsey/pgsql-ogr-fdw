@@ -1,0 +1,51 @@
+{
+   "name": "ogr_fdw",
+   "abstract": "OGR foreign data wrapper",
+   "description": "OGR FDW allows you to connect to any OGR supported data source.",
+   "version": "1.0",
+   "maintainer": [
+      "Paul Ramsey <pramsey@cleverelephant.ca>"
+   ],
+   "license": {
+      "mit": "http://en.wikipedia.org/wiki/MIT_License"
+   },
+   "prereqs": {
+      "runtime": {
+         "requires": {
+            "PostgreSQL": "9.3.0"
+         },
+         "recommends": {
+            "PostgreSQL": "9.3.4"
+         }
+      }
+   },
+   "provides": {
+     "http": {
+       "file": "ogr_fdw--1.0.sql",
+       "docfile": "README.md",
+       "version": "1.0",
+       "abstract": "OGR FDW wrapper"
+     },
+   },
+   "resources": {
+      "homepage": "https://github.com/pramsey/pgsql-ogr-fdw/",
+      "bugtracker": {
+         "web": "https://github.com/pramsey/pgsql-ogr-fdw/issues"
+      },
+      "repository": {
+        "url":  "https://github.com/pramsey/pgsql-ogr-fdw.git",
+        "web":  "https://github.com/pramsey/pgsql-ogr-fdw/",
+        "type": "git"
+      }
+   },
+   "generated_by": "Paul Ramsey",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "http://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "http",
+      "curl",
+      "web"
+   ]
+}
