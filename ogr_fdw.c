@@ -807,7 +807,7 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
 	ogr_geom_field_count = OGR_FD_GetGeomFieldCount(ogr_feat_defn);
 #else
-	ogr_geom_field_count = ( OGR_L_GetGeomType(ogr_feat_defn) != wkbNone ) ? 1 : 0;
+	ogr_geom_field_count = ( OGR_FD_GetGeomType(ogr_feat_defn) != wkbNone ) ? 1 : 0;
 #endif
 	
 	/*
