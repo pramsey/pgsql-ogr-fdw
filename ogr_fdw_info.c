@@ -152,7 +152,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 
 	if ( ! ogr_ds )
 	{
-		CPLError(CE_Failure, CPLE_AppDefined, "Could not conect to source '%s'", source);
+		CPLError(CE_Failure, CPLE_AppDefined, "Could not connect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
 
