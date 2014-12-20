@@ -859,10 +859,8 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 		{
 			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
 	
-			/* Couldn't access or got non-geometry geometry? NULL */
-			if ( ! geom || 
-				OGR_G_GetGeometryType(geom) == wkbNone ||
-				OGR_G_GetGeometryType(geom) == wkbUnknown )
+			/* No geometry ? NULL */
+			if ( ! geom )
 			{
 				/* No geometry column, so make the output null */
 				nulls[i] = true;
