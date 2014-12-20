@@ -569,7 +569,7 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 	switch (ogr_type)
 	{
 		case OFTInteger:
-			if ( pg_type == INT4OID || pg_type == INT8OID || pg_type == NUMERICOID || pg_type == FLOAT4OID || pg_type == FLOAT8OID || pg_type == TEXTOID || pg_type == VARCHAROID )
+			if ( pg_type == BOOLOID ||  pg_type == INT4OID || pg_type == INT8OID || pg_type == NUMERICOID || pg_type == FLOAT4OID || pg_type == FLOAT8OID || pg_type == TEXTOID || pg_type == VARCHAROID )
 				return;
 			break;
 
