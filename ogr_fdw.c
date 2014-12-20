@@ -1122,6 +1122,9 @@ ogrIterateForeignScan(ForeignScanState *node)
 		
 		/* increment row count */
 		execstate->rownum++;
+		
+		/* Release OGR feature object */
+		OGR_F_Destroy(feat);
 	}
 	
 	return slot;
