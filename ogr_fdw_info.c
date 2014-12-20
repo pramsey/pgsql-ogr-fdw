@@ -118,7 +118,8 @@ ogrListLayers(const char *source)
 
 static void strlaunder (char *str)
 {
-	for(int i = 0; str[i]; i++)
+	int i;
+	for(i = 0; str[i]; i++)
 	{
 		char c = tolower(str[i]);
 		if ( (c >= 48 && c <= 57) || /* 0-9 */
