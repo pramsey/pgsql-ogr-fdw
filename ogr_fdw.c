@@ -802,12 +802,19 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 	Datum *values = slot->tts_values;
 	bool *nulls = slot->tts_isnull;
 	int ogr_nfields = OGR_F_GetFieldCount(feat);
+	OGRFeatureDefnH ogr_feat_defn = OGR_F_GetDefnRef(feat);
+	int ogr_geom_field_count;
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+	ogr_geom_field_count = OGR_FD_GetGeomFieldCount(ogr_feat_defn);
+#else
+	ogr_geom_field_count = ( OGR_FD_GetGeomType(ogr_feat_defn) != wkbNone ) ? 1 : 0;
+#endif
 	
 	/*
-	 * We have to read two "non-field" fields (FID and Geometry) before 
+	 * We have to read several "non-field" fields (FID and Geometry/Geometries) before 
 	 * we get to "real" OGR fields in the field definition 
 	 */
-	j = -2;
+	j = -(1 + ogr_geom_field_count);
 	for ( i = 0; i < tupdesc->natts; i++ )
 	{
 		Form_pg_attribute att_tuple = tupdesc->attrs[i];
@@ -829,7 +836,7 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 		/* 
 		 * First non-dropped column is FID 
 		 */
-		if ( j == -2 )
+		if ( j == -(1 + ogr_geom_field_count) )
 		{
 			long fid = OGR_F_GetFID(feat);
 			
@@ -855,9 +862,13 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 		/* 
 		 * Second non-dropped column is Geometry 
 		 */
-		if ( j == -1 )
+		if ( j < 0 )
 		{
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, j + ogr_geom_field_count);
+#else
 			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
+#endif
 	
 			/* No geometry ? NULL */
 			if ( ! geom )

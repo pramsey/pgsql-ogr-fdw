@@ -146,7 +146,10 @@ ogrGenerateSQL(const char *source, const char *layer)
 	char server_name[256];
 	char layer_name[256];
 	int i;
-	
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+	int geom_field_count;
+#endif
+
 	OGRRegisterAll();
 	ogr_ds = OGROpen(source, FALSE, &ogr_dr);			
 
@@ -176,11 +179,6 @@ ogrGenerateSQL(const char *source, const char *layer)
 		"    format '%s' );\n\n",
 		server_name, OGR_DS_GetName(ogr_ds), OGR_Dr_GetName(ogr_dr));
 
-
-	/* Output TABLE definition */
-	printf("CREATE FOREIGN TABLE %s (\n", layer_name);
-	printf("  fid integer,\n");
-	printf("  geom geometry");
 	
 	ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
 	if ( ! ogr_fd )
@@ -188,6 +186,27 @@ ogrGenerateSQL(const char *source, const char *layer)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not read layer definition for layer '%s' in source '%s'", layer, source);
 		return OGRERR_FAILURE;
 	}
+
+	/* Output TABLE definition */
+	printf("CREATE FOREIGN TABLE %s (\n", layer_name);
+	printf("  fid integer");
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+	geom_field_count = OGR_FD_GetGeomFieldCount(ogr_fd);
+	if( geom_field_count == 1 )
+	{
+		printf(",\n  geom geometry");
+	}
+	else
+	{
+		for ( i = 0; i < geom_field_count; i++ )
+		{
+			printf(",\n  geom%d geometry", i + 1);
+		}
+	}
+#else
+	if( OGR_L_GetGeomType(ogr_fd) != wkbNone )
+		printf(",\n  geom geometry");
+#endif
 	
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
