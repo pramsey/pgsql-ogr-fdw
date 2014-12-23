@@ -218,6 +218,11 @@ ogrGenerateSQL(const char *source, const char *layer)
 		switch( OGR_Fld_GetType(ogr_fld) )
 		{
 			case OFTInteger:
+#if GDAL_VERSION_MAJOR >= 2 
+				if( OGR_Fld_GetSubType(ogr_fld) == OFSTBoolean )
+					printf("boolean");
+				else
+#endif
 				printf("integer");
 				break;
 			case OFTReal:
