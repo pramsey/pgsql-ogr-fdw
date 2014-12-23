@@ -11,6 +11,13 @@
 #include "postgres.h"
 
 /*
+ * Require PostgreSQL >= 9.3
+ */
+#if PG_VERSION_NUM < 90300
+#error "OGR FDW requires PostgreSQL version 9.3 or higher"
+#else
+
+/*
  * System
  */
 #include <sys/stat.h>
@@ -1169,4 +1176,4 @@ ogrEndForeignScan(ForeignScanState *node)
 }
 
 
-
+#endif /* PostgreSQL 9.3 version check */
