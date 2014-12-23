@@ -15,7 +15,7 @@ GDAL_LIBS = $(shell $(GDAL_CONFIG) --libs)
 
 PG_CONFIG = pg_config
 
-CFLAGS += $(GDAL_CFLAGS)
+PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
 SHLIB_LINK := $(LIBS)
 

@@ -118,7 +118,8 @@ ogrListLayers(const char *source)
 
 static void strlaunder (char *str)
 {
-	for(int i = 0; str[i]; i++)
+	int i;
+	for(i = 0; str[i]; i++)
 	{
 		char c = tolower(str[i]);
 		if ( (c >= 48 && c <= 57) || /* 0-9 */
@@ -151,7 +152,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 
 	if ( ! ogr_ds )
 	{
-		CPLError(CE_Failure, CPLE_AppDefined, "Could not conect to source '%s'", source);
+		CPLError(CE_Failure, CPLE_AppDefined, "Could not connect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
 
