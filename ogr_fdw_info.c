@@ -27,8 +27,8 @@ static void
 usage()
 {
 	printf(
-		"usage: ogr_fdw_config -s <ogr datasource> -l <ogr layer>\n"
-		"       ogr_fdw_config -s <ogr datasource>\n"
+		"usage: ogr_fdw_info -s <ogr datasource> -l <ogr layer>\n"
+		"       ogr_fdw_info -s <ogr datasource>\n"
 		"\n");	
 	exit(0);
 }
