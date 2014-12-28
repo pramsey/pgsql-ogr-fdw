@@ -1,1 +1,20 @@
--- @abs_srcdir@
+
+CREATE EXTENSION ogr_fdw;
+
+CREATE SERVER myserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data',
+    format 'ESRI Shapefile' );
+
+CREATE FOREIGN TABLE pt_two (
+  fid integer,
+  geom bytea,
+  name varchar,
+  age integer,
+  height real,
+  birthdate date )
+  SERVER myserver
+  OPTIONS ( layer 'pt_two' );
+
+SELECT * FROM pt_two WHERE fid = 1;
