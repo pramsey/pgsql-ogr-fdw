@@ -1,0 +1,21 @@
+CREATE EXTENSION ogr_fdw;
+CREATE SERVER myserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
+    format 'ESRI Shapefile' );
+CREATE FOREIGN TABLE pt_two (
+  fid integer,
+  geom bytea,
+  name varchar,
+  age integer,
+  height real,
+  birthdate date )
+  SERVER myserver
+  OPTIONS ( layer 'pt_two' );
+SELECT * FROM pt_two WHERE fid = 1;
+ fid |                     geom                     | name | age | height | birthdate  
+-----+----------------------------------------------+------+-----+--------+------------
+   1 | \x010100000054e943acd697e2bfc0895ee54a46cf3f | Paul |  33 |   5.84 | 03-25-1971
+(1 row)
+
