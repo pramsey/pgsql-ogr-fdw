@@ -8,6 +8,55 @@
  *-------------------------------------------------------------------------
  */
 
+
+/*
+ * PostgreSQL
+ */
+#include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/reloptions.h"
+#include "access/sysattr.h"
+#include "access/transam.h"
+#include "catalog/namespace.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_foreign_table.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_operator.h"
+#include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
+#include "commands/copy.h"
+#include "commands/defrem.h"
+#include "commands/explain.h"
+#include "commands/vacuum.h"
+#include "foreign/fdwapi.h"
+#include "foreign/foreign.h"
+#include "mb/pg_wchar.h"
+#include "miscadmin.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/relation.h"
+#include "optimizer/clauses.h"
+#include "optimizer/cost.h"
+#include "optimizer/pathnode.h"
+#include "optimizer/planmain.h"
+#include "optimizer/restrictinfo.h"
+#include "optimizer/var.h"
+#include "parser/parsetree.h"
+#include "storage/ipc.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+#include "utils/memutils.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+
+/*
+ * OGR library API
+ */
+#include "ogr_api.h"
+#include "cpl_error.h"
+
+
 typedef enum 
 {
 	OGR_GEOMETRY,
@@ -71,5 +120,5 @@ typedef struct OgrFdwExecState
 } OgrFdwExecState;
 
 /* Shared function signatures */
-void ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
+bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
 

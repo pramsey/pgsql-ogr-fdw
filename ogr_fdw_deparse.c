@@ -8,32 +8,9 @@
  *-------------------------------------------------------------------------
  */
 
+
 #include "postgres.h"
 
-#include "ogr_fdw.h"
-
-#include "access/heapam.h"
-#include "access/htup_details.h"
-#include "access/sysattr.h"
-#include "access/transam.h"
-#include "catalog/pg_collation.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_operator.h"
-#include "catalog/pg_proc.h"
-#include "catalog/pg_type.h"
-#include "commands/defrem.h"
-#include "nodes/nodeFuncs.h"
-#include "optimizer/clauses.h"
-#include "optimizer/var.h"
-#include "parser/parsetree.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
-/*
- * OGR library API
- */
-#include "ogr_api.h"
-#include "cpl_error.h"
 /*
  * Local structures
  */
@@ -49,7 +26,7 @@ typedef struct OgrDeparseCtx
 } OgrDeparseCtx;
 
 /* Local function signatures */
-// static void ogrDeparseExpr(Expr *node, OgrDeparseCtx *context);
+static bool ogrDeparseExpr(Expr *node, OgrDeparseCtx *context);
 // static void ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context);
 
 
@@ -95,7 +72,7 @@ ogrStringFromDatum(Datum datum, Oid type)
 			{
 				/* Escape single quotes as doubled '' */
 				if (*p == '\'')
-					appendStringInfoChar(&result, "\'");
+					appendStringInfoChar(&result, '\'');
 				appendStringInfoChar(&result, *p);
 			}
 			appendStringInfoChar(&result, '\'');
@@ -145,12 +122,136 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 }
 
 
+static bool
+ogrDeparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root)
+{
+	RangeTblEntry *rte;
+	char *colname = NULL;
+	// List *options;
+	// ListCell *lc;
+
+	/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
+	Assert(!IS_SPECIAL_VARNO(varno));
+
+	/* Get RangeTblEntry from array in PlannerInfo. */
+	rte = planner_rt_fetch(varno, root);
+
+	/*
+	 * If it's a column of a foreign table, and it has the column_name FDW
+	 * option, use that value.
+	 */
+	/*
+	 * MySQL FDW uses foreign column options to map remote columns to local columns
+	 * OGR could do that or could just try and match up names, but we'll need a correspondance
+	 * structure to do that.
+	*/
+	// options = GetForeignColumnOptions(rte->relid, varattno);
+	// foreach(lc, options)
+	// {
+	// 	DefElem *def = (DefElem *) lfirst(lc);
+	//
+	// 	if (strcmp(def->defname, "column_name") == 0)
+	// 	{
+	// 		colname = defGetString(def);
+	// 		break;
+	// 	}
+	// }
+
+	/*
+	 * For now we hope that all local column names match remote column names.
+	 * This will be true if users use ogr_fdw_info tool, but otherwise might 
+	 * not be.
+	 */
+	
+	/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
+
+	if (colname == NULL)
+		colname = get_relid_attribute_name(rte->relid, varattno);
+
+	appendStringInfoString(buf, quote_identifier(colname));
+	return true;
+}
+
+static bool
+ogrDeparseParam(Param *node, OgrDeparseCtx *context)
+{
+	elog(ERROR, "got into ogrDeparseParam code");
+	return false;
+	// if (context->params_list)
+	// {
+	// 	int pindex = 0;
+	// 	ListCell *lc;
+	//
+	// 	/* find its index in params_list */
+	// 	foreach(lc, *context->params_list)
+	// 	{
+	// 		pindex++;
+	// 		if (equal(node, (Node *) lfirst(lc)))
+	// 			break;
+	// 	}
+	// 	if (lc == NULL)
+	// 	{
+	// 		/* not in list, so add it */
+	// 		pindex++;
+	// 		*context->params_list = lappend(*context->params_list, node);
+	// 	}
+	//
+	// 	mysql_print_remote_param(pindex, node->paramtype, node->paramtypmod, context);
+	// }
+	// else
+	// {
+	// 	mysql_print_remote_placeholder(node->paramtype, node->paramtypmod, context);
+	// }
+}
+
+
+static bool
+ogrDeparseVar(Var *node, OgrDeparseCtx *context)
+{
+	if (node->varno == context->foreignrel->relid && node->varlevelsup == 0)
+	{
+		/* Var belongs to foreign table */
+		ogrDeparseColumnRef(context->buf, node->varno, node->varattno, context->root);
+	}
+	else
+	{
+		elog(ERROR, "got to param handling section of ogrDeparseVar");
+		return false;
+		// /* Treat like a Param */
+		// if (context->params_list)
+		// {
+		// 	int pindex = 0;
+		// 	ListCell *lc;
+		//
+		// 	/* find its index in params_list */
+		// 	foreach(lc, *context->params_list)
+		// 	{
+		// 		pindex++;
+		// 		if (equal(node, (Node *) lfirst(lc)))
+		// 			break;
+		// 	}
+		// 	if (lc == NULL)
+		// 	{
+		// 		/* not in list, so add it */
+		// 		pindex++;
+		// 		*context->params_list = lappend(*context->params_list, node);
+		// 	}
+		//
+		// 	mysql_print_remote_param(pindex, node->vartype, node->vartypmod, context);
+		// }
+		// else
+		// {
+		// 	mysql_print_remote_placeholder(node->vartype, node->vartypmod, context);
+		// }
+	}
+	return true;
+}
 
 
 static bool 
 ogrOperatorIsSupported(const char *opname)
 {
-	const *ogrOperators[10] = { "<", ">", "<=", ">=", "<>", "=", "!=", "&&", "AND", "OR" };
+	const char * ogrOperators[10] = { "<", ">", "<=", ">=", "<>", "=", "!=", "&&", "AND", "OR" };
 	int i;
 	for ( i = 0; i < 10; i++ )
 	{
@@ -161,7 +262,7 @@ ogrOperatorIsSupported(const char *opname)
 }
 
 
-static vool
+static bool
 ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 {
 	StringInfo buf = context->buf;
@@ -226,23 +327,42 @@ static bool
 ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 {
 	if ( node == NULL )
-		return;
+		return false;
 
 	switch ( nodeTag(node) )
 	{
 		case T_OpExpr:
 			return ogrDeparseOpExpr((OpExpr *) node, context);
 		case T_Const:
+			return ogrDeparseConst((Const *) node, context);
 		case T_Var:
+			return ogrDeparseVar((Var *) node, context);
 		case T_Param:
-		case T_ArrayRef:
-		case T_FuncExpr:
-		case T_DistinctExpr:
-		case T_ScalarArrayOpExpr:
-		case T_RelabelType:
+			return ogrDeparseParam((Param *) node, context);
 		case T_BoolExpr:
+			elog(ERROR, "unsupported expression type, T_BoolExpr");
+			return false;
 		case T_NullTest:
+			elog(ERROR, "unsupported expression type, T_NullTest");
+			return false;
+		case T_ArrayRef:
+			elog(ERROR, "unsupported expression type, T_ArrayRef");
+			return false;
 		case T_ArrayExpr:
+			elog(ERROR, "unsupported expression type, T_ArrayExpr");
+			return false;
+		case T_FuncExpr:
+			elog(ERROR, "unsupported expression type, T_FuncExpr");
+			return false;
+		case T_DistinctExpr:
+			elog(ERROR, "unsupported expression type, T_DistinctExpr");
+			return false;
+		case T_ScalarArrayOpExpr:
+			elog(ERROR, "unsupported expression type, T_ScalarArrayOpExpr");
+			return false;
+		case T_RelabelType:
+			elog(ERROR, "unsupported expression type, T_RelabelType");
+			return false;
 		default:
 			elog(ERROR, "unsupported expression type for deparse: %d", (int) nodeTag(node));
 			return false;
@@ -266,7 +386,7 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 	context.buf = buf;
 	context.root = root;
 	context.foreignrel = foreignrel;
-	context.paramslist = params;
+	context.params_list = params;
 
 	foreach(lc, exprs)
 	{
@@ -276,7 +396,7 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 		if ( ! first )
 		{
 			appendStringInfoString(buf, " AND ");
-			is_first = false;
+			first = false;
 		}
 
 		appendStringInfoChar(buf, '(');
