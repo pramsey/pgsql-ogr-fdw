@@ -204,7 +204,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 		}
 	}
 #else
-	if( OGR_L_GetGeomType(ogr_fd) != wkbNone )
+	if( OGR_L_GetGeomType(ogr_lyr) != wkbNone )
 		printf(",\n  geom geometry");
 #endif
 	
