@@ -19,8 +19,6 @@ In order to access geometry data from OGR, the PostGIS extension has to be insta
 
 To build the wrapper, make sure you have the GDAL library and development packages (is `gdal-config` on your path?) installed, as well as the PostgreSQL development packages (is `pg_config` on your path?)
 
-On Red Hat Enterprise Linux, version 1.9.2 of GDAL does not work as per [this issue](https://github.com/pramsey/pgsql-ogr-fdw/issues/17). Version 1.11.2 **does** work - this may be the case on other versions of GDAL (and Linux) but this has not been tested yet.
-
 Build the wrapper with `make` and `make install`. Now you are ready to create a foreign table.
 
 First install the `postgis` and `ogr_fdw` extensions in your database.
