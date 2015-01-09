@@ -23,9 +23,9 @@ typedef struct OgrFdwColumn
 	Oid pgtype;              /* PostgreSQL data type */
 	int pgtypmod;            /* PostgreSQL type modifier */
 
-    int ograttnum;
+	int ograttnum;
 	OgrColumnVariant ogrvariant;
-    OGRFieldType ogrtype;
+	OGRFieldType ogrtype;
 
 	int used;                /* is the column used in the query? */
 	int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
@@ -65,7 +65,11 @@ typedef struct OgrFdwExecState
 {
 	Oid foreigntableid; 
 	OgrConnection ogr;     /* connection object */    
-    // OgrFdwTable *table;
-    TupleDesc tupdesc;
+	// OgrFdwTable *table;
+	TupleDesc tupdesc;
 	int rownum;            /* how many rows have we read thus far? */
 } OgrFdwExecState;
+
+/* Shared function signatures */
+void ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
+

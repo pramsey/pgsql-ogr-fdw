@@ -524,7 +524,9 @@ ogrGetForeignPaths(PlannerInfo *root,
 					NIL));   /* no fdw_private data */
 
 }
-	
+
+
+
 
 /*
  * fileGetForeignPlan
@@ -549,12 +551,18 @@ ogrGetForeignPlan(PlannerInfo *root,
 	 * TODO: Actually traverse the clauses and add OGR_L_SetSpatialFilter
 	 * and OGR_L_SetAttributeFilter calls to force some clauses down into
 	 * the OGR level.
+	 */
+	
+	
+	
+	/*
 	 * 
 	 * TODO: Review the columns requested and only pull those back, using
 	 * OGR_L_SetIgnoredFields. This is less important than pushing
 	 *
 	 */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
+
 
 	/* 
 	 * Clean up the plan state, we're done w/ it for now. 
@@ -740,6 +748,18 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 
 	/* Initialize OGR connection */
 	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
+
+
+	// /* From MySQL FDW, in getForeignPlan, convern the RestrictInfo into 
+	//    a SQL statement and store in a List in fdw_private on the ForeignPlan 
+	//    then pick that info back out here. Also, can store the list of columns needed
+	//    for return and for query purposes */
+	//
+	// ForeignScan       *fsplan = (ForeignScan *) node->ss.ps.plan;
+	// /* Stash away the state info we have already */
+	// festate->query = strVal(list_nth(fsplan->fdw_private, 0));
+	// festate->retrieved_attrs = list_nth(fsplan->fdw_private, 1);
+	
 	
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(execstate);
@@ -786,6 +806,9 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod)
 
 	return value;
 }
+
+
+
 
 
 /*
