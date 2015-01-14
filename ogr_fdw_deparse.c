@@ -5,6 +5,8 @@
  *
  * Copyright (c) 2014-2015, Paul Ramsey <pramsey@cleverelephant.ca>
  *
+ * Convert parse tree to a QueryExpression as described at 
+ * http://ogdi.sourceforge.net/prop/6.2.CapabilitiesMetadata.html
  *-------------------------------------------------------------------------
  */
 
@@ -23,12 +25,18 @@ typedef struct OgrDeparseCtx
 	RelOptInfo *foreignrel;   /* the foreign relation we are planning for */
 	StringInfo buf;           /* output buffer to append to */
 	List **params_list;       /* exprs that will become remote Params */
+	OGRGeometryH geom;        /* if filter contains a geometry constant, it resides here */
 } OgrDeparseCtx;
 
 /* Local function signatures */
 static bool ogrDeparseExpr(Expr *node, OgrDeparseCtx *context);
 // static void ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context);
 
+static void setStringInfoLength(StringInfo str, int len)
+{
+	str->len = len;
+	str->data[len] = '\0';
+}
 
 static char *
 ogrStringFromDatum(Datum datum, Oid type)
@@ -37,6 +45,15 @@ ogrStringFromDatum(Datum datum, Oid type)
 	regproc typoutput;
 	HeapTuple tuple;
 	char *str, *p;
+
+	/* Special handling for boolean */
+	if ( type == BOOLOID )
+	{
+		if ( datum )
+			return "1=1";
+		else
+			return "1=0";
+	}
 
 	/* get the type's output function */
 	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type));
@@ -48,6 +65,13 @@ ogrStringFromDatum(Datum datum, Oid type)
 	ReleaseSysCache(tuple);
 
 	initStringInfo(&result);
+
+	/* Special handling to convert a geometry to a bbox needed here */
+	if ( type == GEOMETRYOID )
+	{
+		elog(NOTICE, "got a GEOMETRY!");
+		return NULL;
+	}
 
 	/* render the constant in OGR SQL */
 	switch (type)
@@ -66,7 +90,7 @@ ogrStringFromDatum(Datum datum, Oid type)
 			if (str[0] == '\0')
 				return "''";
 
-			/* quote string with ' */
+			/* wrap string with ' */
 			appendStringInfoChar(&result, '\'');
 			for (p=str; *p; ++p)
 			{
@@ -86,12 +110,8 @@ ogrStringFromDatum(Datum datum, Oid type)
 		case NUMERICOID:
 			appendStringInfoString(&result, DatumGetCString(OidFunctionCall1(typoutput, datum)));
 			break;
-		case INTERVALOID:
-			elog(ERROR, "could not convert interval to OGR query form");
-			return NULL;
-			break;			
 		default:
-			elog(ERROR, "could convert unknown type (%d) to OGR query form", type);
+			elog(DEBUG1, "could not convert type (%d) to OGR query form", type);
 			return NULL;
 	}
 
@@ -101,9 +121,59 @@ ogrStringFromDatum(Datum datum, Oid type)
 static bool 
 ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 {
+	/* TODO: Can OGR do anythign w/ NULL? */
 	if (constant->constisnull)
 	{
 		appendStringInfoString(context->buf, "NULL");
+	}
+	/* Use geometry as a spatial filter? */
+	else if ( constant->consttype == GEOMETRYOID )
+	{
+		/*
+		 * For geometry we need to convert the gserialized constant into 
+		 * an OGRGeometry for the OGR spatial filter.
+		 * For that, we can use the type's "send" function
+		 * which takes in gserialized and spits out EWKB.
+		 */
+		Oid sendfunction;
+		bool typeIsVarlena;
+		Datum wkbdatum;
+		char *gser;
+		char *wkb;
+		int wkb_size;
+		OGRGeometryH ogrgeom;
+		OGRErr err;
+
+		/*
+		 * Given a type oid (geometry in this case),
+		 * look up the "send" function that takes in
+		 * serialized input and outputs the binary (WKB) form.
+		 */
+		getTypeBinaryOutputInfo(constant->consttype, &sendfunction, &typeIsVarlena);
+		wkbdatum = OidFunctionCall1(sendfunction, constant->constvalue);
+		
+		/* 
+		 * Convert the WKB into an OGR geometry 
+		 */
+		gser = DatumGetPointer(wkbdatum);
+		wkb = VARDATA(gser);
+		wkb_size = VARSIZE(gser) - VARHDRSZ;
+		err = OGR_G_CreateFromWkb((unsigned char *)wkb, NULL, &ogrgeom, wkb_size);
+		
+		/* 
+		 * Save the result
+		 */
+		if ( err != OGRERR_NONE )
+		{
+			if ( ! context->geom )
+				context->geom = ogrgeom;
+			else
+				elog(NOTICE, "got two geometries in OGR FDW query, only using the first");
+		}
+		/* 
+		 * geometry doesn't play a role in the deparsed SQL 
+		 */
+		return false;
 	}
 	else
 	{
@@ -251,9 +321,9 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 static bool 
 ogrOperatorIsSupported(const char *opname)
 {
-	const char * ogrOperators[10] = { "<", ">", "<=", ">=", "<>", "=", "!=", "&&", "AND", "OR" };
+	const char * ogrOperators[8] = { "<", ">", "<=", ">=", "<>", "=", "!=", "&&" };
 	int i;
-	for ( i = 0; i < 10; i++ )
+	for ( i = 0; i < 8; i++ )
 	{
 		if ( strcasecmp(opname, ogrOperators[i]) == 0 )
 			return true;
@@ -271,6 +341,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	char oprkind;
 	char *opname;
 	ListCell *arg;
+	bool result = true;
 
 	/* Retrieve information about the operator from system catalog. */
 	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
@@ -282,7 +353,17 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 
 	/* Don't deparse expressions we cannot support */
 	if ( ! ogrOperatorIsSupported(opname) )
+	{
+		ReleaseSysCache(tuple);
 		return false;
+	}
+
+	if ( strcmp("&&", opname) == 0 )
+	{
+		/* TODO: this is where we add the geometry extent to the context so we can set the ogrspatialfilter */
+		elog(NOTICE, "whoa, dude, found a && operator");
+		return false;
+	}
 
 	/* TODO: Maybe here coerce some operators into OGR equivalents (!= to <>) */
 	/* TODO: When a && operator is found, we need to do special handling to send the box back up to OGR for SetSpatialFilter */
@@ -300,7 +381,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	{
 		arg = list_head(node->args);
 		/* recurse for nested operations */
-		ogrDeparseExpr(lfirst(arg), context);
+		result &= ogrDeparseExpr(lfirst(arg), context);
 		appendStringInfoChar(buf, ' ');
 	}
 
@@ -313,15 +394,89 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 		arg = list_tail(node->args);
 		appendStringInfoChar(buf, ' ');
 		/* recurse for nested operations */
-		ogrDeparseExpr(lfirst(arg), context);
+		result &= ogrDeparseExpr(lfirst(arg), context);
 	}
 
 	appendStringInfoChar(buf, ')');
 
 	ReleaseSysCache(tuple);
-	return true;
+	return result;
 	
 }
+
+static bool
+ogrDeparseBoolExpr(BoolExpr *node, OgrDeparseCtx *context)
+{
+	const char *op = NULL;		/* keep compiler quiet */
+	ListCell *lc;
+	bool first = true;
+	bool result = true;
+	int len_save_all, len_save_part;
+	int boolop = node->boolop;
+	int result_total = 0;
+	StringInfo buf = context->buf;
+
+	switch (boolop)
+	{
+		case AND_EXPR:
+			op = "AND";
+			break;
+		case OR_EXPR:
+			op = "OR";
+			break;
+
+		/* OGR SQL cannot handle "NOT" */
+		case NOT_EXPR:
+			return false;
+	}
+
+	len_save_all = buf->len;
+
+	appendStringInfoChar(buf, '(');
+	foreach(lc, node->args)
+	{
+		
+		len_save_part = buf->len;
+		
+		/* Connect expressions and parenthesize each condition */
+		if ( ! first )
+			appendStringInfo(buf, " %s ", op);
+
+		/* Unparse the expression, if possible */
+		result = ogrDeparseExpr((Expr *) lfirst(lc), context);
+		result_total += result;
+		
+		/* We can backtrack just this term for AND expressions */
+		if ( boolop == AND_EXPR && ! result )
+			setStringInfoLength(buf, len_save_part);
+
+		/* We have to drop the whole thing if we can't get every part of an OR expression */
+		if ( boolop == OR_EXPR && ! result )
+			break;
+		
+		/* Don't flip the "first" bit until we get a good expression */
+		if ( first && result )
+			first = false;
+	}
+	appendStringInfoChar(buf, ')');
+	
+	/* We have to drop the whole thing if we can't get every part of an OR expression */
+	if ( boolop == OR_EXPR && ! result )
+		setStringInfoLength(buf, len_save_all);
+	
+	return result_total > 0;
+}
+
+
+static bool
+ogrDeparseRelabelType(RelabelType *node, OgrDeparseCtx *context)
+{
+	if (node->relabelformat != COERCE_IMPLICIT_CAST)
+		elog(WARNING, "Received a non-implicit relabel expression but did not handle it");
+
+	return ogrDeparseExpr(node->arg, context);
+}
+
 
 static bool
 ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
@@ -340,31 +495,31 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 		case T_Param:
 			return ogrDeparseParam((Param *) node, context);
 		case T_BoolExpr:
-			elog(ERROR, "unsupported expression type, T_BoolExpr");
-			return false;
+			/* Handle "OR" and "NOT" queries */
+			return ogrDeparseBoolExpr((BoolExpr *) node, context);
 		case T_NullTest:
-			elog(ERROR, "unsupported expression type, T_NullTest");
-			return false;
-		case T_ArrayRef:
-			elog(ERROR, "unsupported expression type, T_ArrayRef");
-			return false;
-		case T_ArrayExpr:
-			elog(ERROR, "unsupported expression type, T_ArrayExpr");
-			return false;
-		case T_FuncExpr:
-			elog(ERROR, "unsupported expression type, T_FuncExpr");
-			return false;
-		case T_DistinctExpr:
-			elog(ERROR, "unsupported expression type, T_DistinctExpr");
-			return false;
-		case T_ScalarArrayOpExpr:
-			elog(ERROR, "unsupported expression type, T_ScalarArrayOpExpr");
+			/* We cannot handle "IS NULL" queries in OGR */
 			return false;
 		case T_RelabelType:
-			elog(ERROR, "unsupported expression type, T_RelabelType");
+			return ogrDeparseRelabelType((RelabelType *) node, context);
+			return false;
+		case T_ArrayRef:
+			elog(NOTICE, "unsupported expression type, T_ArrayRef");
+			return false;
+		case T_ArrayExpr:
+			elog(NOTICE, "unsupported expression type, T_ArrayExpr");
+			return false;
+		case T_FuncExpr:
+			elog(NOTICE, "unsupported expression type, T_FuncExpr");
+			return false;
+		case T_DistinctExpr:
+			elog(NOTICE, "unsupported expression type, T_DistinctExpr");
+			return false;
+		case T_ScalarArrayOpExpr:
+			elog(NOTICE, "unsupported expression type, T_ScalarArrayOpExpr");
 			return false;
 		default:
-			elog(ERROR, "unsupported expression type for deparse: %d", (int) nodeTag(node));
+			elog(NOTICE, "unsupported expression type for deparse: %d", (int) nodeTag(node));
 			return false;
 	}
 	
@@ -387,21 +542,36 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 	context.root = root;
 	context.foreignrel = foreignrel;
 	context.params_list = params;
+	context.geom = NULL;
+	// context.geom_op = NULL;
+	// context.geom_func = NULL;
 
 	foreach(lc, exprs)
 	{
 		RestrictInfo *ri = (RestrictInfo *) lfirst(lc);
+		int len_save = buf->len;
+		bool result;
 
 		/* Connect expressions with "AND" and parenthesize each condition */
 		if ( ! first )
 		{
-			appendStringInfoString(buf, " AND ");
-			first = false;
+			appendStringInfoString(buf, " AnD ");
 		}
 
-		appendStringInfoChar(buf, '(');
-		ogrDeparseExpr(ri->clause, &context);
-		appendStringInfoChar(buf, ')');
+		/* Unparse the expression, if possible */
+		// appendStringInfoChar(buf, '(');
+		result = ogrDeparseExpr(ri->clause, &context);
+		// appendStringInfoChar(buf, ')');
+
+		if ( ! result )
+		{
+			/* Couldn't unparse some portion of the expression, so rewind the stringinfo */
+			setStringInfoLength(buf, len_save);
+		}
+		
+		/* Don't flip the "first" bit until we get a good expression */
+		if ( first && result )
+			first = false;
 	}	
 	
 	return true;	

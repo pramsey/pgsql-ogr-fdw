@@ -122,3 +122,9 @@ typedef struct OgrFdwExecState
 /* Shared function signatures */
 bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
 
+/* Shared global value of the Geometry OId */
+extern Oid GEOMETRYOID;
+
+
+
+

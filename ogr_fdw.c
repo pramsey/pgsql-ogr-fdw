@@ -105,7 +105,7 @@ static OgrConnection ogrGetConnection(Oid foreigntableid);
 static void ogr_fdw_exit(int code, Datum arg);
 
 /* Global to hold GEOMETRYOID */
-static Oid GEOMETRYOID = InvalidOid;
+Oid GEOMETRYOID = InvalidOid;
 
 
 void
@@ -501,14 +501,17 @@ ogrGetForeignPaths(PlannerInfo *root,
  */
 static ForeignScan *
 ogrGetForeignPlan(PlannerInfo *root,
-				   RelOptInfo *baserel,
-				   Oid foreigntableid,
-				   ForeignPath *best_path,
-				   List *tlist,
-				   List *scan_clauses)
+                  RelOptInfo *baserel,
+                  Oid foreigntableid,
+                  ForeignPath *best_path,
+                  List *tlist,
+                  List *scan_clauses)
 {
-	Index		scan_relid = baserel->relid;
-
+	Index scan_relid = baserel->relid;
+	bool sql_generated;
+	StringInfoData sql;
+	List *params_list = NULL;
+	
 	/*
 	 * We are not pushing down WHERE clauses to the OGR library yet,
 	 * So all we have to do here is strip RestrictInfo
@@ -520,7 +523,9 @@ ogrGetForeignPlan(PlannerInfo *root,
 	 * the OGR level.
 	 */
 	
-	
+	initStringInfo(&sql);
+	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
+	elog(NOTICE,"OGR SQL: %s", sql.data);
 	
 	/*
 	 * 
