@@ -113,7 +113,8 @@ typedef struct OgrFdwPlanState
 typedef struct OgrFdwExecState
 {
 	Oid foreigntableid; 
-	OgrConnection ogr;     /* connection object */    
+	OgrConnection ogr;     /* connection object */
+	char *sql;             /* OGR SQL for attribute filter */
 	// OgrFdwTable *table;
 	TupleDesc tupdesc;
 	int rownum;            /* how many rows have we read thus far? */

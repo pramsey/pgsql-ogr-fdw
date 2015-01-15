@@ -69,7 +69,7 @@ ogrStringFromDatum(Datum datum, Oid type)
 	/* Special handling to convert a geometry to a bbox needed here */
 	if ( type == GEOMETRYOID )
 	{
-		elog(NOTICE, "got a GEOMETRY!");
+		elog(ERROR, "got a GEOMETRY!");
 		return NULL;
 	}
 
@@ -118,7 +118,7 @@ ogrStringFromDatum(Datum datum, Oid type)
 	return result.data;
 }
 
-static bool 
+static bool
 ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 {
 	/* TODO: Can OGR do anythign w/ NULL? */
@@ -168,7 +168,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 			if ( ! context->geom )
 				context->geom = ogrgeom;
 			else
-				elog(NOTICE, "got two geometries in OGR FDW query, only using the first");
+				elog(WARNING, "got two geometries in OGR FDW query, only using the first");
 		}
 		/* 
 		 * geometry doesn't play a role in the deparsed SQL 
@@ -197,8 +197,6 @@ ogrDeparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root)
 {
 	RangeTblEntry *rte;
 	char *colname = NULL;
-	// List *options;
-	// ListCell *lc;
 
 	/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
 	Assert(!IS_SPECIAL_VARNO(varno));
@@ -206,33 +204,6 @@ ogrDeparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root)
 	/* Get RangeTblEntry from array in PlannerInfo. */
 	rte = planner_rt_fetch(varno, root);
 
-	/*
-	 * If it's a column of a foreign table, and it has the column_name FDW
-	 * option, use that value.
-	 */
-	/*
-	 * MySQL FDW uses foreign column options to map remote columns to local columns
-	 * OGR could do that or could just try and match up names, but we'll need a correspondance
-	 * structure to do that.
-	*/
-	// options = GetForeignColumnOptions(rte->relid, varattno);
-	// foreach(lc, options)
-	// {
-	// 	DefElem *def = (DefElem *) lfirst(lc);
-	//
-	// 	if (strcmp(def->defname, "column_name") == 0)
-	// 	{
-	// 		colname = defGetString(def);
-	// 		break;
-	// 	}
-	// }
-
-	/*
-	 * For now we hope that all local column names match remote column names.
-	 * This will be true if users use ogr_fdw_info tool, but otherwise might 
-	 * not be.
-	 */
-	
 	/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
 
 	if (colname == NULL)
@@ -247,31 +218,6 @@ ogrDeparseParam(Param *node, OgrDeparseCtx *context)
 {
 	elog(ERROR, "got into ogrDeparseParam code");
 	return false;
-	// if (context->params_list)
-	// {
-	// 	int pindex = 0;
-	// 	ListCell *lc;
-	//
-	// 	/* find its index in params_list */
-	// 	foreach(lc, *context->params_list)
-	// 	{
-	// 		pindex++;
-	// 		if (equal(node, (Node *) lfirst(lc)))
-	// 			break;
-	// 	}
-	// 	if (lc == NULL)
-	// 	{
-	// 		/* not in list, so add it */
-	// 		pindex++;
-	// 		*context->params_list = lappend(*context->params_list, node);
-	// 	}
-	//
-	// 	mysql_print_remote_param(pindex, node->paramtype, node->paramtypmod, context);
-	// }
-	// else
-	// {
-	// 	mysql_print_remote_placeholder(node->paramtype, node->paramtypmod, context);
-	// }
 }
 
 
@@ -287,42 +233,27 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 	{
 		elog(ERROR, "got to param handling section of ogrDeparseVar");
 		return false;
-		// /* Treat like a Param */
-		// if (context->params_list)
-		// {
-		// 	int pindex = 0;
-		// 	ListCell *lc;
-		//
-		// 	/* find its index in params_list */
-		// 	foreach(lc, *context->params_list)
-		// 	{
-		// 		pindex++;
-		// 		if (equal(node, (Node *) lfirst(lc)))
-		// 			break;
-		// 	}
-		// 	if (lc == NULL)
-		// 	{
-		// 		/* not in list, so add it */
-		// 		pindex++;
-		// 		*context->params_list = lappend(*context->params_list, node);
-		// 	}
-		//
-		// 	mysql_print_remote_param(pindex, node->vartype, node->vartypmod, context);
-		// }
-		// else
-		// {
-		// 	mysql_print_remote_placeholder(node->vartype, node->vartypmod, context);
-		// }
 	}
 	return true;
 }
 
+// static int ogrOperatorCmpFunc(const void * a, const void * b)
+// {
+// 	return strcasecmp((const char*)a, (const char*)b);
+// }
 
 static bool 
 ogrOperatorIsSupported(const char *opname)
 {
-	const char * ogrOperators[8] = { "<", ">", "<=", ">=", "<>", "=", "!=", "&&" };
+	// const char * ogrOperators[8] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=" };
+	const char * ogrOperators[8] = { "=", "<", ">", "<=", ">=", "<>", "!=", "&&" };
 	int i;
+
+	// if ( bsearch(opname, ogrOperators, 8, sizeof(char*), ogrOperatorCmpFunc) )
+	// 	return true;
+	// else
+	// 	return false;
+			
 	for ( i = 0; i < 8; i++ )
 	{
 		if ( strcasecmp(opname, ogrOperators[i]) == 0 )
@@ -361,7 +292,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	if ( strcmp("&&", opname) == 0 )
 	{
 		/* TODO: this is where we add the geometry extent to the context so we can set the ogrspatialfilter */
-		elog(NOTICE, "whoa, dude, found a && operator");
+		elog(DEBUG1, "whoa, dude, found a && operator");
 		return false;
 	}
 
@@ -503,23 +434,23 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 		case T_RelabelType:
 			return ogrDeparseRelabelType((RelabelType *) node, context);
 			return false;
+		case T_ScalarArrayOpExpr:
+			elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
+			return false;
 		case T_ArrayRef:
-			elog(NOTICE, "unsupported expression type, T_ArrayRef");
+			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayRef");
 			return false;
 		case T_ArrayExpr:
-			elog(NOTICE, "unsupported expression type, T_ArrayExpr");
+			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayExpr");
 			return false;
 		case T_FuncExpr:
-			elog(NOTICE, "unsupported expression type, T_FuncExpr");
+			elog(NOTICE, "unsupported OGR FDW expression type, T_FuncExpr");
 			return false;
 		case T_DistinctExpr:
-			elog(NOTICE, "unsupported expression type, T_DistinctExpr");
-			return false;
-		case T_ScalarArrayOpExpr:
-			elog(NOTICE, "unsupported expression type, T_ScalarArrayOpExpr");
+			elog(NOTICE, "unsupported OGR FDW expression type, T_DistinctExpr");
 			return false;
 		default:
-			elog(NOTICE, "unsupported expression type for deparse: %d", (int) nodeTag(node));
+			elog(NOTICE, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
 			return false;
 	}
 	

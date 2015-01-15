@@ -511,42 +511,48 @@ ogrGetForeignPlan(PlannerInfo *root,
 	bool sql_generated;
 	StringInfoData sql;
 	List *params_list = NULL;
-	
+	List *fdw_private;
+
 	/*
-	 * We are not pushing down WHERE clauses to the OGR library yet,
-	 * So all we have to do here is strip RestrictInfo
-	 * nodes from the clauses and ignore pseudoconstants (which will be
-	 * handled elsewhere).
-	 * 
-	 * TODO: Actually traverse the clauses and add OGR_L_SetSpatialFilter
-	 * and OGR_L_SetAttributeFilter calls to force some clauses down into
-	 * the OGR level.
-	 */
-	
+	 * TODO: Review the columns requested (via params_list) and only pull those back, using
+	 * OGR_L_SetIgnoredFields. This is less important than pushing restrictions
+	 * down to OGR via OGR_L_SetAttributeFilter and OGR_L_SetSpatialFilter
+	 */	
 	initStringInfo(&sql);
 	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
-	elog(NOTICE,"OGR SQL: %s", sql.data);
+	elog(DEBUG1,"OGR SQL: %s", sql.data);
 	
 	/*
-	 * 
-	 * TODO: Review the columns requested and only pull those back, using
-	 * OGR_L_SetIgnoredFields. This is less important than pushing
-	 *
+	 * Here we strip RestrictInfo
+	 * nodes from the clauses and ignore pseudoconstants (which will be
+	 * handled elsewhere).
+	 * Some FDW implementations (mysql_fdw) just pass this full list on to the 
+	 * make_foreignscan function. postgres_fdw carefully separates local and remote
+	 * clauses and only passes the local ones to make_foreignscan, so this
+	 * is probably best practice, though re-applying the clauses is probably
+	 * the least of our performance worries with this fdw. For now, we just
+	 * pass them all to make_foreignscan, see no evil, etc.
 	 */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
-
-	/* 
-	 * Clean up the plan state, we're done w/ it for now. 
+	/*
+	 * Serialize the data we want to pass to the execution stage.
+	 * This is ugly but seems to be the only way to pass our constructed
+	 * OGR SQL command to execution.
+	 * 
+	 * TODO: Pass a spatial filter down also.
 	 */
-	
+	if ( sql_generated )
+		fdw_private = list_make2(makeString(sql.data), params_list);
+	else
+		fdw_private = list_make2(NULL, params_list);
 
 	/* Create the ForeignScan node */
 	return make_foreignscan(tlist,
-							scan_clauses,
-							scan_relid,
-							NIL,	/* no expressions to evaluate */
-							best_path->fdw_private);
+	                        scan_clauses,
+	                        scan_relid,
+	                        NIL,	/* no expressions to evaluate */
+	                        fdw_private);
 }
 
 
@@ -717,21 +723,23 @@ static void
 ogrBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	Oid foreigntableid = RelationGetRelid(node->ss.ss_currentRelation);
+	ForeignScan *fsplan = (ForeignScan *)node->ss.ps.plan;
 
 	/* Initialize OGR connection */
 	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
 
-
-	// /* From MySQL FDW, in getForeignPlan, convern the RestrictInfo into 
-	//    a SQL statement and store in a List in fdw_private on the ForeignPlan 
-	//    then pick that info back out here. Also, can store the list of columns needed
-	//    for return and for query purposes */
-	//
-	// ForeignScan       *fsplan = (ForeignScan *) node->ss.ps.plan;
-	// /* Stash away the state info we have already */
-	// festate->query = strVal(list_nth(fsplan->fdw_private, 0));
-	// festate->retrieved_attrs = list_nth(fsplan->fdw_private, 1);
-	
+	/* Get private info created by planner functions. */
+	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
+	// execstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private, 1);
+		
+	if ( execstate->sql )
+	{
+		OGRErr err = OGR_L_SetAttributeFilter(execstate->ogr.lyr, execstate->sql);
+		if ( err != OGRERR_NONE )
+		{
+			elog(NOTICE, "unable to set OGR SQL '%s' on layer", execstate->sql);
+		}
+	}
 	
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(execstate);
