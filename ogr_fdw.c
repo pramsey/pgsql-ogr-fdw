@@ -182,7 +182,9 @@ ogrGetDataSource(const char *source, const char *driver)
 	OGRSFDriverH ogr_dr = NULL;
 	
 	/* Cannot search for drivers if they aren't registered */
-	OGRRegisterAll();
+	/* But don't call for registration if we already have drivers */
+	if ( OGRGetDriverCount() <= 0 )
+		OGRRegisterAll();
 	
 	if ( driver )
 	{
@@ -267,6 +269,11 @@ ogrGetConnection(Oid foreigntableid)
 		if (strcmp(def->defname, OPT_LAYER) == 0)
 			ogr.lyr_str = defGetString(def);
 	}
+
+	/* 
+	 * TODO: Connections happen twice for each query, having a 
+	 * connection pool will certainly make things faster.
+	 */
 	
 	/*  Connect! */
 	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str);
