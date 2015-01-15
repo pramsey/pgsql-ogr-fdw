@@ -257,6 +257,16 @@ ogrGetDataSource(const char *source, const char *driver)
 	return ogr_ds;
 }
 
+static void
+ogrFinishConnection(OgrConnection *ogr)
+{
+	if ( ogr->ds )
+	{
+		OGR_DS_Destroy(ogr->ds);
+	}
+	ogr->ds = NULL;
+}
+
 static OgrConnection
 ogrGetConnection(Oid foreigntableid)
 {
@@ -501,7 +511,7 @@ ogrGetForeignPaths(PlannerInfo *root,
 {
 	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 	
-    /*
+	/*
 	 * Estimate costs first. 
 	 */
 
@@ -538,7 +548,8 @@ ogrGetForeignPlan(PlannerInfo *root,
 				   List *tlist,
 				   List *scan_clauses)
 {
-	Index		scan_relid = baserel->relid;
+	Index scan_relid = baserel->relid;
+	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 
 	/*
 	 * We are not pushing down WHERE clauses to the OGR library yet,
@@ -561,6 +572,11 @@ ogrGetForeignPlan(PlannerInfo *root,
 	 */
 	
 
+	/* 
+	 * Clean up our connection
+	 */
+	ogrFinishConnection(&(planstate->ogr));
+	
 	/* Create the ForeignScan node */
 	return make_foreignscan(tlist,
 							scan_clauses,
@@ -1170,7 +1186,7 @@ ogrEndForeignScan(ForeignScanState *node)
 {
 	OgrFdwExecState *execstate = (OgrFdwExecState *) node->fdw_state;
 
-	OGR_DS_Destroy(execstate->ogr.ds);
+	ogrFinishConnection( &(execstate->ogr) );
 
 	return;
 }
