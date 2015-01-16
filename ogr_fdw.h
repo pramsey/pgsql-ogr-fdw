@@ -61,7 +61,8 @@ typedef enum
 {
 	OGR_GEOMETRY,
 	OGR_FID,
-	OGR_FIELD
+	OGR_FIELD,
+	OGR_UNMATCHED
 } OgrColumnVariant;
 
 typedef struct OgrFdwColumn
@@ -72,9 +73,11 @@ typedef struct OgrFdwColumn
 	Oid pgtype;              /* PostgreSQL data type */
 	int pgtypmod;            /* PostgreSQL type modifier */
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
+	Oid pginputioparam;
 
 	OgrColumnVariant ogrvariant;
-	int ograttnum;
+	int ogrfldnum;
+	OGRFieldType ogrfldtype;
 
 	// int used;                /* is the column used in the query? */
 	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */

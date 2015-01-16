@@ -679,7 +679,7 @@ typedef struct OgrFdwColumn
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
 
 	OgrColumnVariant ogrvariant;
-	int ograttnum;
+	int ogrfldnum;
 
 	// int used;                /* is the column used in the query? */
 	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
@@ -709,15 +709,43 @@ freeOgrFdwTable(OgrFdwTable *table)
 	pfree(table->cols);
 }	
 
+typedef struct
+{
+	const char *fldname;
+	int fldnum;
+} OgrFieldEntry;
+
+static int ogrFieldEntryCmpFunc(const void * a, const void * b)
+{
+	const char *a_name = ((OgrFieldEntry*)a)->fldname;
+	const char *b_name = ((OgrFieldEntry*)b)->fldname;
+		
+	return strcasecmp(a_name, b_name);
+}
+
+
+/*
+ * The execstate holds a foreign table relation id and an OGR connection,
+ * this function finds all the OGR fields that match up to columns in the
+ * foreign table definition, using columns name match and data type consistency
+ * as the criteria for making a match.
+ * The results of the matching are stored in the execstate before the function 
+ * returns.
+ */
 static void
 ogrReadColumnData(OgrFdwExecState *execstate)
 {
 	Relation rel;
 	TupleDesc tupdesc;
-	// int i;
-	// int j;
+	int i;
 	OgrFdwTable *tbl;
-	// OGRFeatureDefnH dfn;
+	OGRFeatureDefnH dfn;
+	int ogr_ncols;
+	int fid_count = 0;
+	int geom_count = 0;
+	int field_count = 0;
+	OgrFieldEntry *ogr_fields;
+	char *tblname = get_rel_name(execstate->foreigntableid);
 
 	/* Blow away any existing table in the state */
 	if ( execstate->table )
@@ -730,71 +758,111 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	/* Fresh table */
 	tbl = palloc0(sizeof(OgrFdwTable));
 
-	/* Allocate column list */
-	// dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
-	// tbl->ncols = OGR_FD_GetFieldCount(dfn);
-	// tbl->cols = palloc((2 + tbl->ncols) * sizeof(OgrFdwColumn*));
-	
-	
-	/*
-	 * Fill in information from PgSQL foreign table definition 
-	 */
-
+	/* One column for each PgSQL foreign table column */
 	rel = heap_open(execstate->foreigntableid, NoLock);
 	tupdesc = rel->rd_att;
 	execstate->tupdesc = tupdesc;
+	tbl->ncols = tupdesc->natts;
+	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn*));
 
-	// tbl->npgcols = tupdesc->natts;
+	/* Get OGR metadata ready */
+	dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
+	ogr_ncols = OGR_FD_GetFieldCount(dfn);
 
-	/* loop through foreign table columns */
-	// for ( i = 0; i < tupdesc->natts; i++ )
-	// {
-	// 	Form_pg_attribute att_tuple = tupdesc->attrs[i];
-	//
-	// 	/* get PostgreSQL column number and type */
-	// 	if ( j < tbl->ncols )
-	// 	{
-	// 		OgrFdwColumn *col = tbl->cols[j];
-	// 		col->pgattisdropped = att_tuple->attisdropped;
-	// 		col->pgattnum = att_tuple->attnum;
-	// 		col->pgtype = att_tuple->atttypid;
-	// 		col->pgtypmod = att_tuple->atttypmod;
-	// 		/* Check to make sure we can convert from the OGR to the PostgreSQL type */
-	// 		ogrCanConvertToPg(col->ogrtype, col->pgtype,
-	// 			col->pgname, get_rel_name(execstate->foreigntableid));
-	// 	}
-	// 	j++;
-	// }
-	//
-	// execstate->table = tbl;
+	/* Prepare sorted list of OGR column names */
+	ogr_fields = palloc0(ogr_ncols * sizeof(OgrFieldEntry));
+	for ( i = 0; i < ogr_ncols; i++ )
+	{
+		ogr_fields[i].fldname = OGR_Fld_GetNameRef(OGR_FD_GetFieldDefn(dfn, i));
+		ogr_fields[i].fldnum = i;
+	}
+	qsort(ogr_fields, ogr_ncols, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
 
-	heap_close(rel, NoLock);	
-
-	/* 
-	 * Fill in information from OGR as base definition 
-	 */
 	
-	/* FID column entry */
-	// tbl->cols[0] = palloc0(sizeof(OgrFdwColumn));
-	// tbl->cols[0]->ogrvariant = OGR_FID;
-	//
-	// /* Geometry column entry */
-	// tbl->cols[1] = palloc0(sizeof(OgrFdwColumn));
-	// tbl->cols[1]->ogrvariant = OGR_GEOMETRY;
-	//
-	// /* Field entries */
-	// for ( i = 0; i < tbl->ncols; i++ )
-	// {
-	// 	OGRFieldDefnH flddef = OGR_FD_GetFieldDefn(dfn, i);
-	// 	OgrFdwColumn *col = palloc0(sizeof(OgrFdwColumn));
-	// 	col->ogrtype = OGR_Fld_GetType(flddef);
-	// 	col->ogrvariant = OGR_FIELD;
-	//
-	// 	/* Save it */
-	// 	tbl->cols[i+2] = col;
-	// }
-	//
+	/* loop through foreign table columns */
+	for ( i = 0; i < tbl->ncols; i++ )
+	{
+		Form_pg_attribute att_tuple = tupdesc->attrs[i];
+		OgrFdwColumn *col = palloc0(sizeof(OgrFdwColumn));
+		tbl->cols[i] = col;
+		
+		col->pgattnum = att_tuple->attnum;
+		col->pgtype = att_tuple->atttypid;
+		col->pgtypmod = att_tuple->atttypmod;
+		col->pgattisdropped = att_tuple->attisdropped;
 
+		/* Skip filling in any further metadata about dropped columns */
+		if ( att_tuple->attisdropped )
+			continue;
+
+		/* Find the appropriate conversion function */
+		getTypeInputInfo(col->pgtype, &col->pginputfunc, &col->pginputioparam);
+		
+		/* Get the PgSQL column name */
+		col->pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
+		
+		if ( strcasecmp(col->pgname, "fid") && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
+		{
+			if ( fid_count >= 1 )
+				elog(ERROR, "FDW table includes more than one FID column");
+			
+			col->ogrvariant = OGR_FID;
+			col->ogrfldnum = fid_count++;
+		}
+		else if ( col->pgtype == GEOMETRYOID )
+		{
+			/* Stop if there are more geometry columns than we can support */
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+			if ( geom_count >= OGR_FD_GetGeomFieldCount(dfn) )
+				elog(ERROR, "FDW table includes more geometry columns than exist in the OGR source");
+#else
+			if ( geom_count >= 1 )
+				elog(ERROR, "FDW table includes more that one geometry column");
+#endif
+			col->ogrvariant = OGR_GEOMETRY;
+			col->ogrfldnum = geom_count++;
+		}
+		else
+		{
+			OgrFieldEntry *found_entry;
+			
+			/* Initialize the search key */
+			OgrFieldEntry entry;
+			entry.fldname = col->pgname;
+			entry.fldnum = 0;
+			
+			/* Search PgSQL column name in the OGR column name list */
+			found_entry = bsearch(&entry, ogr_fields, ogr_ncols, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
+
+			/* Column name matched, so save this entry, if the types are consistent */
+			if ( found_entry )
+			{
+				OGRFieldDefnH fld = OGR_FD_GetFieldDefn(dfn, found_entry->fldnum);
+				
+				/* Error if types mismatched when column names match */
+				ogrCanConvertToPg(OGR_Fld_GetType(fld), col->pgtype,
+				                  col->pgname, tblname);
+				
+				col->ogrvariant = OGR_FIELD;
+				col->ogrfldnum = found_entry->fldnum;
+				col->ogrfldtype = OGR_Fld_GetType(fld);
+				field_count++;
+			}
+			else
+			{
+				col->ogrvariant = OGR_UNMATCHED;
+			}
+		}
+	}
+	
+	elog(DEBUG2, "ogrReadColumnData matched %d FID, %d GEOM, %d FIELDS out of %d PGSQL COLUMNS", fid_count, geom_count, field_count, tbl->ncols);
+
+	/* Clean up */
+	execstate->table = tbl;
+	pfree(ogr_fields);
+	heap_close(rel, NoLock);	
+	
+	return;
 }
 
 
