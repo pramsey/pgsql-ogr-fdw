@@ -449,12 +449,14 @@ ogrGetForeignRelSize(PlannerInfo *root,
 	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
 
 	/* Set to NULL to clear the restriction clauses in OGR */
+	/* TODO: the estimate number of rows returned should actually use restrictions */
+	/* TODO: calculate the row width based on the attribute types of the OGR table */
 	OGR_L_SetIgnoredFields(planstate->ogr.lyr, NULL);
 	OGR_L_SetSpatialFilter(planstate->ogr.lyr, NULL);
 	OGR_L_SetAttributeFilter(planstate->ogr.lyr, NULL);
 
 	/* If we can quickly figure how many rows this layer has, then do so */
-	if ( OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) )
+	if ( OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) == TRUE )
 	{
 		/* Count rows, but don't force a slow count */
 		int rows = OGR_L_GetFeatureCount(planstate->ogr.lyr, false);
