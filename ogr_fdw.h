@@ -71,22 +71,20 @@ typedef struct OgrFdwColumn
 	char *pgname;            /* PostgreSQL column name */
 	Oid pgtype;              /* PostgreSQL data type */
 	int pgtypmod;            /* PostgreSQL type modifier */
+	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
 
-	int ograttnum;
 	OgrColumnVariant ogrvariant;
-	OGRFieldType ogrtype;
+	int ograttnum;
 
-	int used;                /* is the column used in the query? */
-	int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
-	char *val;               /* buffer for OGR to return results in (LOB locator for LOBs) */
-	size_t val_size;           /* allocated size in val */
-	int val_null;          /* indicator for NULL value */
+	// int used;                /* is the column used in the query? */
+	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
+	// char *val;               /* buffer for OGR to return results in (LOB locator for LOBs) */
+	// size_t val_size;           /* allocated size in val */
+	// int val_null;          /* indicator for NULL value */
 } OgrFdwColumn;
 
 typedef struct OgrFdwTable
 {
-	OGRFeatureDefnH fdfn; 
-	int npgcols;   /* number of columns (including dropped) in the PostgreSQL foreign table */
 	int ncols;
 	OgrFdwColumn **cols;
 } OgrFdwTable;
@@ -115,7 +113,7 @@ typedef struct OgrFdwExecState
 	Oid foreigntableid; 
 	OgrConnection ogr;     /* connection object */
 	char *sql;             /* OGR SQL for attribute filter */
-	// OgrFdwTable *table;
+	OgrFdwTable *table;
 	TupleDesc tupdesc;
 	int rownum;            /* how many rows have we read thus far? */
 } OgrFdwExecState;

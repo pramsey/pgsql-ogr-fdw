@@ -231,6 +231,10 @@ ogrGetDataSource(const char *source, const char *driver)
 	return ogr_ds;
 }
 
+/* 
+ * Make sure the datasource is cleaned up when we're done
+ * with a connection.
+ */
 static void
 ogrFinishConnection(OgrConnection *ogr)
 {
@@ -241,6 +245,12 @@ ogrFinishConnection(OgrConnection *ogr)
 	ogr->ds = NULL;
 }
 
+/* 
+ * Read the options (data source connection from server and 
+ * layer name from table) from a foreign table and use them
+ * to connect to an OGR layer. Return a connection object that
+ * has handles for both the datasource and layer.
+ */
 static OgrConnection
 ogrGetConnection(Oid foreigntableid)
 {
@@ -409,14 +419,14 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+/*
+ * Initialize an OgrFdwPlanState on the heap.
+ */
 static OgrFdwPlanState* 
 getOgrFdwPlanState(Oid foreigntableid)
 {
-	OgrFdwPlanState *planstate = palloc(sizeof(OgrFdwPlanState));
+	OgrFdwPlanState *planstate = palloc0(sizeof(OgrFdwPlanState));
 	
-	/* Zero out the state */
-	memset(planstate, 0, sizeof(OgrFdwPlanState));
-
 	/*  Connect! */
 	planstate->ogr = ogrGetConnection(foreigntableid);
 	planstate->foreigntableid = foreigntableid;	
@@ -424,14 +434,14 @@ getOgrFdwPlanState(Oid foreigntableid)
 	return planstate;
 }
 
+/*
+ * Initialize an OgrFdwExecState on the heap.
+ */
 static OgrFdwExecState* 
 getOgrFdwExecState(Oid foreigntableid)
 {
-	OgrFdwExecState *execstate = palloc(sizeof(OgrFdwExecState));
+	OgrFdwExecState *execstate = palloc0(sizeof(OgrFdwExecState));
 	
-	/* Zero out the state */
-	memset(execstate, 0, sizeof(OgrFdwExecState));
-
 	/*  Connect! */
 	execstate->ogr = ogrGetConnection(foreigntableid);
 	execstate->foreigntableid = foreigntableid;	
@@ -485,7 +495,7 @@ ogrGetForeignRelSize(PlannerInfo *root,
  * ogrGetForeignPaths
  *		Create possible access paths for a scan on the foreign table
  *
- *		Currently we don't support any push-down feature, so there is only one
+ *		Currently there is only one
  *		possible access path, which simply returns all records in the order in
  *		the data file.
  */
@@ -545,7 +555,7 @@ ogrGetForeignPlan(PlannerInfo *root,
 	/*
 	 * TODO: Review the columns requested (via params_list) and only pull those back, using
 	 * OGR_L_SetIgnoredFields. This is less important than pushing restrictions
-	 * down to OGR via OGR_L_SetAttributeFilter and OGR_L_SetSpatialFilter
+	 * down to OGR via OGR_L_SetAttributeFilter and OGR_L_SetSpatialFilter.
 	 */	
 	initStringInfo(&sql);
 	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
@@ -651,6 +661,53 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 			));	
 }
 
+#if 0
+typedef enum 
+{
+	OGR_GEOMETRY,
+	OGR_FID,
+	OGR_FIELD
+} OgrColumnVariant;
+
+typedef struct OgrFdwColumn
+{
+	int pgattnum;            /* PostgreSQL attribute number */
+	int pgattisdropped;      /* PostgreSQL attribute dropped? */
+	char *pgname;            /* PostgreSQL column name */
+	Oid pgtype;              /* PostgreSQL data type */
+	int pgtypmod;            /* PostgreSQL type modifier */
+	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
+
+	OgrColumnVariant ogrvariant;
+	int ograttnum;
+
+	// int used;                /* is the column used in the query? */
+	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
+	// char *val;               /* buffer for OGR to return results in (LOB locator for LOBs) */
+	// size_t val_size;           /* allocated size in val */
+	// int val_null;          /* indicator for NULL value */
+} OgrFdwColumn;
+
+typedef struct OgrFdwTable
+{
+	OGRFeatureDefnH fdfn; 
+	int npgcols;   /* number of columns (including dropped) in the PostgreSQL foreign table */
+	int ncols;
+	OgrFdwColumn **cols;
+} OgrFdwTable;
+#endif 
+
+static void
+freeOgrFdwTable(OgrFdwTable *table)
+{
+	int i;
+	for ( i = 0; i < table->ncols; i++ )
+	{
+		if ( table->cols[i] )
+			pfree(table->cols[i]);
+	}
+	pfree(table->cols);
+}	
 
 static void
 ogrReadColumnData(OgrFdwExecState *execstate)
@@ -659,24 +716,19 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	TupleDesc tupdesc;
 	// int i;
 	// int j;
-	// OgrFdwTable *tbl;
+	OgrFdwTable *tbl;
 	// OGRFeatureDefnH dfn;
 
 	/* Blow away any existing table in the state */
-	// if ( execstate->table )
-	// {
-	// 	for ( i = 0; i < execstate->table->ncols; i++ )
-	// 	{
-	// 		if ( execstate->table->cols[i] )
-	// 			pfree(execstate->table->cols[i]);
-	// 	}
-	// 	pfree(execstate->table->cols);
-	// 	pfree(execstate->table);
-	// }
+	if ( execstate->table )
+	{
+		freeOgrFdwTable(execstate->table);
+		pfree(execstate->table->cols);
+		execstate->table = NULL;
+	}
 	
 	/* Fresh table */
-	// tbl = palloc(sizeof(OgrFdwTable));
-	// memset(tbl, 0, sizeof(OgrFdwTable));
+	tbl = palloc0(sizeof(OgrFdwTable));
 
 	/* Allocate column list */
 	// dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
@@ -723,21 +775,18 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	 */
 	
 	/* FID column entry */
-	// tbl->cols[0] = palloc(sizeof(OgrFdwColumn));
-	// memset(tbl->cols[0], 0, sizeof(OgrFdwColumn));
+	// tbl->cols[0] = palloc0(sizeof(OgrFdwColumn));
 	// tbl->cols[0]->ogrvariant = OGR_FID;
 	//
 	// /* Geometry column entry */
-	// tbl->cols[1] = palloc(sizeof(OgrFdwColumn));
-	// memset(tbl->cols[1], 0, sizeof(OgrFdwColumn));
+	// tbl->cols[1] = palloc0(sizeof(OgrFdwColumn));
 	// tbl->cols[1]->ogrvariant = OGR_GEOMETRY;
 	//
 	// /* Field entries */
 	// for ( i = 0; i < tbl->ncols; i++ )
 	// {
 	// 	OGRFieldDefnH flddef = OGR_FD_GetFieldDefn(dfn, i);
-	// 	OgrFdwColumn *col = palloc(sizeof(OgrFdwColumn));
-	// 	memset(col, 0, sizeof(OgrFdwColumn));
+	// 	OgrFdwColumn *col = palloc0(sizeof(OgrFdwColumn));
 	// 	col->ogrtype = OGR_Fld_GetType(flddef);
 	// 	col->ogrvariant = OGR_FIELD;
 	//
