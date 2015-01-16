@@ -336,8 +336,12 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	struct OgrFdwOption *opt;
 	const char *source = NULL, *layer = NULL, *driver = NULL;
 
-	/* TODO, check that the database encoding is UTF8, to match OGR internals */
-	/* GetDatabaseEncoding() == "UTF8" ? */
+	/* Check that the database encoding is UTF8, to match OGR internals */
+	if ( GetDatabaseEncoding() != PG_UTF8 )
+	{
+		elog(ERROR, "OGR FDW only works with UTF-8 databases");
+		PG_RETURN_VOID();
+	}
 
 	/* Initialize found state to not found */
 	for ( opt = valid_options; opt->optname; opt++ )
