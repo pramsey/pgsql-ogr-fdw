@@ -801,7 +801,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 		/* Get the PgSQL column name */
 		col->pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
 		
-		if ( strcasecmp(col->pgname, "fid") && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
+		if ( strcasecmp(col->pgname, "fid") == 0 && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
 		{
 			if ( fid_count >= 1 )
 				elog(ERROR, "FDW table includes more than one FID column");
@@ -820,6 +820,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 				elog(ERROR, "FDW table includes more that one geometry column");
 #endif
 			col->ogrvariant = OGR_GEOMETRY;
+			col->ogrfldtype = OFTBinary;
 			col->ogrfldnum = geom_count++;
 		}
 		else
@@ -879,6 +880,9 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	/* Initialize OGR connection */
 	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
 
+	/* Read the OGR layer definition and PgSQL foreign table definitions */
+	ogrReadColumnData(execstate);
+	
 	/* Get private info created by planner functions. */
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
 	// execstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private, 1);
@@ -895,9 +899,6 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	{
 		OGR_L_SetAttributeFilter(execstate->ogr.lyr, NULL);
 	}
-	
-	/* Read the OGR layer definition and PgSQL foreign table definitions */
-	ogrReadColumnData(execstate);
 	
 	/* Save the state for the next call */
 	node->fdw_state = (void *) execstate;
