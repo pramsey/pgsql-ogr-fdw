@@ -205,6 +205,8 @@ ogrDeparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root)
 	rte = planner_rt_fetch(varno, root);
 
 	/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
+	/* TODO: This also seems necessary to hand geometry column restrictions */
+	/* TODO: Lookup OGR column name by going from varattno -> OGR via a table/OGR map */
 
 	if (colname == NULL)
 		colname = get_relid_attribute_name(rte->relid, varattno);
@@ -237,29 +239,30 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 	return true;
 }
 
-// static int ogrOperatorCmpFunc(const void * a, const void * b)
-// {
-// 	return strcasecmp((const char*)a, (const char*)b);
-// }
+static int ogrOperatorCmpFunc(const void * a, const void * b)
+{
+	return strcasecmp(*(const char**)a, *(const char**)b);
+}
 
 static bool 
 ogrOperatorIsSupported(const char *opname)
 {
-	// const char * ogrOperators[8] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=" };
-	const char * ogrOperators[8] = { "=", "<", ">", "<=", ">=", "<>", "!=", "&&" };
-	int i;
+	/* IMPORTANT */
+	/* This array MUST be in sorted order or the bsearch will fail */
+	static const char * ogrOperators[8] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=" };
 
-	// if ( bsearch(opname, ogrOperators, 8, sizeof(char*), ogrOperatorCmpFunc) )
-	// 	return true;
-	// else
-	// 	return false;
-			
-	for ( i = 0; i < 8; i++ )
-	{
-		if ( strcasecmp(opname, ogrOperators[i]) == 0 )
-			return true;
-	}
-	return false;
+	if ( bsearch(&opname, ogrOperators, 8, sizeof(char*), ogrOperatorCmpFunc) )
+		return true;
+	else
+		return false;
+
+	// int i;
+	// for ( i = 0; i < 8; i++ )
+	// {
+	// 	if ( strcasecmp(opname, ogrOperators[i]) == 0 )
+	// 		return true;
+	// }
+	// return false;
 }
 
 
