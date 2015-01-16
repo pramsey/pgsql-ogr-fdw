@@ -36,7 +36,7 @@ PG_MODULE_MAGIC;
 struct OgrFdwOption
 {
 	const char *optname;
-	Oid optcontext;		/* Oid of catalog in which option may appear */
+	Oid optcontext;     /* Oid of catalog in which option may appear */
 	bool optrequired;   /* Flag mandatory options */
 	bool optfound;      /* Flag whether options was specified by user */
 };
@@ -133,11 +133,11 @@ _PG_init(void)
 	Oid namesp = LookupExplicitNamespace("public", false);
 	Oid typoid = GetSysCacheOid2(TYPENAMENSP, CStringGetDatum(typname), ObjectIdGetDatum(namesp));
 
-    if (OidIsValid(typoid) && get_typisdefined(typoid))
-    {
+	if (OidIsValid(typoid) && get_typisdefined(typoid))
+	{
 		GEOMETRYOID = typoid;
-    }
-    else
+	}
+	else
 	{
 		GEOMETRYOID = BYTEAOID;
 	}
@@ -175,6 +175,11 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(fdwroutine);
 }
 
+/*
+ * Given a connection string and (optional) driver string, try to connect
+ * with appropriate error handling and reporting. Used in query startup,
+ * and in FDW options validation.
+ */
 static OGRDataSourceH
 ogrGetDataSource(const char *source, const char *driver)
 {
@@ -442,8 +447,8 @@ getOgrFdwExecState(Oid foreigntableid)
  */
 static void
 ogrGetForeignRelSize(PlannerInfo *root,
-					  RelOptInfo *baserel,
-					  Oid foreigntableid)
+                     RelOptInfo *baserel,
+                     Oid foreigntableid)
 {
 	/* Initialize the OGR connection */
 	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
@@ -486,8 +491,8 @@ ogrGetForeignRelSize(PlannerInfo *root,
  */
 static void
 ogrGetForeignPaths(PlannerInfo *root,
-					RelOptInfo *baserel,
-					Oid foreigntableid)
+                   RelOptInfo *baserel,
+                   Oid foreigntableid)
 {
 	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 	
@@ -1058,7 +1063,7 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						
 						OGR_F_GetFieldAsDateTime(feat, j, 
 						                         &year, &month, &day,
-												 &hour, &minute, &second, &tz);
+						                         &hour, &minute, &second, &tz);
 						
 						if ( ogrtype == OFTDate )
 						{
