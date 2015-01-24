@@ -1,7 +1,7 @@
 # ogr_fdw/Makefile
 
 MODULE_big = ogr_fdw
-OBJS = ogr_fdw.o
+OBJS = ogr_fdw.o ogr_fdw_deparse.o
 EXTENSION = ogr_fdw
 DATA = ogr_fdw--1.0.sql
 

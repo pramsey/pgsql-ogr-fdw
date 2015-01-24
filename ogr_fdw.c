@@ -8,6 +8,12 @@
  *-------------------------------------------------------------------------
  */
 
+/*
+ * System
+ */
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "postgres.h"
 
 /*
@@ -17,45 +23,6 @@
 #error "OGR FDW requires PostgreSQL version 9.3 or higher"
 #else
 
-/*
- * System
- */
-#include <sys/stat.h>
-#include <unistd.h>
-/*
- * PostgreSQL
- */
-#include "access/htup_details.h"
-#include "access/reloptions.h"
-#include "access/sysattr.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_foreign_table.h"
-#include "catalog/pg_foreign_server.h"
-#include "commands/copy.h"
-#include "commands/defrem.h"
-#include "commands/explain.h"
-#include "commands/vacuum.h"
-#include "foreign/fdwapi.h"
-#include "foreign/foreign.h"
-#include "mb/pg_wchar.h"
-#include "miscadmin.h"
-#include "nodes/makefuncs.h"
-#include "optimizer/cost.h"
-#include "optimizer/pathnode.h"
-#include "optimizer/planmain.h"
-#include "optimizer/restrictinfo.h"
-#include "optimizer/var.h"
-#include "storage/ipc.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
-#include "utils/memutils.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
-/*
- * OGR library API
- */
-#include "ogr_api.h"
-#include "cpl_error.h"
 /*
  * Local structures
  */
@@ -138,7 +105,7 @@ static OgrConnection ogrGetConnection(Oid foreigntableid);
 static void ogr_fdw_exit(int code, Datum arg);
 
 /* Global to hold GEOMETRYOID */
-static Oid GEOMETRYOID = InvalidOid;
+Oid GEOMETRYOID = InvalidOid;
 
 
 void
@@ -215,7 +182,9 @@ ogrGetDataSource(const char *source, const char *driver)
 	OGRSFDriverH ogr_dr = NULL;
 	
 	/* Cannot search for drivers if they aren't registered */
-	OGRRegisterAll();
+	/* But don't call for registration if we already have drivers */
+	if ( OGRGetDriverCount() <= 0 )
+		OGRRegisterAll();
 	
 	if ( driver )
 	{
@@ -257,6 +226,16 @@ ogrGetDataSource(const char *source, const char *driver)
 	return ogr_ds;
 }
 
+static void
+ogrFinishConnection(OgrConnection *ogr)
+{
+	if ( ogr->ds )
+	{
+		OGR_DS_Destroy(ogr->ds);
+	}
+	ogr->ds = NULL;
+}
+
 static OgrConnection
 ogrGetConnection(Oid foreigntableid)
 {
@@ -290,6 +269,11 @@ ogrGetConnection(Oid foreigntableid)
 		if (strcmp(def->defname, OPT_LAYER) == 0)
 			ogr.lyr_str = defGetString(def);
 	}
+
+	/* 
+	 * TODO: Connections happen twice for each query, having a 
+	 * connection pool will certainly make things faster.
+	 */
 	
 	/*  Connect! */
 	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str);
@@ -326,8 +310,12 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	struct OgrFdwOption *opt;
 	const char *source = NULL, *layer = NULL, *driver = NULL;
 
-	/* TODO, check that the database encoding is UTF8, to match OGR internals */
-	/* GetDatabaseEncoding() == "UTF8" ? */
+	/* Check that the database encoding is UTF8, to match OGR internals */
+	if ( GetDatabaseEncoding() != PG_UTF8 )
+	{
+		elog(ERROR, "OGR FDW only works with UTF-8 databases");
+		PG_RETURN_VOID();
+	}
 
 	/* Initialize found state to not found */
 	for ( opt = valid_options; opt->optname; opt++ )
@@ -461,12 +449,14 @@ ogrGetForeignRelSize(PlannerInfo *root,
 	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
 
 	/* Set to NULL to clear the restriction clauses in OGR */
+	/* TODO: the estimate number of rows returned should actually use restrictions */
+	/* TODO: calculate the row width based on the attribute types of the OGR table */
 	OGR_L_SetIgnoredFields(planstate->ogr.lyr, NULL);
 	OGR_L_SetSpatialFilter(planstate->ogr.lyr, NULL);
 	OGR_L_SetAttributeFilter(planstate->ogr.lyr, NULL);
 
 	/* If we can quickly figure how many rows this layer has, then do so */
-	if ( OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) )
+	if ( OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) == TRUE )
 	{
 		/* Count rows, but don't force a slow count */
 		int rows = OGR_L_GetFeatureCount(planstate->ogr.lyr, false);
@@ -501,7 +491,7 @@ ogrGetForeignPaths(PlannerInfo *root,
 {
 	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 	
-    /*
+	/*
 	 * Estimate costs first. 
 	 */
 
@@ -524,7 +514,9 @@ ogrGetForeignPaths(PlannerInfo *root,
 					NIL));   /* no fdw_private data */
 
 }
-	
+
+
+
 
 /*
  * fileGetForeignPlan
@@ -532,41 +524,64 @@ ogrGetForeignPaths(PlannerInfo *root,
  */
 static ForeignScan *
 ogrGetForeignPlan(PlannerInfo *root,
-				   RelOptInfo *baserel,
-				   Oid foreigntableid,
-				   ForeignPath *best_path,
-				   List *tlist,
-				   List *scan_clauses)
+                  RelOptInfo *baserel,
+                  Oid foreigntableid,
+                  ForeignPath *best_path,
+                  List *tlist,
+                  List *scan_clauses)
 {
-	Index		scan_relid = baserel->relid;
+	Index scan_relid = baserel->relid;
+	bool sql_generated;
+	StringInfoData sql;
+	List *params_list = NULL;
+	List *fdw_private;
+	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 
 	/*
-	 * We are not pushing down WHERE clauses to the OGR library yet,
-	 * So all we have to do here is strip RestrictInfo
+	 * TODO: Review the columns requested (via params_list) and only pull those back, using
+	 * OGR_L_SetIgnoredFields. This is less important than pushing restrictions
+	 * down to OGR via OGR_L_SetAttributeFilter and OGR_L_SetSpatialFilter
+	 */	
+	initStringInfo(&sql);
+	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
+	elog(DEBUG1,"OGR SQL: %s", sql.data);
+	
+	/*
+	 * Here we strip RestrictInfo
 	 * nodes from the clauses and ignore pseudoconstants (which will be
 	 * handled elsewhere).
-	 * 
-	 * TODO: Actually traverse the clauses and add OGR_L_SetSpatialFilter
-	 * and OGR_L_SetAttributeFilter calls to force some clauses down into
-	 * the OGR level.
-	 * 
-	 * TODO: Review the columns requested and only pull those back, using
-	 * OGR_L_SetIgnoredFields. This is less important than pushing
-	 *
+	 * Some FDW implementations (mysql_fdw) just pass this full list on to the 
+	 * make_foreignscan function. postgres_fdw carefully separates local and remote
+	 * clauses and only passes the local ones to make_foreignscan, so this
+	 * is probably best practice, though re-applying the clauses is probably
+	 * the least of our performance worries with this fdw. For now, we just
+	 * pass them all to make_foreignscan, see no evil, etc.
 	 */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
-	/* 
-	 * Clean up the plan state, we're done w/ it for now. 
+	/*
+	 * Serialize the data we want to pass to the execution stage.
+	 * This is ugly but seems to be the only way to pass our constructed
+	 * OGR SQL command to execution.
+	 * 
+	 * TODO: Pass a spatial filter down also.
 	 */
-	
+	if ( sql_generated )
+		fdw_private = list_make2(makeString(sql.data), params_list);
+	else
+		fdw_private = list_make2(NULL, params_list);
 
+	/* 
+	 * Clean up our connection
+	 */
+	ogrFinishConnection(&(planstate->ogr));
+	
 	/* Create the ForeignScan node */
 	return make_foreignscan(tlist,
-							scan_clauses,
-							scan_relid,
-							NIL,	/* no expressions to evaluate */
-							best_path->fdw_private);
+	                        scan_clauses,
+	                        scan_relid,
+	                        NIL,	/* no expressions to evaluate */
+	                        fdw_private);
 }
 
 
@@ -737,9 +752,23 @@ static void
 ogrBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	Oid foreigntableid = RelationGetRelid(node->ss.ss_currentRelation);
+	ForeignScan *fsplan = (ForeignScan *)node->ss.ps.plan;
 
 	/* Initialize OGR connection */
 	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
+
+	/* Get private info created by planner functions. */
+	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
+	// execstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private, 1);
+		
+	if ( execstate->sql )
+	{
+		OGRErr err = OGR_L_SetAttributeFilter(execstate->ogr.lyr, execstate->sql);
+		if ( err != OGRERR_NONE )
+		{
+			elog(NOTICE, "unable to set OGR SQL '%s' on layer", execstate->sql);
+		}
+	}
 	
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(execstate);
@@ -786,6 +815,9 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod)
 
 	return value;
 }
+
+
+
 
 
 /*
@@ -1170,7 +1202,7 @@ ogrEndForeignScan(ForeignScanState *node)
 {
 	OgrFdwExecState *execstate = (OgrFdwExecState *) node->fdw_state;
 
-	OGR_DS_Destroy(execstate->ogr.ds);
+	ogrFinishConnection( &(execstate->ogr) );
 
 	return;
 }

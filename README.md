@@ -10,7 +10,9 @@ This implementation currently has the following limitations:
 
 * **PostgreSQL 9.3+** This wrapper does not support the FDW implementations in older versions of PostgreSQL.
 * **Tables are read-only.** Foreign data wrappers support read/write and many OGR drivers support read/write, so this limitation can be removed given some development time.
-* **Query restrictions are not pushed down to the OGR driver.** PostgreSQL foreign data wrappers support delegating portions of the SQL query to the underlying data source, in this case OGR. This implementation does not currently do this. Instead it reads the **entire contents** of the table into memory and the database then applies the SQL clauses there. It would be a lot more efficient to push as many restriction clauses as possible down to the OGR layer. This limitation can also be removed given some development time.
+* **Only non-spatial query restrictions are pushed down to the OGR driver.** PostgreSQL foreign data wrappers support delegating portions of the SQL query to the underlying data source, in this case OGR. This implementation currently pushes down only non-spatial query restrictions, and only for the small subset of comparison operators (>, <, <=, >=, =) supported by OGR.
+* **Spatial restrictions are not pushed down.** OGR can handle basic bounding box restrictions and even (for some drivers) more explicit intersection restrictions, but those are not passed to the OGR driver yet.
+* **OGR connections every time** Rather than pooling OGR connections, each query makes (and disposes of) two new ones, which seems to be the largest performance drag at the moment for restricted (small) queries.
 * **All columns are retrieved every time.** PostgreSQL foreign data wrappers don't require all columns all the time, and some efficiencies can be gained by only requesting the columns needed to fulfill a query. This would be a minimal efficiency improvement, but can be removed given some development time, since the OGR API supports returning a subset of columns.
 
 ## Basic Operation
