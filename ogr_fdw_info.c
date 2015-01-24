@@ -22,6 +22,7 @@ static void usage();
 static OGRErr ogrListLayers(const char *source);
 static OGRErr ogrGenerateSQL(const char *source, const char *layer);
 
+#define STR_MAX_LEN 256 
 	
 static void
 usage()
@@ -118,10 +119,18 @@ ogrListLayers(const char *source)
 
 static void strlaunder (char *str)
 {
-	int i;
+	int i, j = 0;
 	for(i = 0; str[i]; i++)
 	{
 		char c = tolower(str[i]);
+		
+		/* First character is a numeral, prefix with 'n' */
+		if ( i == 0 && (c >= 48 && c <= 57) )
+		{
+			str[j++] = 'n';
+		}
+		
+		/* Replace non-safe characters w/ _ */
 		if ( (c >= 48 && c <= 57) || /* 0-9 */
 			 (c >= 65 && c <= 90) || /* A-Z */
 			 (c >= 97 && c <= 122 ) /* a-z */ )
@@ -132,7 +141,11 @@ static void strlaunder (char *str)
 		{
 			c = '_';
 		}
-		str[i] = c;
+		str[j++] = c;
+		
+		/* Avoid mucking with data beyond the end of our stack-allocated strings */
+		if ( j >= STR_MAX_LEN )
+			j = STR_MAX_LEN - 1;
 	}
 }
 
@@ -143,8 +156,8 @@ ogrGenerateSQL(const char *source, const char *layer)
 	OGRSFDriverH ogr_dr = NULL;
 	OGRLayerH ogr_lyr = NULL;
 	OGRFeatureDefnH ogr_fd = NULL;
-	char server_name[256];
-	char layer_name[256];
+	char server_name[STR_MAX_LEN];
+	char layer_name[STR_MAX_LEN];
 	int i;
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
 	int geom_field_count;
@@ -168,7 +181,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not find layer '%s' in source '%s'", layer, source);
 		return OGRERR_FAILURE; 
 	}
-	strncpy(layer_name, OGR_L_GetName(ogr_lyr), 256);
+	strncpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 	strlaunder(layer_name);
 
 	/* Output SERVER definition */
@@ -210,9 +223,9 @@ ogrGenerateSQL(const char *source, const char *layer)
 	
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
-		char field_name[256];
+		char field_name[STR_MAX_LEN];
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		strncpy(field_name, OGR_Fld_GetNameRef(ogr_fld), 256);
+		strncpy(field_name, OGR_Fld_GetNameRef(ogr_fld), STR_MAX_LEN);
 		strlaunder(field_name);
 		printf(",\n  %s ", field_name);
 		switch( OGR_Fld_GetType(ogr_fld) )
