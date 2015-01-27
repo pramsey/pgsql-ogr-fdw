@@ -14,6 +14,7 @@ GDAL_CFLAGS = $(shell $(GDAL_CONFIG) --cflags)
 GDAL_LIBS = $(shell $(GDAL_CONFIG) --libs)
 
 PG_CONFIG = pg_config
+REGRESS_OPTS = --encoding=UTF8
 
 PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
