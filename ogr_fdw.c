@@ -766,13 +766,17 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
 	// execstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private, 1);
 		
-	if ( execstate->sql )
+	if ( execstate->sql && strlen(execstate->sql) > 0 )
 	{
 		OGRErr err = OGR_L_SetAttributeFilter(execstate->ogr.lyr, execstate->sql);
 		if ( err != OGRERR_NONE )
 		{
 			elog(NOTICE, "unable to set OGR SQL '%s' on layer", execstate->sql);
 		}
+	}
+	else
+	{
+		OGR_L_SetAttributeFilter(execstate->ogr.lyr, NULL);
 	}
 	
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
