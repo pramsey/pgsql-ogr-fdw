@@ -151,3 +151,43 @@ Unzip the `Querying.zip` file from the `data` directory to get a `Querying.gdb` 
 
 Query away!
 
+### PostgreSQL FDW
+
+Wraparound action! Handy for testing. Connect your database back to your database and watch the fur fly.
+
+    CREATE TABLE typetest ( 
+      id integer, 
+      geom geometry(point, 4326),
+      num real, 
+      name varchar, 
+      clock time, 
+      calendar date, 
+      tstmp timestamp 
+    );
+
+    INSERT INTO typetest 
+      VALUES (1, 'SRID=4326;POINT(-126 46)', 4.5, 'Paul', '09:34:23', 'June 1, 2013', '12:34:56 December 14, 1823');
+    INSERT INTO typetest 
+      VALUES (2, 'SRID=4326;POINT(-126 46)', 4.8, 'Peter', '14:34:53', 'July 12, 2011', '1:34:12 December 24, 1923');
+
+    CREATE SERVER wraparound
+      FOREIGN DATA WRAPPER ogr_fdw
+      OPTIONS (
+        datasource 'Pg:dbname=fdw user=postgres',
+        format 'PostgreSQL' );
+
+    CREATE FOREIGN TABLE typetest_fdw (
+      fid integer,
+      geom geometry,
+      id integer,
+      num real,
+      name varchar,
+      clock time,
+      calendar date,
+      tstmp timestamp )
+      SERVER wraparound
+      OPTIONS ( layer 'typetest' );
+
+    SELECT * FROM typetest_fdw;
+
+Enjoy!
