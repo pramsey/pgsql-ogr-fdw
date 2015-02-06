@@ -1072,14 +1072,17 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						if ( ogrtype == OFTDate )
 						{
 							snprintf(cstr, 256, "%d-%02d-%02d", year, month, day);
+							elog(DEBUG3, "converting OFTDate '%s' from OGR", cstr);
 						}
 						else if ( ogrtype == OFTTime )
 						{
 							snprintf(cstr, 256, "%02d:%02d:%02d", hour, minute, second);
+							elog(DEBUG3, "converting OFTTime '%s' from OGR", cstr);
 						}
 						else 
 						{
 							snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+							elog(DEBUG3, "converting OFTDateTime '%s' from OGR", cstr);
 						}
 						
 						nulls[i] = false;
