@@ -231,6 +231,19 @@ ogrGetDataSource(const char *source, const char *driver)
 	return ogr_ds;
 }
 
+static bool
+ogrCanReallyCountFast(const OgrConnection *con)
+{
+	const char *dr_str = con->dr_str;
+	if ( streq(dr_str, "ESRI Shapefile" ) ||
+   	     streq(dr_str, "FileGDB" ) ||
+	     streq(dr_str, "OpenFileGDB" ) )		     
+	{
+		return true;
+	}
+	return false;
+}
+
 /* 
  * Make sure the datasource is cleaned up when we're done
  * with a connection.
@@ -462,16 +475,32 @@ ogrGetForeignRelSize(PlannerInfo *root,
 {
 	/* Initialize the OGR connection */
 	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
+	List *scan_clauses = baserel->baserestrictinfo;
 
 	/* Set to NULL to clear the restriction clauses in OGR */
-	/* TODO: the estimate number of rows returned should actually use restrictions */
-	/* TODO: calculate the row width based on the attribute types of the OGR table */
 	OGR_L_SetIgnoredFields(planstate->ogr.lyr, NULL);
 	OGR_L_SetSpatialFilter(planstate->ogr.lyr, NULL);
 	OGR_L_SetAttributeFilter(planstate->ogr.lyr, NULL);
 
+	/* 
+	* The estimate number of rows returned must actually use restrictions.
+	* Since OGR can't really give us a fast count with restrictions on
+	* (usually involves a scan) and restrictions in the baserel mean we 
+	* must punt row count estimates.
+	*/
+
+	/* TODO: calculate the row width based on the attribute types of the OGR table */
+	
+	/* 
+	* OGR asks drivers to honestly state if they can provide a fast
+	* row count, but too many drivers lie. We are not listing drivers
+	* we trust in ogrCanReallyCountFast()
+	*/
+
 	/* If we can quickly figure how many rows this layer has, then do so */
-	if ( OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) == TRUE )
+	if ( scan_clauses == NIL && 
+	     OGR_L_TestCapability(planstate->ogr.lyr, OLCFastFeatureCount) == TRUE &&
+	     ogrCanReallyCountFast(&(planstate->ogr)) )
 	{
 		/* Count rows, but don't force a slow count */
 		int rows = OGR_L_GetFeatureCount(planstate->ogr.lyr, false);
@@ -506,19 +535,19 @@ ogrGetForeignPaths(PlannerInfo *root,
 {
 	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
 	
-	/*
-	 * Estimate costs first. 
-	 */
-
 	/* TODO: replace this with something that looks at the OGRDriver and */
-	/* makes a determination based on that? */
+	/* makes a determination based on that? Better: add connection caching */
+	/* so that slow startup doesn't matter so much */
 	planstate->startup_cost = 25;
 	
 	/* TODO: more research on what the total cost is supposed to mean, */
 	/* relative to the startup cost? */
 	planstate->total_cost = planstate->startup_cost + baserel->rows;
-
-
+	
+	/* Built the (one) path we are providing. Providing fancy paths is */
+	/* really only possible with back-ends that can properly provide */
+	/* explain info on how they complete the query, not for something as */
+	/* obtuse as OGR. (So far, have only seen it w/ the postgres_fdw */
 	add_path(baserel, 
 		(Path *) create_foreignscan_path(root, baserel,
 					baserel->rows,
@@ -527,7 +556,6 @@ ogrGetForeignPaths(PlannerInfo *root,
 					NIL,     /* no pathkeys */
 					NULL,    /* no outer rel either */
 					NIL));   /* no fdw_private data */
-
 }
 
 
@@ -555,7 +583,7 @@ ogrGetForeignPlan(PlannerInfo *root,
 	/*
 	 * TODO: Review the columns requested (via params_list) and only pull those back, using
 	 * OGR_L_SetIgnoredFields. This is less important than pushing restrictions
-	 * down to OGR via OGR_L_SetAttributeFilter and OGR_L_SetSpatialFilter.
+	 * down to OGR via OGR_L_SetAttributeFilter (done) and (TODO) OGR_L_SetSpatialFilter.
 	 */	
 	initStringInfo(&sql);
 	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
@@ -743,6 +771,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	int ogr_ncols;
 	int fid_count = 0;
 	int geom_count = 0;
+	int ogr_geom_count = 0;
 	int field_count = 0;
 	OgrFieldEntry *ogr_fields;
 	char *tblname = get_rel_name(execstate->foreigntableid);
@@ -768,6 +797,12 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	/* Get OGR metadata ready */
 	dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
 	ogr_ncols = OGR_FD_GetFieldCount(dfn);
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
+#else
+	ogr_geom_count = ( OGR_FD_GetGeomType(dfn) != wkbNone ) ? 1 : 0;
+#endif
+
 
 	/* Prepare sorted list of OGR column names */
 	ogr_fields = palloc0(ogr_ncols * sizeof(OgrFieldEntry));
@@ -813,11 +848,11 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 		{
 			/* Stop if there are more geometry columns than we can support */
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			if ( geom_count >= OGR_FD_GetGeomFieldCount(dfn) )
+			if ( geom_count >= ogr_geom_count )
 				elog(ERROR, "FDW table includes more geometry columns than exist in the OGR source");
 #else
-			if ( geom_count >= 1 )
-				elog(ERROR, "FDW table includes more that one geometry column");
+			if ( geom_count >= ogr_geom_count )
+				elog(ERROR, "FDW table includes more than one geometry column");
 #endif
 			col->ogrvariant = OGR_GEOMETRY;
 			col->ogrfldtype = OFTBinary;
@@ -861,7 +896,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	/* Clean up */
 	execstate->table = tbl;
 	pfree(ogr_fields);
-	heap_close(rel, NoLock);	
+	heap_close(rel, NoLock);
 	
 	return;
 }

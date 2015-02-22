@@ -57,6 +57,8 @@
 #include "cpl_error.h"
 
 
+#define streq(s1,s2) (strcmp((s1),(s2)) == 0)
+
 typedef enum 
 {
 	OGR_GEOMETRY,

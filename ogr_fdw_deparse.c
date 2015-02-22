@@ -489,7 +489,7 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 		/* Connect expressions with "AND" and parenthesize each condition */
 		if ( ! first )
 		{
-			appendStringInfoString(buf, " AnD ");
+			appendStringInfoString(buf, " AND ");
 		}
 
 		/* Unparse the expression, if possible */
