@@ -797,7 +797,7 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
  * be to cache this information once.
  */
 static Datum
-pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod)
+pgDatumFromCString(const char *cstr, Oid pgtype, int32 pgtypmod)
 {
 	Datum cdata;
 	Datum value;
@@ -808,19 +808,10 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod)
 	getTypeInputInfo(pgtype, &inputfunc, &inputioparam);
 	cdata = CStringGetDatum(cstr);
 	
-	/* pgtypmod will be -1 for types w/o typmod  */
-	if ( pgtypmod >= 0 )
-	{
-		/* These functions require a type modifier */
-		value = OidFunctionCall3(inputfunc, cdata,
-			ObjectIdGetDatum(InvalidOid),
-			Int32GetDatum(pgtypmod));
-	}
-	else
-	{
-		/* These functions don't */
-		value = OidFunctionCall1(inputfunc, cdata);
-	}
+	/* Count on the typmod always being properly handled, even by non-typmod types... */
+	value = OidFunctionCall3(inputfunc, cdata,
+		ObjectIdGetDatum(InvalidOid),
+		Int32GetDatum(pgtypmod));
 
 	return value;
 }
@@ -867,7 +858,7 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 	{
 		Form_pg_attribute att_tuple = tupdesc->attrs[i];
 		Oid pgtype = att_tuple->atttypid;
-		int pgtypemod = att_tuple->atttypmod;
+		int32 pgtypemod = att_tuple->atttypmod;
 		const char *pgcolname = att_tuple->attname.data;
 		const char *pgtblname = get_rel_name(att_tuple->attrelid);
 
