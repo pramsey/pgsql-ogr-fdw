@@ -39,3 +39,6 @@ clean:
 
 all: ogr_fdw_info
 
+install: all
+	$(INSTALL_PROGRAM) ogr_fdw_info$(X) '$(DESTDIR)$(bindir)'
+
