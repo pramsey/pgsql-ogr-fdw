@@ -31,14 +31,17 @@ include $(PGXS)
 CFLAGS = $(GDAL_CFLAGS)
 LIBS = $(GDAL_LIBS)
 
-ogr_fdw_info: ogr_fdw_info.o
+ogr_fdw_info$(X): ogr_fdw_info.o
 	$(CC) $(CFLAGS) -o $@ $? $(LIBS)
 
-clean:
-	rm -f *.o ogr_fdw_info *.so
+clean-exe:
+	rm -f ogr_fdw_info$(X)
 
-all: ogr_fdw_info
-
-install: all
+install-exe: all
 	$(INSTALL_PROGRAM) ogr_fdw_info$(X) '$(DESTDIR)$(bindir)'
 
+all: ogr_fdw_info$(X)
+
+clean: clean-exe
+
+install: install-exe
