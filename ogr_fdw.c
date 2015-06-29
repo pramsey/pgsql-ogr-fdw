@@ -129,9 +129,10 @@ _PG_init(void)
 	 * We assume PostGIS is installed in 'public' and if we cannot 
 	 * find it, we'll treat all geometry from OGR as bytea. 
 	 */
-	const char *typname = "geometry";
-	Oid namesp = LookupExplicitNamespace("public", false);
-	Oid typoid = GetSysCacheOid2(TYPENAMENSP, CStringGetDatum(typname), ObjectIdGetDatum(namesp));
+	// const char *typname = "geometry";
+	// Oid namesp = LookupExplicitNamespace("public", false);
+	// Oid typoid = GetSysCacheOid2(TYPENAMENSP, CStringGetDatum(typname), ObjectIdGetDatum(namesp));
+	Oid typoid = TypenameGetTypid("geometry");
 
 	if (OidIsValid(typoid) && get_typisdefined(typoid))
 	{
