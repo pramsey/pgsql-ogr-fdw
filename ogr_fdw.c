@@ -589,7 +589,6 @@ ogrGetForeignPlan(PlannerInfo *root,
 	                        fdw_private);
 }
 
-
 static void
 ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const char *tblname)
 {
@@ -630,8 +629,18 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 				return;
 			break;
 
+#if GDAL_VERSION_MAJOR >= 2
+		case OFTInteger64:
+			if ( pg_type == INT8OID || pg_type == NUMERICOID || pg_type == FLOAT8OID || pg_type == TEXTOID || pg_type == VARCHAROID )
+				return;
+			break;
+#endif
+			
 		case OFTWideString:
 		case OFTIntegerList:
+#if GDAL_VERSION_MAJOR >= 2
+		case OFTInteger64List:
+#endif
 		case OFTRealList:
 		case OFTStringList:
 		case OFTWideStringList:
