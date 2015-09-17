@@ -265,6 +265,12 @@ ogrGenerateSQL(const char *source, const char *layer)
 			case OFTStringList:
 				printf("varchar[]");
 				break;
+				
+#if GDAL_VERSION_MAJOR >= 2
+		   case OFTInteger64:
+			printf("bigint");
+				break;
+#endif
 			default:
 				CPLError(CE_Failure, CPLE_AppDefined, "Unsupported GDAL type '%s'", OGR_GetFieldTypeName(OGR_Fld_GetType(ogr_fld)));
 				return OGRERR_FAILURE;

@@ -1038,6 +1038,9 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						break;
 					}
 					case OFTInteger:
+					#if GDAL_VERSION_MAJOR >= 2
+                        case OFTInteger64:
+                    #endif
 					case OFTReal:
 					case OFTString:
 					{
