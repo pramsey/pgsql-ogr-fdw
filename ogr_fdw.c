@@ -591,7 +591,8 @@ ogrGetForeignPlan(PlannerInfo *root,
 	                        scan_relid,
 	                        NIL,	/* no expressions to evaluate */
 	                        fdw_private 
-#if PG_VERSION_NUM >= 90500,
+#if PG_VERSION_NUM >= 90500
+,
 /*
  * Require PostgreSQL >= 9.5
  */
