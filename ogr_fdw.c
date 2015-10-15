@@ -583,11 +583,24 @@ ogrGetForeignPlan(PlannerInfo *root,
 	ogrFinishConnection(&(planstate->ogr));
 	
 	/* Create the ForeignScan node */
+	
+
+
 	return make_foreignscan(tlist,
-	                        scan_clauses,
-	                        scan_relid,
-	                        NIL,	/* no expressions to evaluate */
-	                        fdw_private);
+							scan_clauses,
+							scan_relid,
+							NIL,	/* no expressions to evaluate */
+							fdw_private 
+#if PG_VERSION_NUM >= 90500
+,
+/*
+* Require PostgreSQL >= 9.5
+*/
+						NIL  /* no scan_tlist */
+#endif
+); 
+
+
 }
 
 static void
@@ -1038,6 +1051,9 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						break;
 					}
 					case OFTInteger:
+#if GDAL_VERSION_MAJOR >= 2
+					case OFTInteger64:
+#endif
 					case OFTReal:
 					case OFTString:
 					{
