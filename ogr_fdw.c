@@ -583,11 +583,27 @@ ogrGetForeignPlan(PlannerInfo *root,
 	ogrFinishConnection(&(planstate->ogr));
 	
 	/* Create the ForeignScan node */
+	
+/*
+ * Require PostgreSQL >= 9.5
+ */
+#if PG_VERSION_NUM >= 90500
 	return make_foreignscan(tlist,
 	                        scan_clauses,
 	                        scan_relid,
 	                        NIL,	/* no expressions to evaluate */
-	                        fdw_private);
+	                        fdw_private,
+	                        NIL); /* no scan_tlist */
+#else
+/*
+* older version of PostgreSQL 
+*/
+	return make_foreignscan(tlist,
+	                        scan_clauses,
+	                        scan_relid,
+	                        NIL,	/* no expressions to evaluate */
+	                        fdw_private); 
+#endif
 }
 
 static void
