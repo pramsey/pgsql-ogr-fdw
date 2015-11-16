@@ -596,7 +596,8 @@ ogrGetForeignPlan(PlannerInfo *root,
 /*
 * Require PostgreSQL >= 9.5
 */
-						NIL  /* no scan_tlist */
+							NIL,  /* no scan_tlist */
+							NIL   /* no remote quals */ 
 #endif
 ); 
 
