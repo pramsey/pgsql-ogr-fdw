@@ -525,7 +525,7 @@ ogrGetForeignPaths(PlannerInfo *root,
 					planstate->total_cost,
 					NIL,     /* no pathkeys */
 					NULL,    /* no outer rel either */
-					NIL  /* no extra plan */
+					NULL  /* no extra plan */
 #if PG_VERSION_NUM >= 90500
 ,
 /*
