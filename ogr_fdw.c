@@ -90,7 +90,15 @@ static ForeignScan *ogrGetForeignPlan(PlannerInfo *root,
 				   Oid foreigntableid,
 				   ForeignPath *best_path,
 				   List *tlist,
-				   List *scan_clauses);
+				   List *scan_clauses
+#if PG_VERSION_NUM >= 90500
+,
+/*
+* Require PostgreSQL >= 9.5
+*/
+					Plan *outer_plan 
+#endif
+);
 static void ogrBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *ogrIterateForeignScan(ForeignScanState *node);
 static void ogrReScanForeignScan(ForeignScanState *node);
@@ -517,7 +525,16 @@ ogrGetForeignPaths(PlannerInfo *root,
 					planstate->total_cost,
 					NIL,     /* no pathkeys */
 					NULL,    /* no outer rel either */
-					NIL));   /* no fdw_private data */
+					NULL  /* no extra plan */
+#if PG_VERSION_NUM >= 90500
+,
+/*
+* Require PostgreSQL >= 9.5
+*/
+					 NIL /* no fdw_private list */
+#endif  					
+					)
+		);   /* no fdw_private data */
 
 }
 
@@ -534,7 +551,15 @@ ogrGetForeignPlan(PlannerInfo *root,
                   Oid foreigntableid,
                   ForeignPath *best_path,
                   List *tlist,
-                  List *scan_clauses)
+                  List *scan_clauses
+#if PG_VERSION_NUM >= 90500
+,
+/*
+* Require PostgreSQL >= 9.5
+*/
+					Plan *outer_plan
+#endif                  
+                  )
 {
 	Index scan_relid = baserel->relid;
 	bool sql_generated;
@@ -597,7 +622,8 @@ ogrGetForeignPlan(PlannerInfo *root,
 * Require PostgreSQL >= 9.5
 */
 							NIL,  /* no scan_tlist */
-							NIL   /* no remote quals */ 
+							NIL,   /* no remote quals */ 
+							outer_plan
 #endif
 ); 
 
