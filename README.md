@@ -210,6 +210,20 @@ true schemaed databases such as SQL server or PostgreSQL by using something like
 	IMPORT FOREIGN SCHEMA "CityInf"
 		FROM server fgdbtest INTO fgdbcityinf;
 		
+## Importing subset of layers using LIMIT and EXCEPT
+Note: LIMIT TO should contain layer names and is case sensitive
+
+	CREATE SCHEMA fgdbcitysub;
+	-- import only layers called Cities and Countries
+	IMPORT FOREIGN SCHEMA ogr_all 
+    		LIMIT TO("Cities") 
+		FROM server fgdbtest INTO fgdbcitysub ;
+		
+	-- import only layers not called Cities or Countries
+	IMPORT FOREIGN SCHEMA ogr_all 
+        EXCEPT ("Cities", "Countries")
+		FROM server fgdbtest INTO fgdbcitysub;
+		
 ## Preserving case and special characters in column names and table names
 By default, when IMPORT FOREIGN SCHEMA is run on an ogr foreign data server, the table names and column names are laundered
 (meaning all upper case is converted to lowercase and special characters such as spaces are replaced with _).
