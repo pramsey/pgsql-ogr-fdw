@@ -214,7 +214,7 @@ true schemaed databases such as SQL server or PostgreSQL by using something like
 Note: LIMIT TO should contain layer names and is case sensitive
 
 	CREATE SCHEMA fgdbcitysub;
-	-- import only layers called Cities and Countries
+	-- import only layer called Cities
 	IMPORT FOREIGN SCHEMA ogr_all 
     		LIMIT TO("Cities") 
 		FROM server fgdbtest INTO fgdbcitysub ;
