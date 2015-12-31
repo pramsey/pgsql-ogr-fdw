@@ -201,28 +201,14 @@ If you want to import all tables use the special schema called  *ogr_all*
 
 ## Importing subset of tables using prefixes		
 Not all ogr data sources have a concept of schema, so we use the remote_schema as a prefix.
-Note this is case sensitive, so make sure casing matches your table names
+Note this is case sensitive, so make sure casing matches your layer names.
 
-For example the following will only import tables that start with *CityInf*. As long as you quote, you can handle 
+For example the following will only import tables that start with *CitiesIn*. As long as you quote, you can handle 
 true schemaed databases such as SQL server or PostgreSQL by using something like *"dbo."*
 
 	CREATE SCHEMA fgdbcityinf;
-	IMPORT FOREIGN SCHEMA "CityInf"
+	IMPORT FOREIGN SCHEMA "CitiesIn"
 		FROM server fgdbtest INTO fgdbcityinf;
-		
-## Importing subset of layers using LIMIT and EXCEPT
-Note: LIMIT TO should contain layer names and is case sensitive
-
-	CREATE SCHEMA fgdbcitysub;
-	-- import only layer called Cities
-	IMPORT FOREIGN SCHEMA ogr_all 
-    		LIMIT TO("Cities") 
-		FROM server fgdbtest INTO fgdbcitysub ;
-		
-	-- import only layers not called Cities or Countries
-	IMPORT FOREIGN SCHEMA ogr_all 
-        EXCEPT ("Cities", "Countries")
-		FROM server fgdbtest INTO fgdbcitysub;
 		
 ## Preserving case and special characters in column names and table names
 By default, when IMPORT FOREIGN SCHEMA is run on an ogr foreign data server, the table names and column names are laundered
@@ -238,6 +224,29 @@ To preserve casing and other funky characters in both column names and table nam
 	IMPORT FOREIGN SCHEMA ogr_all
 		FROM server fgdbtest INTO fgdbpreserve 
 		OPTIONS(launder_table_names 'false', launder_column_names 'false') ;
+		
+		
+## Importing subset of layers using LIMIT and EXCEPT
+Note: LIMIT TO /EXCEPT should contain resulting table names (NOT the layer names)
+In the default case, the table names are laundered should not have mixed case or weird characters.
+
+	CREATE SCHEMA fgdbcitysub;
+	-- import only layer called Cities
+	IMPORT FOREIGN SCHEMA ogr_all 
+    		LIMIT TO(cities) 
+		FROM server fgdbtest INTO fgdbcitysub ;
+		
+	-- import only layers not called Cities or Countries
+	IMPORT FOREIGN SCHEMA ogr_all 
+        EXCEPT (cities, countries)
+		FROM server fgdbtest INTO fgdbcitysub;
+		
+	-- With table laundering turned off, need to use exact layer names
+	DROP SCHEMA IF EXISTS fgdbcitysub CASCADE;
+	
+	IMPORT FOREIGN SCHEMA ogr_all 
+    		LIMIT TO("Cities") 
+		FROM server fgdbtest INTO fgdbcitysub OPTIONS(launder_table_names 'false') ;
 		
 		
 

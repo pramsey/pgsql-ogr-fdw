@@ -1337,7 +1337,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	 */
 	server = GetForeignServer(serverOid);
 
-	/* TODO: Parset statement options introduce statement options possibly like laundering etc 
+	/* Read server druver and data source connection string
 	*/
 	options = NIL;
 	options = list_concat(options, server->options);
@@ -1350,7 +1350,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			ogr.dr_str = defGetString(def);
 	}
 	
-	/* Parse statement options */
+	/* Parse statement laundering options */
 	foreach(lc, stmt->options)
 	{
 		DefElem    *def = (DefElem *) lfirst(lc);
@@ -1382,6 +1382,16 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			/* layer name is never laundered, since it's link back to foreign data */
 			strncpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 			
+			/* We need to compare against created table names 
+			* because postgres does an extra check on create foriegn table 
+			* and removes statements not in limit
+			*/
+			/* having this as separate variable since we may choose to launder it */
+			strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
+			if (launder_table_names){
+				strlaunder(table_name);
+			}
+			
 			/* only include if layer prefix starts with remote schema 
 				or remote schema is ogr_all */
 			include_item = (!check_schema || 
@@ -1396,7 +1406,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 				foreach(lc, stmt->table_list)
 				{
 					RangeVar   *rv = (RangeVar *) lfirst(lc);
-					if ( strcmp(rv->relname, layer_name) == 0  ){
+					if ( strcmp(rv->relname, table_name) == 0  ){
 						//elog(NOTICE, "MATCH layer %s, table %s", layer_name, rv->relname );
 						/* bit is true on match only if limit to */
 						include_item = ( stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO );
@@ -1409,9 +1419,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 		
 		if (include_item){
 			resetStringInfo(&buf);
-			/* having this as separate variable since we may choose to launder id */
 			
-			strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 			if (launder_table_names){
 				strlaunder(table_name);
 			}
@@ -1517,7 +1525,6 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 			commands = lappend(commands, pstrdup(buf.data));
 		}
-		//printf("  %s\n", OGR_L_GetName(ogr_lyr));
 	}
 	OGR_DS_Destroy(ogr_ds);
 	elog(NOTICE, "Number of tables to be created %d", list_length(commands) );
