@@ -104,7 +104,7 @@ static TupleTableSlot *ogrIterateForeignScan(ForeignScanState *node);
 static void ogrReScanForeignScan(ForeignScanState *node);
 static void ogrEndForeignScan(ForeignScanState *node);
 
-static void strlaunder (char *str);
+static void strTableColumnLaunder (char *str);
 
 #if PG_VERSION_NUM >= 90500
 /*
@@ -1389,7 +1389,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			/* having this as separate variable since we may choose to launder it */
 			strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 			if (launder_table_names){
-				strlaunder(table_name);
+				strTableColumnLaunder(table_name);
 			}
 			
 			/* only include if layer prefix starts with remote schema 
@@ -1421,7 +1421,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			resetStringInfo(&buf);
 			
 			if (launder_table_names){
-				strlaunder(table_name);
+				strTableColumnLaunder(table_name);
 			}
 			ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
 			if ( !ogr_fd )
@@ -1458,7 +1458,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 					OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, k);
 					strncpy(field_name, OGR_Fld_GetNameRef(ogr_fld), STR_MAX_LEN);
 					if (launder_column_names){
-						strlaunder(field_name);
+						strTableColumnLaunder(field_name);
 					}
 					appendStringInfo(&buf, " , %s ", quote_identifier(field_name));
 					switch( OGR_Fld_GetType(ogr_fld) )
@@ -1530,12 +1530,14 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	elog(NOTICE, "Number of tables to be created %d", list_length(commands) );
 	//elog(NOTICE, "The nth item %s", list_nth(commands,0) );
 
+	/* Clean up */
+	pfree(buf.data);
 	/** returns list of create foreign table statements to run **/
 	return commands;
 }
 #endif /*end import foreign schema **/
 
-static void strlaunder (char *str)
+static void strTableColumnLaunder (char *str)
 {
 	int i, j = 0;
 	for(i = 0; str[i]; i++)
