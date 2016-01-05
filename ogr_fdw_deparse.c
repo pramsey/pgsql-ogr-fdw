@@ -512,4 +512,32 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 }
 
 
+/*
+ * Append a SQL string literal representing "val" to buf.
+ */
+void
+ogrDeparseStringLiteral(StringInfo buf, const char *val)
+{
+	const char *valptr;
+
+	/*
+	 * Rather than making assumptions about the remote server's value of
+	 * standard_conforming_strings, always use E'foo' syntax if there are any
+	 * backslashes.  This will fail on remote servers before 8.1, but those
+	 * are long out of support.
+	 */
+	if (strchr(val, '\\') != NULL)
+		appendStringInfoChar(buf, ESCAPE_STRING_SYNTAX);
+	appendStringInfoChar(buf, '\'');
+	for (valptr = val; *valptr; valptr++)
+	{
+		char		ch = *valptr;
+
+		if (SQL_STR_DOUBLE(ch, true))
+			appendStringInfoChar(buf, ch);
+		appendStringInfoChar(buf, ch);
+	}
+	appendStringInfoChar(buf, '\'');
+}
+
 
