@@ -194,7 +194,7 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
 *  This feature is available on **PostgreSQL 9.5+** only
 
-### Importing links to all tables
+### Importing all tables
 
 If you want to import all tables use the special schema called "ogr_all".
 
@@ -202,13 +202,13 @@ If you want to import all tables use the special schema called "ogr_all".
 	IMPORT FOREIGN SCHEMA ogr_all 
 		FROM server fgdbtest INTO fgdball;
 
-### Importing subset of tables using prefixes		
+### Importing a subset of tables
 
-Not all ogr data sources have a concept of schema, so we use the remote_schema as a prefix.
-Note this is case sensitive, so make sure casing matches your layer names.
+Not all OGR data sources have a concept of schema, so we use the remote schema string as a prefix to match OGR layers.
+The matching is case sensitive, so make sure casing matches your layer names.
 
-For example the following will only import tables that start with *CitiesIn*. As long as you quote, you can handle 
-true schemaed databases such as SQL server or PostgreSQL by using something like *"dbo."*
+For example, the following will only import tables that start with *CitiesIn*. As long as you quote, you can handle 
+true schemaed databases such as SQL Server or PostgreSQL by using something like *"dbo."*
 
 	CREATE SCHEMA fgdbcityinf;
 	IMPORT FOREIGN SCHEMA "CitiesIn"
@@ -216,26 +216,24 @@ true schemaed databases such as SQL server or PostgreSQL by using something like
 
 ### Preserving case and special characters in column names and table names
 
-By default, when `IMPORT FOREIGN SCHEMA` is run on an ogr foreign data server, the table names and column names are laundered
+By default, when `IMPORT FOREIGN SCHEMA` is run on an OGR foreign data server, the table names and column names are laundered
 (meaning all upper case is converted to lowercase and special characters such as spaces are replaced with "_").
 
-This is not desirable in all cases. You can override this behavior with 2 IMPORT FOREIGN SCHEMA options specific to ogr fdw servers.
+This is not desirable in all cases. You can override this behavior with two `IMPORT FOREIGN SCHEMA` options specific to `ogr_fdw` servers: `launder_column_names` and `launder_table_names`.
 
-These are `launder_column_names` and `launder_table_names`.
-
-To preserve casing and other funky characters in both column names and table names you can do the following:
+To preserve casing and other funky characters in both column names and table names, do the following:
 
 	CREATE SCHEMA fgdbcitypreserve;
 	IMPORT FOREIGN SCHEMA ogr_all
 		FROM server fgdbtest INTO fgdbpreserve 
-		OPTIONS(launder_table_names 'false', launder_column_names 'false') ;
+		OPTIONS (launder_table_names 'false', launder_column_names 'false') ;
 		
 		
 ### Importing subset of layers using LIMIT and EXCEPT
 
-Note: LIMIT TO /EXCEPT should contain resulting table names (NOT the layer names).
+Note: `LIMIT TO` and `EXCEPT` clauses should use table names that reflect the laundering mode in use.
 
-In the default case, the table names are laundered and should not have mixed case or weird characters.
+By default, table and column names are laundered and will not have mixed case or weird characters.
 
 	CREATE SCHEMA fgdbcitysub;
 	-- import only layer called Cities
@@ -253,5 +251,5 @@ In the default case, the table names are laundered and should not have mixed cas
 	
 	IMPORT FOREIGN SCHEMA ogr_all 
     		LIMIT TO("Cities") 
-		FROM server fgdbtest INTO fgdbcitysub OPTIONS(launder_table_names 'false') ;
+		FROM server fgdbtest INTO fgdbcitysub OPTIONS (launder_table_names 'false') ;
 
