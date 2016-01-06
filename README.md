@@ -190,16 +190,20 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
     SELECT * FROM typetest_fdw;
     
-### Using IMPORT FOREIGN SCHEMA (for PostgreSQL 9.5+ only)
+## IMPORT FOREIGN SCHEMA
 
-## Importing links to all tables
+*  This feature is available on **PostgreSQL 9.5+** only
+
+### Importing links to all tables
+
 If you want to import all tables use the special schema called  *ogr_all*
 
 	CREATE SCHEMA fgdball;
 	IMPORT FOREIGN SCHEMA ogr_all 
 		FROM server fgdbtest INTO fgdball;
 
-## Importing subset of tables using prefixes		
+### Importing subset of tables using prefixes		
+
 Not all ogr data sources have a concept of schema, so we use the remote_schema as a prefix.
 Note this is case sensitive, so make sure casing matches your layer names.
 
@@ -210,7 +214,8 @@ true schemaed databases such as SQL server or PostgreSQL by using something like
 	IMPORT FOREIGN SCHEMA "CitiesIn"
 		FROM server fgdbtest INTO fgdbcityinf;
 		
-## Preserving case and special characters in column names and table names
+### Preserving case and special characters in column names and table names
+
 By default, when IMPORT FOREIGN SCHEMA is run on an ogr foreign data server, the table names and column names are laundered
 (meaning all upper case is converted to lowercase and special characters such as spaces are replaced with _).
 
@@ -226,7 +231,8 @@ To preserve casing and other funky characters in both column names and table nam
 		OPTIONS(launder_table_names 'false', launder_column_names 'false') ;
 		
 		
-## Importing subset of layers using LIMIT and EXCEPT
+### Importing subset of layers using LIMIT and EXCEPT
+
 Note: LIMIT TO /EXCEPT should contain resulting table names (NOT the layer names)
 In the default case, the table names are laundered should not have mixed case or weird characters.
 
@@ -249,5 +255,3 @@ In the default case, the table names are laundered should not have mixed case or
 		FROM server fgdbtest INTO fgdbcitysub OPTIONS(launder_table_names 'false') ;
 		
 		
-
-Enjoy!
