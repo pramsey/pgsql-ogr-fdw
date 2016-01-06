@@ -196,7 +196,7 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
 ### Importing links to all tables
 
-If you want to import all tables use the special schema called  *ogr_all*
+If you want to import all tables use the special schema called "ogr_all".
 
 	CREATE SCHEMA fgdball;
 	IMPORT FOREIGN SCHEMA ogr_all 
@@ -213,15 +213,15 @@ true schemaed databases such as SQL server or PostgreSQL by using something like
 	CREATE SCHEMA fgdbcityinf;
 	IMPORT FOREIGN SCHEMA "CitiesIn"
 		FROM server fgdbtest INTO fgdbcityinf;
-		
+
 ### Preserving case and special characters in column names and table names
 
-By default, when IMPORT FOREIGN SCHEMA is run on an ogr foreign data server, the table names and column names are laundered
-(meaning all upper case is converted to lowercase and special characters such as spaces are replaced with _).
+By default, when `IMPORT FOREIGN SCHEMA` is run on an ogr foreign data server, the table names and column names are laundered
+(meaning all upper case is converted to lowercase and special characters such as spaces are replaced with "_").
 
 This is not desirable in all cases. You can override this behavior with 2 IMPORT FOREIGN SCHEMA options specific to ogr fdw servers.
 
-These are `launder_column_names` and `launder_tables_names`.
+These are `launder_column_names` and `launder_table_names`.
 
 To preserve casing and other funky characters in both column names and table names you can do the following:
 
@@ -233,8 +233,9 @@ To preserve casing and other funky characters in both column names and table nam
 		
 ### Importing subset of layers using LIMIT and EXCEPT
 
-Note: LIMIT TO /EXCEPT should contain resulting table names (NOT the layer names)
-In the default case, the table names are laundered should not have mixed case or weird characters.
+Note: LIMIT TO /EXCEPT should contain resulting table names (NOT the layer names).
+
+In the default case, the table names are laundered and should not have mixed case or weird characters.
 
 	CREATE SCHEMA fgdbcitysub;
 	-- import only layer called Cities
@@ -253,5 +254,4 @@ In the default case, the table names are laundered should not have mixed case or
 	IMPORT FOREIGN SCHEMA ogr_all 
     		LIMIT TO("Cities") 
 		FROM server fgdbtest INTO fgdbcitysub OPTIONS(launder_table_names 'false') ;
-		
-		
+
