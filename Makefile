@@ -35,7 +35,7 @@ ogr_fdw_info$(X): ogr_fdw_info.o
 	$(CC) $(CFLAGS) -o $@ $? $(LIBS)
 
 clean-exe:
-	rm -f ogr_fdw_info$(X)
+	rm -f ogr_fdw_info$(X) ogr_fdw_info.o
 
 install-exe: all
 	$(INSTALL_PROGRAM) ogr_fdw_info$(X) '$(DESTDIR)$(bindir)'
