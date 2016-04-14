@@ -1,3 +1,12 @@
 *.o
+*.a
 *.so
-ogr_fdw_info
+*.pc
+ogr_fdw_info*
+sql/ogr_fdw.sql
+expected/ogr_fdw.out
+results/
+regression.diffs
+regression.out
+tmp_check/
+log/
