@@ -95,7 +95,7 @@ typedef struct OgrFdwTable
 {
 	int ncols;
 	char *tblname;
-	OgrFdwColumn **cols;
+	OgrFdwColumn *cols;
 } OgrFdwTable;
 
 typedef struct OgrConnection

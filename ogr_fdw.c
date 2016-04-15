@@ -96,11 +96,7 @@ static ForeignScan *ogrGetForeignPlan(PlannerInfo *root,
 				   List *tlist,
 				   List *scan_clauses
 #if PG_VERSION_NUM >= 90500
-,
-/*
-* Require PostgreSQL >= 9.5
-*/
-				   Plan *outer_plan 
+				   ,Plan *outer_plan 
 #endif
 );
 static void ogrBeginForeignScan(ForeignScanState *node, int eflags);
@@ -108,14 +104,11 @@ static TupleTableSlot *ogrIterateForeignScan(ForeignScanState *node);
 static void ogrReScanForeignScan(ForeignScanState *node);
 static void ogrEndForeignScan(ForeignScanState *node);
 
-static void strTableColumnLaunder (char *str);
-
 #if PG_VERSION_NUM >= 90500
-/*
-* Require PostgreSQL >= 9.5
-*/
 static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt,
 				    Oid serverOid);
+
+static void strTableColumnLaunder (char *str);
 #endif
 
 /*
@@ -628,11 +621,7 @@ ogrGetForeignPaths(PlannerInfo *root,
 					NULL,    /* no outer rel either */
 					NULL  /* no extra plan */
 #if PG_VERSION_NUM >= 90500
-,
-/*
-* Require PostgreSQL >= 9.5
-*/
-					NIL /* no fdw_private list */
+					,NIL /* no fdw_private list */
 #endif  					
 					)
 		);   /* no fdw_private data */
@@ -653,11 +642,7 @@ ogrGetForeignPlan(PlannerInfo *root,
                   List *tlist,
                   List *scan_clauses
 #if PG_VERSION_NUM >= 90500
-,
-/*
-* Require PostgreSQL >= 9.5
-*/
-                  Plan *outer_plan
+                  ,Plan *outer_plan
 #endif                  
                   )
 {
@@ -714,13 +699,9 @@ ogrGetForeignPlan(PlannerInfo *root,
 							NIL,	/* no expressions to evaluate */
 							fdw_private 
 #if PG_VERSION_NUM >= 90500
-,
-/*
-* Require PostgreSQL >= 9.5
-*/
-							NIL,  /* no scan_tlist */
-							NIL,   /* no remote quals */ 
-							outer_plan
+							,NIL  /* no scan_tlist */
+							,NIL   /* no remote quals */ 
+							,outer_plan
 #endif
 ); 
 
@@ -798,53 +779,15 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 			));	
 }
 
-#if 0
-typedef enum 
-{
-	OGR_GEOMETRY,
-	OGR_FID,
-	OGR_FIELD
-} OgrColumnVariant;
-
-typedef struct OgrFdwColumn
-{
-	int pgattnum;            /* PostgreSQL attribute number */
-	int pgattisdropped;      /* PostgreSQL attribute dropped? */
-	char *pgname;            /* PostgreSQL column name */
-	Oid pgtype;              /* PostgreSQL data type */
-	int pgtypmod;            /* PostgreSQL type modifier */
-	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
-
-	OgrColumnVariant ogrvariant;
-	int ogrfldnum;
-
-	// int used;                /* is the column used in the query? */
-	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
-	// char *val;               /* buffer for OGR to return results in (LOB locator for LOBs) */
-	// size_t val_size;           /* allocated size in val */
-	// int val_null;          /* indicator for NULL value */
-} OgrFdwColumn;
-
-typedef struct OgrFdwTable
-{
-	OGRFeatureDefnH fdfn; 
-	int npgcols;   /* number of columns (including dropped) in the PostgreSQL foreign table */
-	int ncols;
-	OgrFdwColumn **cols;
-} OgrFdwTable;
-#endif 
-
 static void
 freeOgrFdwTable(OgrFdwTable *table)
 {
-	int i;
-	for ( i = 0; i < table->ncols; i++ )
+	if ( table ) 
 	{
-		if ( table->cols[i] )
-			pfree(table->cols[i]);
+		if ( table->tblname ) pfree(table->tblname);
+		if ( table->cols ) pfree(table->cols);
+		pfree(table);
 	}
-	if ( table->tblname ) pfree(table->tblname);
-	if ( table->cols ) pfree(table->cols);
 }
 
 typedef struct
@@ -901,7 +844,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	tupdesc = rel->rd_att;
 	execstate->tupdesc = tupdesc;
 	tbl->ncols = tupdesc->natts;
-	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn*));
+	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
 	tbl->tblname = pstrdup(tblname);
 
 	/* Get OGR metadata ready */
@@ -929,34 +872,32 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	for ( i = 0; i < tbl->ncols; i++ )
 	{
 		Form_pg_attribute att_tuple = tupdesc->attrs[i];
-		OgrFdwColumn *col = palloc0(sizeof(OgrFdwColumn));
-		tbl->cols[i] = col;
-		
-		col->pgattnum = att_tuple->attnum;
-		col->pgtype = att_tuple->atttypid;
-		col->pgtypmod = att_tuple->atttypmod;
-		col->pgattisdropped = att_tuple->attisdropped;
+		OgrFdwColumn col = tbl->cols[i];
+		col.pgattnum = att_tuple->attnum;
+		col.pgtype = att_tuple->atttypid;
+		col.pgtypmod = att_tuple->atttypmod;
+		col.pgattisdropped = att_tuple->attisdropped;
 
 		/* Skip filling in any further metadata about dropped columns */
-		if ( att_tuple->attisdropped )
+		if ( col.pgattisdropped )
 			continue;
 
 		/* Find the appropriate conversion function */
-		getTypeInputInfo(col->pgtype, &col->pginputfunc, &col->pginputioparam);
-		getTypeBinaryInputInfo(col->pgtype, &col->pgrecvfunc, &col->pgrecvioparam);
+		getTypeInputInfo(col.pgtype, &col.pginputfunc, &col.pginputioparam);
+		getTypeBinaryInputInfo(col.pgtype, &col.pgrecvfunc, &col.pgrecvioparam);
 		
 		/* Get the PgSQL column name */
-		col->pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
+		col.pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
 		
-		if ( strcaseeq(col->pgname, "fid") && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
+		if ( strcaseeq(col.pgname, "fid") && (col.pgtype == INT4OID || col.pgtype == INT8OID) )
 		{
 			if ( fid_count >= 1 )
-				elog(ERROR, "FDW table includes more than one FID column");
+				elog(ERROR, "FDW table '%s' includes more than one FID column", tblname);
 			
-			col->ogrvariant = OGR_FID;
-			col->ogrfldnum = fid_count++;
+			col.ogrvariant = OGR_FID;
+			col.ogrfldnum = fid_count++;
 		}
-		else if ( col->pgtype == GEOMETRYOID )
+		else if ( col.pgtype == GEOMETRYOID )
 		{
 			/* Stop if there are more geometry columns than we can support */
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
@@ -966,19 +907,37 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 			if ( geom_count >= ogr_geom_count )
 				elog(ERROR, "FDW table includes more than one geometry column");
 #endif
-			col->ogrvariant = OGR_GEOMETRY;
-			col->ogrfldtype = OFTBinary;
-			col->ogrfldnum = geom_count++;
+			col.ogrvariant = OGR_GEOMETRY;
+			col.ogrfldtype = OFTBinary;
+			col.ogrfldnum = geom_count++;
 		}
 		else
 		{
+			List *options;
+			ListCell *lc;
 			OgrFieldEntry *found_entry;
-			
-			/* Initialize the search key */
+
+			/* By default, search for the PgSQL column name */
 			OgrFieldEntry entry;
-			entry.fldname = col->pgname;
+			entry.fldname = col.pgname;
 			entry.fldnum = 0;
-			
+		
+			/* 
+			 * But, if there is a 'column_name' option for this column, we 
+			 * want to search for *that* in the OGR layer.
+			 */
+			options = GetForeignColumnOptions(execstate->foreigntableid, i + 1);
+			foreach(lc, options)
+			{
+				DefElem    *def = (DefElem *) lfirst(lc);
+
+				if ( streq(def->defname, "column_name") )
+				{
+					entry.fldname = defGetString(def);
+					break;
+				}
+			}
+
 			/* Search PgSQL column name in the OGR column name list */
 			found_entry = bsearch(&entry, ogr_fields, ogr_ncols, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
 
@@ -986,19 +945,19 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 			if ( found_entry )
 			{
 				OGRFieldDefnH fld = OGR_FD_GetFieldDefn(dfn, found_entry->fldnum);
+				OGRFieldType fldtype = OGR_Fld_GetType(fld);
 				
 				/* Error if types mismatched when column names match */
-				ogrCanConvertToPg(OGR_Fld_GetType(fld), col->pgtype,
-				                  col->pgname, tblname);
+				ogrCanConvertToPg(fldtype, col.pgtype, col.pgname, tblname);
 				
-				col->ogrvariant = OGR_FIELD;
-				col->ogrfldnum = found_entry->fldnum;
-				col->ogrfldtype = OGR_Fld_GetType(fld);
+				col.ogrvariant = OGR_FIELD;
+				col.ogrfldnum = found_entry->fldnum;
+				col.ogrfldtype = fldtype;
 				field_count++;
 			}
 			else
 			{
-				col->ogrvariant = OGR_UNMATCHED;
+				col.ogrvariant = OGR_UNMATCHED;
 			}
 		}
 	}
@@ -1012,7 +971,6 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	
 	return;
 }
-
 
 
 /*
@@ -1084,6 +1042,12 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
 	return value;
 }
 
+static inline void
+ogrNullSlot(Datum *values, bool *nulls, int i)
+{
+	values[i] = PointerGetDatum(NULL);
+	nulls[i] = true;
+}
 
 /*
 * The ogrIterateForeignScan is getting a new TupleTableSlot to handle
@@ -1116,23 +1080,22 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 	/* For each pgtable column, get a value from OGR */
 	for ( i = 0; i < tbl->ncols; i++ )
 	{
-		OgrFdwColumn *col = tbl->cols[i];
-		const char *pgname = col->pgname;
-		Oid pgtype = col->pgtype;
-		int pgtypmod = col->pgtypmod;
-		Oid pginputfunc = col->pginputfunc;
-		// Oid pginputioparam = col->pginputioparam;
-		int ogrfldnum = col->ogrfldnum;
-		OGRFieldType ogrfldtype = col->ogrfldtype;
-		OgrColumnVariant ogrvariant = col->ogrvariant;
+		OgrFdwColumn col = tbl->cols[i];
+		const char *pgname = col.pgname;
+		Oid pgtype = col.pgtype;
+		int pgtypmod = col.pgtypmod;
+		Oid pginputfunc = col.pginputfunc;
+		// Oid pginputioparam = col.pginputioparam;
+		int ogrfldnum = col.ogrfldnum;
+		OGRFieldType ogrfldtype = col.ogrfldtype;
+		OgrColumnVariant ogrvariant = col.ogrvariant;
 		
 		/* 
 		 * Fill in dropped attributes with NULL 
 		 */
-		if ( col->pgattisdropped )
+		if ( col.pgattisdropped )
 		{
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);
+			ogrNullSlot(values, nulls, i);
 			continue;
 		}
 		
@@ -1142,8 +1105,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 			
 			if ( fid == OGRNullFID )
 			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
+				ogrNullSlot(values, nulls, i);
 			}
 			else
 			{
@@ -1171,8 +1133,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 			if ( ! geom )
 			{
 				/* No geometry column, so make the output null */
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
+				ogrNullSlot(values, nulls, i);
 				continue;
 			}
 
@@ -1226,13 +1187,12 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 				 * and just have no typmod checking.
 				 */
 				nulls[i] = false;
-				values[i] = OidFunctionCall1(col->pgrecvfunc, PointerGetDatum(&strinfo));
+				values[i] = OidFunctionCall1(col.pgrecvfunc, PointerGetDatum(&strinfo));
 			}
 			else 
 			{
 				elog(NOTICE, "conversion to geometry called with column type not equal to bytea or geometry");
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
+				ogrNullSlot(values, nulls, i);
 			}
 		}
 		else if ( ogrvariant == OGR_FIELD )
@@ -1274,6 +1234,10 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 						{
 							nulls[i] = false;
 							values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
+						}
+						else
+						{
+							ogrNullSlot(values, nulls, i);
 						}
 						break;
 					}
@@ -1329,15 +1293,13 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 			}
 			else
 			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);				
+				ogrNullSlot(values, nulls, i);
 			}
 		}			
 		/* Fill in unmatched columns with NULL */
 		else if ( ogrvariant == OGR_UNMATCHED )
 		{
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);
+			ogrNullSlot(values, nulls, i);
 		}
 		else 
 		{
@@ -1703,6 +1665,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 }
 #endif /*end import foreign schema **/
 
+#if PG_VERSION_NUM >= 90500
 static void strTableColumnLaunder (char *str)
 {
 	int i, j = 0;
@@ -1737,3 +1700,4 @@ static void strTableColumnLaunder (char *str)
 			j = STR_MAX_LEN - 1;
 	}
 }
+#endif
