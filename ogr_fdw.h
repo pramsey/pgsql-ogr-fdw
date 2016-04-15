@@ -77,6 +77,8 @@ typedef struct OgrFdwColumn
 	int pgtypmod;            /* PostgreSQL type modifier */
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
 	Oid pginputioparam;
+	Oid pgrecvfunc;          /* PostgreSQL function to convert binary to type */
+	Oid pgrecvioparam;
 
 	OgrColumnVariant ogrvariant;
 	int ogrfldnum;
@@ -92,6 +94,7 @@ typedef struct OgrFdwColumn
 typedef struct OgrFdwTable
 {
 	int ncols;
+	char *tblname;
 	OgrFdwColumn **cols;
 } OgrFdwTable;
 

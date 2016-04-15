@@ -500,11 +500,6 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 		OGRCleanupAll();
 	}
 	
-	if ( catalog == ForeignTableRelationId )
-	{
-		
-	}
-	
 	PG_RETURN_VOID();
 }
 
@@ -848,8 +843,9 @@ freeOgrFdwTable(OgrFdwTable *table)
 		if ( table->cols[i] )
 			pfree(table->cols[i]);
 	}
-	pfree(table->cols);
-}	
+	if ( table->tblname ) pfree(table->tblname);
+	if ( table->cols ) pfree(table->cols);
+}
 
 typedef struct
 {
@@ -894,7 +890,6 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	if ( execstate->table )
 	{
 		freeOgrFdwTable(execstate->table);
-		pfree(execstate->table->cols);
 		execstate->table = NULL;
 	}
 	
@@ -907,6 +902,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	execstate->tupdesc = tupdesc;
 	tbl->ncols = tupdesc->natts;
 	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn*));
+	tbl->tblname = pstrdup(tblname);
 
 	/* Get OGR metadata ready */
 	dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
@@ -919,6 +915,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 
 
 	/* Prepare sorted list of OGR column names */
+	/* TODO: change this to a hash table, to avoid repeated strcmp */
 	ogr_fields = palloc0(ogr_ncols * sizeof(OgrFieldEntry));
 	for ( i = 0; i < ogr_ncols; i++ )
 	{
@@ -946,11 +943,12 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 
 		/* Find the appropriate conversion function */
 		getTypeInputInfo(col->pgtype, &col->pginputfunc, &col->pginputioparam);
+		getTypeBinaryInputInfo(col->pgtype, &col->pgrecvfunc, &col->pgrecvioparam);
 		
 		/* Get the PgSQL column name */
 		col->pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
 		
-		if ( strcasecmp(col->pgname, "fid") == 0 && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
+		if ( strcaseeq(col->pgname, "fid") && (col->pgtype == INT4OID || col->pgtype == INT8OID) )
 		{
 			if ( fid_count >= 1 )
 				elog(ERROR, "FDW table includes more than one FID column");
@@ -1063,28 +1061,6 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
  * column and every row, so probably a performance improvement would
  * be to cache this information once.
  */
-#if 0
-static Datum
-pgDatumFromCString(const char *cstr, Oid pgtype, int32 pgtypmod)
-{
-	Datum cdata;
-	Datum value;
-	Oid inputfunc;
-	Oid inputioparam;
-
-	/* Find the appropriate conversion function */
-	getTypeInputInfo(pgtype, &inputfunc, &inputioparam);
-	cdata = CStringGetDatum(cstr);
-	
-	/* Count on the typmod always being properly handled, even by non-typmod types... */
-	value = OidFunctionCall3(inputfunc, cdata,
-		ObjectIdGetDatum(InvalidOid),
-		Int32GetDatum(pgtypmod));
-
-	return value;
-}
-#endif
-
 static Datum
 pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
 {
@@ -1109,365 +1085,6 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
 }
 
 
-
-
-static OGRErr 
-ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable *tbl)
-{
-	int i, j;
-
-	/* Check our assumption that slot and setup data match */
-	if ( tbl->ncols != tupdesc->natts )
-	{
-		elog(ERROR, "FDW metadata table and exec table have mismatching number of columns");
-		return OGRERR_FATAL;
-	}
-	
-	for ( i = 0; i < tbl->ncols; i++ )
-	{
-		OgrFdwColumn *col = tbl->cols[i];
-		Oid pgtype = col->pgtype;
-		int pgtypemod = col->pgtypemod;
-		Oid pginputfunc = col->pginputfunc;
-		Oid pginputioparam = col->pginputioparam;
-		const char *pgcolname = col->pgname;
-		
-		/* 
-		 * Fill in dropped attributes with NULL 
-		 */
-		if ( col->pgattisdropped )
-		{
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);
-			continue;
-		}
-		
-		if ( col->ogrvariant == OGR_FID )
-		{
-			long fid = OGR_F_GetFID(feat);
-			
-			if ( fid == OGRNullFID )
-			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
-			}
-			else
-			{
-				char fidstr[256];
-				snprintf(fidstr, 256, "%ld", fid);
-
-				nulls[i] = false;
-				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypemod, pginputfunc);
-			}
-/* XXX START HERE */			
-		}
-		else if ( col->ogrvariant == OGR_GEOMETRY )
-		{
-		}
-		else if ( col->ogrvariant == OGR_FIELD )
-		{
-			long fid = OGR_F_GetFID(feat);
-			
-			if ( fid == OGRNullFID )
-			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
-			}
-			else
-			{
-				char fidstr[256];
-				snprintf(fidstr, 256, "%ld", fid);
-
-				nulls[i] = false;
-				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypemod);
-			}
-			
-		}
-		/* Fill in unmatched columns with NULL */
-		else if ( col->ogrvariant == OGR_UNMATCHED )
-		{
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);
-		}
-		else 
-		{
-			elog(ERROR, "OGR FDW unsupported column variant in \"%s\", %d", pgcolname, col->ogrvariant);
-			return OGRERR_FATAL;
-		}
-		
-	}
-	
-	
-	/*
-	 * We have to read several "non-field" fields (FID and Geometry/Geometries) before 
-	 * we get to "real" OGR fields in the field definition 
-	 */
-	j = -(1 + ogr_geom_field_count);
-	for ( i = 0; i < tupdesc->natts; i++ )
-	{
-		Form_pg_attribute att_tuple = tupdesc->attrs[i];
-		Oid pgtype = att_tuple->atttypid;
-		int pgtypemod = att_tuple->atttypmod;
-		const char *pgcolname = att_tuple->attname.data;
-		const char *pgtblname = get_rel_name(att_tuple->attrelid);
-
-		/* 
-		 * Fill in dropped attributes with NULL 
-		 */
-		if ( att_tuple->attisdropped )
-		{
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);
-			continue;
-		}
-		
-		/* 
-		 * First non-dropped column is FID 
-		 */
-		if ( j == -(1 + ogr_geom_field_count) )
-		{
-			long fid = OGR_F_GetFID(feat);
-			
-			if ( fid == OGRNullFID )
-			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
-			}
-			else
-			{
-				char fidstr[256];
-				snprintf(fidstr, 256, "%ld", fid);
-
-				nulls[i] = false;
-				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypemod);
-			}
-			
-			/* Move on to next OGR column */
-			j++;
-			continue;				
-		}
-
-		/* 
-		 * Second non-dropped column is Geometry 
-		 */
-		if ( j < 0 )
-		{
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, j + ogr_geom_field_count);
-#else
-			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
-#endif
-	
-			/* No geometry ? NULL */
-			if ( ! geom )
-			{
-				/* No geometry column, so make the output null */
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);
-			}
-			else
-			{
-				/* 
-				 * Start by generating standard PgSQL variable length byte
-				 * buffer, with WKB filled into the data area.
-				 */
-				int wkbsize = OGR_G_WkbSize(geom);
-				int varsize = wkbsize + VARHDRSZ;
-				bytea *varlena = palloc(varsize);
-				OGRErr err = OGR_G_ExportToWkb(geom, wkbNDR, (unsigned char *)VARDATA(varlena));
-				SET_VARSIZE(varlena, varsize);
-
-				if ( err != OGRERR_NONE )
-				{
-					return err;
-				}
-				else
-				{
-					if ( pgtype == BYTEAOID )
-					{
-						/* 
-						 * Nothing special to do for bytea, just send the varlena data through! 
-						 */
-						nulls[i] = false;
-						values[i] = PointerGetDatum(varlena);
-					}
-					else if ( pgtype == GEOMETRYOID )
-					{
-						/*
-						 * For geometry we need to convert the varlena WKB data into a serialized
-						 * geometry (aka "gserialized"). For that, we can use the type's "recv" function
-						 * which takes in WKB and spits out serialized form.
-						 */
-						
-						Oid recvfunction;
-						Oid ioparam;
-						StringInfoData strinfo;
-					
-						/*
-						 * The "recv" function expects to receive a StringInfo pointer 
-						 * on the first argument, so we form one of those ourselves by
-						 * hand. Rather than copy into a fresh buffer, we'll just use the 
-						 * existing varlena buffer and point to the data area.
-						 */
-						strinfo.data = (char *)VARDATA(varlena);
-						strinfo.len = wkbsize;
-						strinfo.maxlen = strinfo.len;
-						strinfo.cursor = 0;
-					
-						/* 
-						 * Given a type oid (geometry in this case), 
-						 * look up the "recv" function that takes in
-						 * binary input and outputs the serialized form.
-						 */
-						getTypeBinaryInputInfo(pgtype, &recvfunction, &ioparam);
-				
-						/* 
-						 * TODO: We should probably find out the typmod and send
-						 * this along to the recv function too, but we can ignore it now
-						 * and just have no typmod checking.
-						 */
-						nulls[i] = false;
-						values[i] = OidFunctionCall1(recvfunction, PointerGetDatum(&strinfo));
-					}
-					else 
-					{
-						elog(NOTICE, "conversion to geometry called with column type not equal to bytea or geometry");
-						nulls[i] = true;
-						values[i] = PointerGetDatum(NULL);
-					}
-				}
-			}
-
-			j++;
-			continue;					
-		}			
-
-		/*
-		 * All the rest of the columns come from the OGR fields.
-		 * It's possible that there are more foreign table columns than
-		 * there are OGR fields, and in that case we'll just fill them
-		 * in with NULLs.
-		 */
-		if ( j >= 0 && j < ogr_nfields )
-		{
-			OGRFieldDefnH flddfn = OGR_F_GetFieldDefnRef(feat, j);
-			OGRFieldType ogrtype = OGR_Fld_GetType(flddfn);
-			
-			/* Ensure that the OGR data type fits the destination Pg column */
-			ogrCanConvertToPg(ogrtype, pgtype, pgcolname, pgtblname);
-			
-			/* Only convert non-null fields */
-			if ( OGR_F_IsFieldSet(feat, j) )
-			{
-				switch(ogrtype)
-				{
-					case OFTBinary:
-					{
-						/* 
-						 * Convert binary fields to bytea directly 
-						 */
-						int bufsize;
-						GByte *buf = OGR_F_GetFieldAsBinary(feat, j, &bufsize);
-						int varsize = bufsize + VARHDRSZ;
-						bytea *varlena = palloc(varsize);
-						memcpy(VARDATA(varlena), buf, bufsize);
-						SET_VARSIZE(varlena, varsize);
-						nulls[i] = false;
-						values[i] = PointerGetDatum(varlena);
-						break;
-					}
-					case OFTInteger:
-					case OFTReal:
-					case OFTString:
-					{
-						/* 
-						 * Convert numbers and strings via a string representation.
-						 * Handling numbers directly would be faster, but require a lot of extra code.
-						 * For now, we go via text.
-						 */
-						const char *cstr = OGR_F_GetFieldAsString(feat, j);
-						if ( cstr )
-						{
-							nulls[i] = false;
-							values[i] = pgDatumFromCString(cstr, pgtype, pgtypemod);
-						}
-						break;
-					}
-					case OFTDate:
-					case OFTTime:
-					case OFTDateTime:
-					{	
-						/* 
-						 * OGR date/times have a weird access method, so we use that to pull
-						 * out the raw data and turn it into a string for PgSQL's (very
-						 * sophisticated) date/time parsing routines to handle.
-						 */
-						int year, month, day, hour, minute, second, tz;
-						char cstr[256];
-						
-						OGR_F_GetFieldAsDateTime(feat, j, 
-						                         &year, &month, &day,
-						                         &hour, &minute, &second, &tz);
-						
-						if ( ogrtype == OFTDate )
-						{
-							snprintf(cstr, 256, "%d-%02d-%02d", year, month, day);
-						}
-						else if ( ogrtype == OFTTime )
-						{
-							snprintf(cstr, 256, "%02d:%02d:%02d", hour, minute, second);
-						}
-						else 
-						{
-							snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
-						}
-						
-						nulls[i] = false;
-						values[i] = pgDatumFromCString(cstr, pgtype, pgtypemod);
-						break;
-						
-					}
-					case OFTIntegerList:
-					case OFTRealList:
-					case OFTStringList:
-					{
-						/* TODO, map these OGR array types into PgSQL arrays (fun!) */
-						elog(ERROR, "unsupported OGR array type \"%s\"", OGR_GetFieldTypeName(ogrtype));
-						break;
-					}
-					default:
-					{
-						elog(ERROR, "unsupported OGR type \"%s\"", OGR_GetFieldTypeName(ogrtype));
-						break;
-					}
-					
-				}				
-			}
-			else
-			{
-				nulls[i] = true;
-				values[i] = PointerGetDatum(NULL);				
-			}
-		}
-		else 
-		{
-			elog(NOTICE, "handling more pgsql fields (%d) than there are ogr fields (%d)", i, ogr_nfields);
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);							
-		}
-			
-		/* Incrememnt our OGR column counter */
-		j++;
-	}
-
-	/* done! */
-	return OGRERR_NONE;
-}
-
-
-
-
-
 /*
 * The ogrIterateForeignScan is getting a new TupleTableSlot to handle
 * for each iteration. Each slot contains an entry for every column in 
@@ -1482,49 +1099,44 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 * using int8 as the type, and then a geometry using bytea as
 * the type, then everything else.
 */
-#if 0
 static OGRErr 
-ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
+ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc, const OgrFdwTable *tbl)
 {
-	int i, j;
+	int i;
 	Datum *values = slot->tts_values;
 	bool *nulls = slot->tts_isnull;
-	int ogr_nfields = OGR_F_GetFieldCount(feat);
-	OGRFeatureDefnH ogr_feat_defn = OGR_F_GetDefnRef(feat);
-	int ogr_geom_field_count;
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-	ogr_geom_field_count = OGR_FD_GetGeomFieldCount(ogr_feat_defn);
-#else
-	ogr_geom_field_count = ( OGR_FD_GetGeomType(ogr_feat_defn) != wkbNone ) ? 1 : 0;
-#endif
-	
-	/*
-	 * We have to read several "non-field" fields (FID and Geometry/Geometries) before 
-	 * we get to "real" OGR fields in the field definition 
-	 */
-	j = -(1 + ogr_geom_field_count);
-	for ( i = 0; i < tupdesc->natts; i++ )
-	{
-		Form_pg_attribute att_tuple = tupdesc->attrs[i];
-		Oid pgtype = att_tuple->atttypid;
-		int32 pgtypemod = att_tuple->atttypmod;
-		const char *pgcolname = att_tuple->attname.data;
-		const char *pgtblname = get_rel_name(att_tuple->attrelid);
 
+	/* Check our assumption that slot and setup data match */
+	if ( tbl->ncols != tupdesc->natts )
+	{
+		elog(ERROR, "FDW metadata table and exec table have mismatching number of columns");
+		return OGRERR_FAILURE;
+	}
+	
+	/* For each pgtable column, get a value from OGR */
+	for ( i = 0; i < tbl->ncols; i++ )
+	{
+		OgrFdwColumn *col = tbl->cols[i];
+		const char *pgname = col->pgname;
+		Oid pgtype = col->pgtype;
+		int pgtypmod = col->pgtypmod;
+		Oid pginputfunc = col->pginputfunc;
+		// Oid pginputioparam = col->pginputioparam;
+		int ogrfldnum = col->ogrfldnum;
+		OGRFieldType ogrfldtype = col->ogrfldtype;
+		OgrColumnVariant ogrvariant = col->ogrvariant;
+		
 		/* 
 		 * Fill in dropped attributes with NULL 
 		 */
-		if ( att_tuple->attisdropped )
+		if ( col->pgattisdropped )
 		{
 			nulls[i] = true;
 			values[i] = PointerGetDatum(NULL);
 			continue;
 		}
 		
-		/* 
-		 * First non-dropped column is FID 
-		 */
-		if ( j == -(1 + ogr_geom_field_count) )
+		if ( ogrvariant == OGR_FID )
 		{
 			long fid = OGR_F_GetFID(feat);
 			
@@ -1539,21 +1151,18 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 				snprintf(fidstr, 256, "%ld", fid);
 
 				nulls[i] = false;
-				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypemod);
+				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypmod, pginputfunc);
 			}
-			
-			/* Move on to next OGR column */
-			j++;
-			continue;				
 		}
-
-		/* 
-		 * Second non-dropped column is Geometry 
-		 */
-		if ( j < 0 )
+		else if ( ogrvariant == OGR_GEOMETRY )
 		{
+			int wkbsize;
+			int varsize;
+			bytea *varlena;
+			OGRErr err;
+				
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, j + ogr_geom_field_count);
+			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, ogrfldnum);
 #else
 			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
 #endif
@@ -1564,102 +1173,77 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 				/* No geometry column, so make the output null */
 				nulls[i] = true;
 				values[i] = PointerGetDatum(NULL);
+				continue;
 			}
-			else
+
+			/* 
+			 * Start by generating standard PgSQL variable length byte
+			 * buffer, with WKB filled into the data area.
+			 */
+			wkbsize = OGR_G_WkbSize(geom);
+			varsize = wkbsize + VARHDRSZ;
+			varlena = palloc(varsize);
+			err = OGR_G_ExportToWkb(geom, wkbNDR, (unsigned char *)VARDATA(varlena));
+			SET_VARSIZE(varlena, varsize);
+
+			/* Couldn't create WKB from OGR geometry? error */
+			if ( err != OGRERR_NONE )
+			{
+				return err;
+			}
+			
+			if ( pgtype == BYTEAOID )
 			{
 				/* 
-				 * Start by generating standard PgSQL variable length byte
-				 * buffer, with WKB filled into the data area.
+				 * Nothing special to do for bytea, just send the varlena data through! 
 				 */
-				int wkbsize = OGR_G_WkbSize(geom);
-				int varsize = wkbsize + VARHDRSZ;
-				bytea *varlena = palloc(varsize);
-				OGRErr err = OGR_G_ExportToWkb(geom, wkbNDR, (unsigned char *)VARDATA(varlena));
-				SET_VARSIZE(varlena, varsize);
-
-				if ( err != OGRERR_NONE )
-				{
-					return err;
-				}
-				else
-				{
-					if ( pgtype == BYTEAOID )
-					{
-						/* 
-						 * Nothing special to do for bytea, just send the varlena data through! 
-						 */
-						nulls[i] = false;
-						values[i] = PointerGetDatum(varlena);
-					}
-					else if ( pgtype == GEOMETRYOID )
-					{
-						/*
-						 * For geometry we need to convert the varlena WKB data into a serialized
-						 * geometry (aka "gserialized"). For that, we can use the type's "recv" function
-						 * which takes in WKB and spits out serialized form.
-						 */
-						
-						Oid recvfunction;
-						Oid ioparam;
-						StringInfoData strinfo;
-					
-						/*
-						 * The "recv" function expects to receive a StringInfo pointer 
-						 * on the first argument, so we form one of those ourselves by
-						 * hand. Rather than copy into a fresh buffer, we'll just use the 
-						 * existing varlena buffer and point to the data area.
-						 */
-						strinfo.data = (char *)VARDATA(varlena);
-						strinfo.len = wkbsize;
-						strinfo.maxlen = strinfo.len;
-						strinfo.cursor = 0;
-					
-						/* 
-						 * Given a type oid (geometry in this case), 
-						 * look up the "recv" function that takes in
-						 * binary input and outputs the serialized form.
-						 */
-						getTypeBinaryInputInfo(pgtype, &recvfunction, &ioparam);
-				
-						/* 
-						 * TODO: We should probably find out the typmod and send
-						 * this along to the recv function too, but we can ignore it now
-						 * and just have no typmod checking.
-						 */
-						nulls[i] = false;
-						values[i] = OidFunctionCall1(recvfunction, PointerGetDatum(&strinfo));
-					}
-					else 
-					{
-						elog(NOTICE, "conversion to geometry called with column type not equal to bytea or geometry");
-						nulls[i] = true;
-						values[i] = PointerGetDatum(NULL);
-					}
-				}
+				nulls[i] = false;
+				values[i] = PointerGetDatum(varlena);
 			}
-
-			j++;
-			continue;					
-		}			
-
-		/*
-		 * All the rest of the columns come from the OGR fields.
-		 * It's possible that there are more foreign table columns than
-		 * there are OGR fields, and in that case we'll just fill them
-		 * in with NULLs.
-		 */
-		if ( j >= 0 && j < ogr_nfields )
-		{
-			OGRFieldDefnH flddfn = OGR_F_GetFieldDefnRef(feat, j);
-			OGRFieldType ogrtype = OGR_Fld_GetType(flddfn);
-			
-			/* Ensure that the OGR data type fits the destination Pg column */
-			ogrCanConvertToPg(ogrtype, pgtype, pgcolname, pgtblname);
-			
-			/* Only convert non-null fields */
-			if ( OGR_F_IsFieldSet(feat, j) )
+			else if ( pgtype == GEOMETRYOID )
 			{
-				switch(ogrtype)
+				/*
+				 * For geometry we need to convert the varlena WKB data into a serialized
+				 * geometry (aka "gserialized"). For that, we can use the type's "recv" function
+				 * which takes in WKB and spits out serialized form.
+				 */					
+				StringInfoData strinfo;
+			
+				/*
+				 * The "recv" function expects to receive a StringInfo pointer 
+				 * on the first argument, so we form one of those ourselves by
+				 * hand. Rather than copy into a fresh buffer, we'll just use the 
+				 * existing varlena buffer and point to the data area.
+				 */
+				strinfo.data = (char *)VARDATA(varlena);
+				strinfo.len = wkbsize;
+				strinfo.maxlen = strinfo.len;
+				strinfo.cursor = 0;
+			
+				/* 
+				 * TODO: We should probably find out the typmod and send
+				 * this along to the recv function too, but we can ignore it now
+				 * and just have no typmod checking.
+				 */
+				nulls[i] = false;
+				values[i] = OidFunctionCall1(col->pgrecvfunc, PointerGetDatum(&strinfo));
+			}
+			else 
+			{
+				elog(NOTICE, "conversion to geometry called with column type not equal to bytea or geometry");
+				nulls[i] = true;
+				values[i] = PointerGetDatum(NULL);
+			}
+		}
+		else if ( ogrvariant == OGR_FIELD )
+		{			
+			/* Ensure that the OGR data type fits the destination Pg column */
+			ogrCanConvertToPg(ogrfldtype, pgtype, pgname, tbl->tblname);
+
+			/* Only convert non-null fields */
+			if ( OGR_F_IsFieldSet(feat, ogrfldnum) )
+			{
+				switch(ogrfldtype)
 				{
 					case OFTBinary:
 					{
@@ -1667,7 +1251,7 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						 * Convert binary fields to bytea directly 
 						 */
 						int bufsize;
-						GByte *buf = OGR_F_GetFieldAsBinary(feat, j, &bufsize);
+						GByte *buf = OGR_F_GetFieldAsBinary(feat, ogrfldnum, &bufsize);
 						int varsize = bufsize + VARHDRSZ;
 						bytea *varlena = palloc(varsize);
 						memcpy(VARDATA(varlena), buf, bufsize);
@@ -1677,9 +1261,6 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						break;
 					}
 					case OFTInteger:
-#if GDAL_VERSION_MAJOR >= 2
-					case OFTInteger64:
-#endif
 					case OFTReal:
 					case OFTString:
 					{
@@ -1688,11 +1269,11 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						 * Handling numbers directly would be faster, but require a lot of extra code.
 						 * For now, we go via text.
 						 */
-						const char *cstr = OGR_F_GetFieldAsString(feat, j);
+						const char *cstr = OGR_F_GetFieldAsString(feat, ogrfldnum);
 						if ( cstr )
 						{
 							nulls[i] = false;
-							values[i] = pgDatumFromCString(cstr, pgtype, pgtypemod);
+							values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
 						}
 						break;
 					}
@@ -1708,28 +1289,25 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 						int year, month, day, hour, minute, second, tz;
 						char cstr[256];
 						
-						OGR_F_GetFieldAsDateTime(feat, j, 
+						OGR_F_GetFieldAsDateTime(feat, ogrfldnum, 
 						                         &year, &month, &day,
 						                         &hour, &minute, &second, &tz);
 						
-						if ( ogrtype == OFTDate )
+						if ( ogrfldtype == OFTDate )
 						{
 							snprintf(cstr, 256, "%d-%02d-%02d", year, month, day);
-							elog(DEBUG3, "converting OFTDate '%s' from OGR", cstr);
 						}
-						else if ( ogrtype == OFTTime )
+						else if ( ogrfldtype == OFTTime )
 						{
 							snprintf(cstr, 256, "%02d:%02d:%02d", hour, minute, second);
-							elog(DEBUG3, "converting OFTTime '%s' from OGR", cstr);
 						}
 						else 
 						{
 							snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
-							elog(DEBUG3, "converting OFTDateTime '%s' from OGR", cstr);
 						}
 						
 						nulls[i] = false;
-						values[i] = pgDatumFromCString(cstr, pgtype, pgtypemod);
+						values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
 						break;
 						
 					}
@@ -1738,12 +1316,12 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 					case OFTStringList:
 					{
 						/* TODO, map these OGR array types into PgSQL arrays (fun!) */
-						elog(ERROR, "unsupported OGR array type \"%s\"", OGR_GetFieldTypeName(ogrtype));
+						elog(ERROR, "unsupported OGR array type \"%s\"", OGR_GetFieldTypeName(ogrfldtype));
 						break;
 					}
 					default:
 					{
-						elog(ERROR, "unsupported OGR type \"%s\"", OGR_GetFieldTypeName(ogrtype));
+						elog(ERROR, "unsupported OGR type \"%s\"", OGR_GetFieldTypeName(ogrfldtype));
 						break;
 					}
 					
@@ -1754,22 +1332,25 @@ ogrFeatureToSlot(OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc)
 				nulls[i] = true;
 				values[i] = PointerGetDatum(NULL);				
 			}
+		}			
+		/* Fill in unmatched columns with NULL */
+		else if ( ogrvariant == OGR_UNMATCHED )
+		{
+			nulls[i] = true;
+			values[i] = PointerGetDatum(NULL);
 		}
 		else 
 		{
-			elog(NOTICE, "handling more pgsql fields (%d) than there are ogr fields (%d)", i, ogr_nfields);
-			nulls[i] = true;
-			values[i] = PointerGetDatum(NULL);							
+			elog(ERROR, "OGR FDW unsupported column variant in \"%s\", %d", pgname, ogrvariant);
+			return OGRERR_FAILURE;
 		}
-			
-		/* Incrememnt our OGR column counter */
-		j++;
+		
 	}
 
 	/* done! */
 	return OGRERR_NONE;
 }
-#endif
+
 
 /*
  * ogrIterateForeignScan
@@ -1803,7 +1384,7 @@ ogrIterateForeignScan(ForeignScanState *node)
 	if ( (feat = OGR_L_GetNextFeature(execstate->ogr.lyr)) )
 	{
 		/* convert result to arrays of values and null indicators */
-		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->tupdesc) )
+		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->tupdesc, execstate->table) )
 		{
 			const char *ogrerr = CPLGetLastErrorMsg();
 			if ( ogrerr && strcmp(ogrerr,"") != 0 )
