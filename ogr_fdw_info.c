@@ -225,10 +225,12 @@ ogrGenerateSQL(const char *source, const char *layer)
 	{
 		char field_name[STR_MAX_LEN];
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		strncpy(field_name, OGR_Fld_GetNameRef(ogr_fld), STR_MAX_LEN);
+		OGRFieldType ogr_fld_type = OGR_Fld_GetType(ogr_fld);
+		const char *ogr_field_name = OGR_Fld_GetNameRef(ogr_fld);
+		strncpy(field_name, ogr_field_name, STR_MAX_LEN);
 		strlaunder(field_name);
 		printf(",\n  %s ", field_name);
-		switch( OGR_Fld_GetType(ogr_fld) )
+		switch( ogr_fld_type )
 		{
 			case OFTInteger:
 #if GDAL_VERSION_MAJOR >= 2 
@@ -272,8 +274,15 @@ ogrGenerateSQL(const char *source, const char *layer)
                 break;
 #endif
 			default:
-				CPLError(CE_Failure, CPLE_AppDefined, "Unsupported GDAL type '%s'", OGR_GetFieldTypeName(OGR_Fld_GetType(ogr_fld)));
+				CPLError(CE_Failure, CPLE_AppDefined, 
+				         "Unsupported GDAL type '%s'", 
+				         OGR_GetFieldTypeName(ogr_fld_type));
 				return OGRERR_FAILURE;
+		}
+		
+		if ( strncasecmp(field_name, ogr_field_name, STR_MAX_LEN) != 0 )
+		{
+            printf(" OPTIONS (column_name '%s')", ogr_field_name);
 		}
 	}
 	printf(" )\n  SERVER %s\n", server_name);
