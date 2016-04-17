@@ -62,10 +62,10 @@
 
 typedef enum 
 {
+	OGR_UNMATCHED,
 	OGR_GEOMETRY,
 	OGR_FID,
-	OGR_FIELD,
-	OGR_UNMATCHED
+	OGR_FIELD
 } OgrColumnVariant;
 
 typedef struct OgrFdwColumn

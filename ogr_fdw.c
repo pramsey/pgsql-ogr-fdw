@@ -812,7 +812,7 @@ freeOgrFdwTable(OgrFdwTable *table)
 
 typedef struct
 {
-	const char *fldname;
+	char *fldname;
 	int fldnum;
 } OgrFieldEntry;
 
@@ -847,6 +847,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	int ogr_geom_count = 0;
 	int field_count = 0;
 	OgrFieldEntry *ogr_fields;
+	int ogr_fields_count = 0;
 	char *tblname = get_rel_name(execstate->foreigntableid);
 
 	/* Blow away any existing table in the state */
@@ -880,11 +881,12 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	/* Prepare sorted list of OGR column names */
 	/* TODO: change this to a hash table, to avoid repeated strcmp */
 	/* We will search both the original and laundered OGR field names for matches */
-	ogr_fields = palloc0(2 * ogr_ncols * sizeof(OgrFieldEntry));
+	ogr_fields_count = 2 * ogr_ncols;
+	ogr_fields = palloc0(ogr_fields_count * sizeof(OgrFieldEntry));
 	for ( i = 0; i < ogr_ncols; i++ )
 	{
-		const char *fldname = OGR_Fld_GetNameRef(OGR_FD_GetFieldDefn(dfn, i));
-		char fldname_laundered[STR_MAX_LEN];
+		char *fldname = pstrdup(OGR_Fld_GetNameRef(OGR_FD_GetFieldDefn(dfn, i)));
+		char *fldname_laundered = palloc(STR_MAX_LEN);
 		strncpy(fldname_laundered, fldname, STR_MAX_LEN);
 		ogrStringLaunder(fldname_laundered);
 		ogr_fields[2*i].fldname = fldname;
@@ -892,7 +894,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 		ogr_fields[2*i+1].fldname = fldname_laundered;
 		ogr_fields[2*i+1].fldnum = i;
 	}
-	qsort(ogr_fields, ogr_ncols, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
+	qsort(ogr_fields, ogr_fields_count, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
 
 
 	/* loop through foreign table columns */
@@ -966,7 +968,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 			}
 
 			/* Search PgSQL column name in the OGR column name list */
-			found_entry = bsearch(&entry, ogr_fields, ogr_ncols, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
+			found_entry = bsearch(&entry, ogr_fields, ogr_fields_count, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
 
 			/* Column name matched, so save this entry, if the types are consistent */
 			if ( found_entry )
@@ -987,12 +989,16 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 				col.ogrvariant = OGR_UNMATCHED;
 			}
 		}
+		tbl->cols[i] = col;
 	}
 
 	elog(DEBUG2, "ogrReadColumnData matched %d FID, %d GEOM, %d FIELDS out of %d PGSQL COLUMNS", fid_count, geom_count, field_count, tbl->ncols);
 
 	/* Clean up */
+	
 	execstate->table = tbl;
+	for( i = 0; i < 2*ogr_ncols; i++ )
+		if ( ogr_fields[i].fldname ) pfree(ogr_fields[i].fldname);
 	pfree(ogr_fields);
 	heap_close(rel, NoLock);
 
