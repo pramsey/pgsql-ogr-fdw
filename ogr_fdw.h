@@ -65,7 +65,7 @@
 #define GDALDatasetH OGRDataSourceH
 #define GDALDriverH OGRSFDriverH
 
-/* Redefine common functions */
+/* Rename GDAL2 functions to OGR equivs */
 #define GDALGetDriverCount() OGRGetDriverCount()
 #define GDALAllRegister() OGRRegisterAll()
 #define GDALGetDriverByName(name) OGRGetDriverByName(name)
@@ -76,8 +76,9 @@
 #define GDALGetDriverShortName(dr) OGR_Dr_GetName(dr)
 #define GDALGetDatasetDriver(ds) OGR_DS_GetDriver(ds)
 	
-#endif
+#endif /* GDAL 1 support */
 
+/* Utility macros for string equality */
 #define streq(s1,s2) (strcmp((s1),(s2)) == 0)
 #define strcaseeq(s1,s2) (strcasecmp((s1),(s2)) == 0)
 
