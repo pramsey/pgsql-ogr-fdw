@@ -58,7 +58,6 @@
 #include "cpl_error.h"
 #include "cpl_string.h"
 
-
 /* Support for GDAL 1.X */
 #if GDAL_VERSION_MAJOR < 2
 
@@ -122,12 +121,13 @@ typedef struct OgrFdwTable
 
 typedef struct OgrConnection
 {
-	char *ds_str;       /* datasource connection string */
-	char *dr_str;       /* driver (format) name */
-	char *lyr_str;      /* layer name */
+	char *ds_str;         /* datasource connection string */
+	char *dr_str;         /* driver (format) name */
+	char *lyr_str;        /* layer name */
 	char *config_options; /* GDAL config options */
+	char *open_options;   /* GDAL open options */
 	GDALDatasetH ds;
-	OGRLayerH lyr;      /* OGR layer handle */
+	OGRLayerH lyr;        /* OGR layer handle */
 } OgrConnection;
 
 typedef struct OgrFdwPlanState

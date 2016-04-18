@@ -207,10 +207,12 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
  * and in FDW options validation.
  */
 static GDALDatasetH
-ogrGetDataSource(const char *source, const char *driver, const char *config_options)
+ogrGetDataSource(const char *source, const char *driver, 
+                 const char *config_options, const char *open_options)
 {
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
+	char **open_option_list = NULL;
 
 	if ( config_options )
 	{
@@ -231,6 +233,9 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 		}
 	}
 
+	if ( open_options )
+		open_option_list = CSLTokenizeString(open_options);
+
 	/* Cannot search for drivers if they aren't registered */
 	/* But don't call for registration if we already have drivers */
 	if ( GDALGetDriverCount() <= 0 )
@@ -249,11 +254,11 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 #if GDAL_VERSION_MAJOR < 2
 		ogr_ds = OGR_Dr_Open(ogr_dr, source, false);
 #else
-		ogr_ds = GDALOpenEx(source,
-		                    GDAL_OF_VECTOR|GDAL_OF_READONLY,
-		                    (const char* const*)CSLAddString(NULL, driver),
-		                    NULL /* open options */,
-		                    NULL);
+		ogr_ds = GDALOpenEx(source,                                         /* file/data source */
+		                    GDAL_OF_VECTOR|GDAL_OF_READONLY,                /* open flags */
+		                    (const char* const*)CSLAddString(NULL, driver), /* driver */
+		                    (const char *const *)open_option_list,          /* open options */
+		                    NULL);                                          /* sibling files */
 #endif
 	}
 	/* No driver, try a blind open... */
@@ -262,7 +267,11 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 #if GDAL_VERSION_MAJOR < 2
 		ogr_ds = OGROpen(source, false, &ogr_dr);
 #else
-		ogr_ds = GDALOpenEx(source, GDAL_OF_VECTOR|GDAL_OF_READONLY, NULL, NULL /* open options */, NULL);
+		ogr_ds = GDALOpenEx(source, 
+		                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
+		                    NULL, 
+		                    (const char *const *)open_option_list,
+		                    NULL);
 #endif
 	}
 
@@ -338,6 +347,8 @@ ogrGetConnectionFromServer(Oid foreignserverid)
 			ogr.dr_str = defGetString(def);
 		if (streq(def->defname, OPT_CONFIG_OPTIONS))
 			ogr.config_options = defGetString(def);
+		if (streq(def->defname, OPT_OPEN_OPTIONS))
+			ogr.open_options = defGetString(def);
 	}
 
 	if ( ! ogr.ds_str )
@@ -349,7 +360,7 @@ ogrGetConnectionFromServer(Oid foreignserverid)
 	 */
 
 	/*  Connect! */
-	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, ogr.config_options);
+	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, ogr.config_options, ogr.open_options);
 
 	return ogr;
 }
@@ -416,7 +427,8 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	Oid catalog = PG_GETARG_OID(1);
 	ListCell *cell;
 	struct OgrFdwOption *opt;
-	const char *source = NULL, *layer = NULL, *driver = NULL, *config_options = NULL;
+	const char *source = NULL, *layer = NULL, *driver = NULL;
+	const char *config_options = NULL, *open_options = NULL;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
 	if ( GetDatabaseEncoding() != PG_UTF8 )
@@ -456,7 +468,9 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 					driver = defGetString(def);
 				if ( streq(opt->optname, OPT_CONFIG_OPTIONS) )
 					config_options = defGetString(def);
-				
+				if ( streq(opt->optname, OPT_OPEN_OPTIONS) )
+					open_options = defGetString(def);
+
 				break;
 			}
 		}
@@ -503,7 +517,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if ( catalog == ForeignServerRelationId && source )
 	{
 		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver, config_options);
+		ogr_ds = ogrGetDataSource(source, driver, config_options, open_options);
 		if ( ogr_ds )
 		{
 			GDALClose(ogr_ds);
