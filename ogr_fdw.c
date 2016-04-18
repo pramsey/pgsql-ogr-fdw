@@ -1645,7 +1645,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 			appendStringInfoString(&buf, ");");
 
-			elog(DEBUG4, "%s", buf.data);
+			elog(DEBUG2, "%s", buf.data);
 
 			commands = lappend(commands, pstrdup(buf.data));
 		}
@@ -1665,6 +1665,9 @@ static void
 ogrStringLaunder (char *str)
 {
 	int i, j = 0;
+	char tmp[STR_MAX_LEN];
+	memset(tmp, 0, STR_MAX_LEN);
+	
 	for(i = 0; str[i]; i++)
 	{
 		char c = tolower(str[i]);
@@ -1672,7 +1675,7 @@ ogrStringLaunder (char *str)
 		/* First character is a numeral, prefix with 'n' */
 		if ( i == 0 && (c >= 48 && c <= 57) )
 		{
-			str[j++] = 'n';
+			tmp[j++] = 'n';
 		}
 
 		/* Replace non-safe characters w/ _ */
@@ -1686,10 +1689,12 @@ ogrStringLaunder (char *str)
 		{
 			c = '_';
 		}
-		str[j++] = c;
+		tmp[j++] = c;
 
 		/* Avoid mucking with data beyond the end of our stack-allocated strings */
 		if ( j >= STR_MAX_LEN )
 			j = STR_MAX_LEN - 1;
 	}
+	strncpy(str, tmp, STR_MAX_LEN);
+	
 }
