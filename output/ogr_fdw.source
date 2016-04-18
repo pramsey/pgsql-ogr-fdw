@@ -2,9 +2,10 @@ CREATE EXTENSION ogr_fdw;
 CREATE SERVER myserver
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
-    datasource '@abs_srcdir@/data',
+    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
     format 'ESRI Shapefile' );
-CREATE FOREIGN TABLE pt_two (
+------------------------------------------------
+CREATE FOREIGN TABLE pt_1 (
   fid integer,
   geom bytea,
   name varchar,
@@ -13,9 +14,61 @@ CREATE FOREIGN TABLE pt_two (
   birthdate date )
   SERVER myserver
   OPTIONS ( layer 'pt_two' );
-SELECT * FROM pt_two WHERE fid = 1;
+SELECT * FROM pt_1 WHERE fid = 1;
  fid |                     geom                     | name | age | height | birthdate  
 -----+----------------------------------------------+------+-----+--------+------------
    1 | \x010100000054e943acd697e2bfc0895ee54a46cf3f | Paul |  33 |   5.84 | 03-25-1971
 (1 row)
+
+------------------------------------------------
+CREATE FOREIGN TABLE pt_2 (
+  fid integer,
+  name varchar )
+  SERVER myserver
+  OPTIONS ( layer 'pt_two' );
+SELECT * FROM pt_2 ORDER BY name;
+ fid | name  
+-----+-------
+   1 | Paul
+   0 | Peter
+(2 rows)
+
+------------------------------------------------
+CREATE FOREIGN TABLE pt_3 (
+  geom bytea,
+  name varchar )
+  SERVER myserver
+  OPTIONS ( layer 'pt_two' );
+SELECT * FROM pt_3 ORDER BY name;
+                     geom                     | name  
+----------------------------------------------+-------
+ \x010100000054e943acd697e2bfc0895ee54a46cf3f | Paul
+ \x0101000000c00497d1162cb93f8cbaef08a080e63f | Peter
+(2 rows)
+
+------------------------------------------------
+CREATE SCHEMA fdw_import;
+IMPORT FOREIGN SCHEMA ogr_all LIMIT TO (n2launder) FROM SERVER myserver INTO fdw_import;
+NOTICE:  Number of tables to be created 1
+SELECT * FROM fdw_import.n2launder WHERE fid = 0;
+ fid |                     geom                     | n2ame | age | height | b_rthdate  
+-----+----------------------------------------------+-------+-----+--------+------------
+   0 | \x0101000000c00497d1162cb93f8cbaef08a080e63f | Peter |  45 |    5.6 | 04-12-1965
+(1 row)
+
+------------------------------------------------
+CREATE FOREIGN TABLE column_name_test (
+ fid integer,
+ name varchar OPTIONS (column_name '2ame'),
+ theage integer OPTIONS (column_name 'age'),
+ height real OPTIONS (column_name 'Height'),
+ birthdate date OPTIONS (column_name 'b-rthdate')
+) SERVER myserver
+OPTIONS (layer '2launder');
+SELECT * FROM column_name_test ORDER BY fid;
+ fid | name  | theage | height | birthdate  
+-----+-------+--------+--------+------------
+   0 | Peter |     45 |    5.6 | 04-12-1965
+   1 | Paul  |     33 |   5.84 | 03-25-1971
+(2 rows)
 
