@@ -72,3 +72,22 @@ SELECT * FROM column_name_test ORDER BY fid;
    1 | Paul  |     33 |   5.84 | 03-25-1971
 (2 rows)
 
+------------------------------------------------
+CREATE SERVER myserver_latin1
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
+    format 'ESRI Shapefile',
+	config_options 'SHAPE_ENCODING=LATIN1' );
+CREATE FOREIGN TABLE e_1 (
+  fid integer,
+  name varchar )
+  SERVER myserver_latin1
+  OPTIONS ( layer 'enc' );
+  
+SELECT * FROM e_1 WHERE fid = 1;
+ fid | name 
+-----+------
+   1 | Pàul
+(1 row)
+

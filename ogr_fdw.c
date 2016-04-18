@@ -45,6 +45,8 @@ struct OgrFdwOption
 #define OPT_SOURCE "datasource"
 #define OPT_LAYER "layer"
 #define OPT_COLUMN "column_name"
+#define OPT_CONFIG_OPTIONS "config_options"
+#define OPT_OPEN_OPTIONS "open_options"
 
 /*
  * Valid options for ogr_fdw.
@@ -61,6 +63,7 @@ static struct OgrFdwOption valid_options[] = {
 	/* OGR datasource options */
 	{OPT_SOURCE, ForeignServerRelationId, true, false},
 	{OPT_DRIVER, ForeignServerRelationId, false, false},
+	{OPT_CONFIG_OPTIONS, ForeignServerRelationId, false, false},
 
 	/* OGR layer options */
 	{OPT_LAYER, ForeignTableRelationId, true, false},
@@ -114,7 +117,7 @@ static void ogrStringLaunder (char *str);
  */
 static OgrFdwPlanState* getOgrFdwPlanState(Oid foreigntableid);
 static OgrFdwExecState* getOgrFdwExecState(Oid foreigntableid);
-static OgrConnection ogrGetConnectionTable(Oid foreigntableid);
+static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid);
 static void ogr_fdw_exit(int code, Datum arg);
 
 /* Global to hold GEOMETRYOID */
@@ -202,10 +205,30 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
  * and in FDW options validation.
  */
 static OGRDataSourceH
-ogrGetDataSource(const char *source, const char *driver)
+ogrGetDataSource(const char *source, const char *driver, const char *config_options)
 {
 	OGRDataSourceH ogr_ds = NULL;
 	OGRSFDriverH ogr_dr = NULL;
+	
+
+	if ( config_options )
+	{
+		const char *option;
+		char **option_list = CSLTokenizeString(config_options);
+
+		for ( option = *option_list; *option_list; option_list++ )
+		{
+			char *key;
+			const char *value;
+			value = CPLParseNameValue(option, &key);
+			if ( ! (key && value) )
+				elog(ERROR, "bad config option string '%s'", config_options);
+			
+			elog(DEBUG1, "GDAL config option '%s' set to '%s'", key, value);
+			CPLSetConfigOption(key, value);
+			CPLFree(key);
+		}
+	}
 
 	/* Cannot search for drivers if they aren't registered */
 	/* But don't call for registration if we already have drivers */
@@ -280,7 +303,7 @@ ogrFinishConnection(OgrConnection *ogr)
 }
 
 static OgrConnection
-ogrGetConnectionServer(Oid foreignserverid)
+ogrGetConnectionFromServer(Oid foreignserverid)
 {
 	ForeignServer *server;
 	OgrConnection ogr;
@@ -298,6 +321,8 @@ ogrGetConnectionServer(Oid foreignserverid)
 			ogr.ds_str = defGetString(def);
 		if (streq(def->defname, OPT_DRIVER))
 			ogr.dr_str = defGetString(def);
+		if (streq(def->defname, OPT_CONFIG_OPTIONS))
+			ogr.config_options = defGetString(def);
 	}
 
 	if ( ! ogr.ds_str )
@@ -309,7 +334,7 @@ ogrGetConnectionServer(Oid foreignserverid)
 	 */
 
 	/*  Connect! */
-	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str);
+	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, ogr.config_options);
 
 	return ogr;
 }
@@ -322,7 +347,7 @@ ogrGetConnectionServer(Oid foreignserverid)
  * has handles for both the datasource and layer.
  */
 static OgrConnection
-ogrGetConnectionTable(Oid foreigntableid)
+ogrGetConnectionFromTable(Oid foreigntableid)
 {
 	ForeignTable *table;
 	/* UserMapping *mapping; */
@@ -334,7 +359,7 @@ ogrGetConnectionTable(Oid foreigntableid)
 	table = GetForeignTable(foreigntableid);
 	/* mapping = GetUserMapping(GetUserId(), table->serverid); */
 
-	ogr = ogrGetConnectionServer(table->serverid);
+	ogr = ogrGetConnectionFromServer(table->serverid);
 
 	foreach(cell, table->options)
 	{
@@ -376,7 +401,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	Oid catalog = PG_GETARG_OID(1);
 	ListCell *cell;
 	struct OgrFdwOption *opt;
-	const char *source = NULL, *layer = NULL, *driver = NULL;
+	const char *source = NULL, *layer = NULL, *driver = NULL, *config_options = NULL;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
 	if ( GetDatabaseEncoding() != PG_UTF8 )
@@ -414,7 +439,9 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 					layer = defGetString(def);
 				if ( streq(opt->optname, OPT_DRIVER) )
 					driver = defGetString(def);
-
+				if ( streq(opt->optname, OPT_CONFIG_OPTIONS) )
+					config_options = defGetString(def);
+				
 				break;
 			}
 		}
@@ -461,7 +488,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if ( catalog == ForeignServerRelationId && source )
 	{
 		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver);
+		ogr_ds = ogrGetDataSource(source, driver, config_options);
 		if ( ogr_ds )
 		{
 			OGR_DS_Destroy(ogr_ds);
@@ -481,7 +508,7 @@ getOgrFdwPlanState(Oid foreigntableid)
 	OgrFdwPlanState *planstate = palloc0(sizeof(OgrFdwPlanState));
 
 	/*  Connect! */
-	planstate->ogr = ogrGetConnectionTable(foreigntableid);
+	planstate->ogr = ogrGetConnectionFromTable(foreigntableid);
 	planstate->foreigntableid = foreigntableid;
 
 	return planstate;
@@ -496,7 +523,7 @@ getOgrFdwExecState(Oid foreigntableid)
 	OgrFdwExecState *execstate = palloc0(sizeof(OgrFdwExecState));
 
 	/*  Connect! */
-	execstate->ogr = ogrGetConnectionTable(foreigntableid);
+	execstate->ogr = ogrGetConnectionFromTable(foreigntableid);
 	execstate->foreigntableid = foreigntableid;
 
 	return execstate;
@@ -1493,7 +1520,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	/* Make connection to server */
 	memset(&ogr, 0, sizeof(OgrConnection));
 	server = GetForeignServer(serverOid);
-	ogr = ogrGetConnectionServer(serverOid);
+	ogr = ogrGetConnectionFromServer(serverOid);
 
 	/* Launder by default */
 	launder_column_names = launder_table_names = true;

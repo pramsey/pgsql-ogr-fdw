@@ -55,6 +55,7 @@
  */
 #include "ogr_api.h"
 #include "cpl_error.h"
+#include "cpl_string.h"
 
 
 #define streq(s1,s2) (strcmp((s1),(s2)) == 0)
@@ -103,6 +104,7 @@ typedef struct OgrConnection
 	char *ds_str;       /* datasource connection string */
 	char *dr_str;       /* driver (format) name */
 	char *lyr_str;      /* layer name */
+	char *config_options; /* GDAL config options */
 	OGRDataSourceH ds;  /* OGR data source handle */
 	OGRLayerH lyr;      /* OGR layer handle */
 } OgrConnection;
