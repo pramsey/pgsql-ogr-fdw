@@ -53,10 +53,31 @@
 /*
  * OGR library API
  */
+#include "gdal.h"
 #include "ogr_api.h"
 #include "cpl_error.h"
 #include "cpl_string.h"
 
+
+/* Support for GDAL 1.X */
+#if GDAL_VERSION_MAJOR < 2
+
+/* Redefine variable types */
+#define GDALDatasetH OGRDataSourceH
+#define GDALDriverH OGRSFDriverH
+
+/* Redefine common functions */
+#define GDALGetDriverCount() OGRGetDriverCount()
+#define GDALAllRegister() OGRRegisterAll()
+#define GDALGetDriverByName(name) OGRGetDriverByName(name)
+#define GDALClose(ds) OGR_DS_Destroy(ds)
+#define GDALDatasetGetLayerByName(ds,name) OGR_DS_GetLayerByName(ds,name)
+#define GDALDatasetGetLayerCount(ds) OGR_DS_GetLayerCount(ds)
+#define GDALDatasetGetLayer(ds,i) OGR_DS_GetLayer(ds,i)
+#define GDALGetDriverShortName(dr) OGR_Dr_GetName(dr)
+#define GDALGetDatasetDriver(ds) OGR_DS_GetDriver(ds)
+	
+#endif
 
 #define streq(s1,s2) (strcmp((s1),(s2)) == 0)
 #define strcaseeq(s1,s2) (strcasecmp((s1),(s2)) == 0)
@@ -105,7 +126,7 @@ typedef struct OgrConnection
 	char *dr_str;       /* driver (format) name */
 	char *lyr_str;      /* layer name */
 	char *config_options; /* GDAL config options */
-	OGRDataSourceH ds;  /* OGR data source handle */
+	GDALDatasetH ds;
 	OGRLayerH lyr;      /* OGR layer handle */
 } OgrConnection;
 
@@ -136,7 +157,4 @@ void ogrDeparseStringLiteral(StringInfo buf, const char *val);
 
 /* Shared global value of the Geometry OId */
 extern Oid GEOMETRYOID;
-
-
-
 

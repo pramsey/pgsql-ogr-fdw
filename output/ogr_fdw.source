@@ -78,7 +78,7 @@ CREATE SERVER myserver_latin1
   OPTIONS (
     datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
     format 'ESRI Shapefile',
-	config_options 'SHAPE_ENCODING=LATIN1' );
+    config_options 'SHAPE_ENCODING=LATIN1' );
 CREATE FOREIGN TABLE e_1 (
   fid integer,
   name varchar )

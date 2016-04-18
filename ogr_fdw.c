@@ -64,7 +64,9 @@ static struct OgrFdwOption valid_options[] = {
 	{OPT_SOURCE, ForeignServerRelationId, true, false},
 	{OPT_DRIVER, ForeignServerRelationId, false, false},
 	{OPT_CONFIG_OPTIONS, ForeignServerRelationId, false, false},
-
+#if GDAL_VERSION_MAJOR >= 2
+	{OPT_OPEN_OPTIONS, ForeignServerRelationId, false, false},
+#endif
 	/* OGR layer options */
 	{OPT_LAYER, ForeignTableRelationId, true, false},
 
@@ -204,12 +206,11 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
  * with appropriate error handling and reporting. Used in query startup,
  * and in FDW options validation.
  */
-static OGRDataSourceH
+static GDALDatasetH
 ogrGetDataSource(const char *source, const char *driver, const char *config_options)
 {
-	OGRDataSourceH ogr_ds = NULL;
-	OGRSFDriverH ogr_dr = NULL;
-	
+	GDALDatasetH ogr_ds = NULL;
+	GDALDriverH ogr_dr = NULL;
 
 	if ( config_options )
 	{
@@ -232,12 +233,12 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 
 	/* Cannot search for drivers if they aren't registered */
 	/* But don't call for registration if we already have drivers */
-	if ( OGRGetDriverCount() <= 0 )
-		OGRRegisterAll();
+	if ( GDALGetDriverCount() <= 0 )
+		GDALAllRegister();
 
 	if ( driver )
 	{
-		ogr_dr = OGRGetDriverByName(driver);
+		ogr_dr = GDALGetDriverByName(driver);
 		if ( ! ogr_dr )
 		{
 			ereport(ERROR,
@@ -245,12 +246,24 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 					errmsg("unable to find format \"%s\"", driver),
 					errhint("See the formats list at http://www.gdal.org/ogr_formats.html")));
 		}
+#if GDAL_VERSION_MAJOR < 2
 		ogr_ds = OGR_Dr_Open(ogr_dr, source, false);
+#else
+		ogr_ds = GDALOpenEx(source,
+		                    GDAL_OF_VECTOR|GDAL_OF_READONLY,
+		                    (const char* const*)CSLAddString(NULL, driver),
+		                    NULL /* open options */,
+		                    NULL);
+#endif
 	}
 	/* No driver, try a blind open... */
 	else
 	{
+#if GDAL_VERSION_MAJOR < 2
 		ogr_ds = OGROpen(source, false, &ogr_dr);
+#else
+		ogr_ds = GDALOpenEx(source, GDAL_OF_VECTOR|GDAL_OF_READONLY, NULL, NULL /* open options */, NULL);
+#endif
 	}
 
 	/* Open failed, provide error hint if OGR gives us one. */
@@ -278,7 +291,9 @@ ogrGetDataSource(const char *source, const char *driver, const char *config_opti
 static bool
 ogrCanReallyCountFast(const OgrConnection *con)
 {
-	const char *dr_str = con->dr_str;
+	GDALDriverH dr = GDALGetDatasetDriver(con->ds);
+	const char *dr_str = GDALGetDriverShortName(dr);
+
 	if ( streq(dr_str, "ESRI Shapefile" ) ||
    	     streq(dr_str, "FileGDB" ) ||
 	     streq(dr_str, "OpenFileGDB" ) )
@@ -297,7 +312,7 @@ ogrFinishConnection(OgrConnection *ogr)
 {
 	if ( ogr->ds )
 	{
-		OGR_DS_Destroy(ogr->ds);
+		GDALClose(ogr->ds);
 	}
 	ogr->ds = NULL;
 }
@@ -372,7 +387,7 @@ ogrGetConnectionFromTable(Oid foreigntableid)
 		elog(ERROR, "FDW table '%s' option is missing", OPT_LAYER);
 
 	/* Does the layer exist in the data source? */
-	ogr.lyr = OGR_DS_GetLayerByName(ogr.ds, ogr.lyr_str);
+	ogr.lyr = GDALDatasetGetLayerByName(ogr.ds, ogr.lyr_str);
 	if ( ! ogr.lyr )
 	{
 		const char *ogrerr = CPLGetLastErrorMsg();
@@ -491,7 +506,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 		ogr_ds = ogrGetDataSource(source, driver, config_options);
 		if ( ogr_ds )
 		{
-			OGR_DS_Destroy(ogr_ds);
+			GDALClose(ogr_ds);
 		}
 		OGRCleanupAll();
 	}
@@ -1540,10 +1555,10 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 					 errmsg("invalid option \"%s\"", def->defname)));
 	}
 
-	for ( i = 0; i < OGR_DS_GetLayerCount(ogr.ds); i++ )
+	for ( i = 0; i < GDALDatasetGetLayerCount(ogr.ds); i++ )
 	{
 		bool import_layer = false;
-		OGRLayerH ogr_lyr = OGR_DS_GetLayer(ogr.ds, i);
+		OGRLayerH ogr_lyr = GDALDatasetGetLayer(ogr.ds, i);
 
 		if ( ! ogr_lyr )
 		{
