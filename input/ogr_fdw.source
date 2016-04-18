@@ -67,7 +67,7 @@ CREATE SERVER myserver_latin1
   OPTIONS (
     datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile',
-	config_options 'SHAPE_ENCODING=LATIN1' );
+    config_options 'SHAPE_ENCODING=LATIN1' );
 
 CREATE FOREIGN TABLE e_1 (
   fid integer,
@@ -76,3 +76,5 @@ CREATE FOREIGN TABLE e_1 (
   OPTIONS ( layer 'enc' );
   
 SELECT * FROM e_1 WHERE fid = 1;
+
+
