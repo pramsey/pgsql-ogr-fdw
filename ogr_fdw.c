@@ -86,28 +86,56 @@ PG_FUNCTION_INFO_V1(ogr_fdw_validator);
 void _PG_init(void);
 
 /*
- * FDW callback routines
+ * FDW query callback routines
  */
 static void ogrGetForeignRelSize(PlannerInfo *root,
-					  RelOptInfo *baserel,
-					  Oid foreigntableid);
+					RelOptInfo *baserel,
+					Oid foreigntableid);
 static void ogrGetForeignPaths(PlannerInfo *root,
 					RelOptInfo *baserel,
 					Oid foreigntableid);
 static ForeignScan *ogrGetForeignPlan(PlannerInfo *root,
-				   RelOptInfo *baserel,
-				   Oid foreigntableid,
-				   ForeignPath *best_path,
-				   List *tlist,
-				   List *scan_clauses
+				 	RelOptInfo *baserel,
+				 	Oid foreigntableid,
+				 	ForeignPath *best_path,
+				 	List *tlist,
+				 	List *scan_clauses
 #if PG_VERSION_NUM >= 90500
-				   ,Plan *outer_plan
+					,Plan *outer_plan
 #endif
 );
 static void ogrBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *ogrIterateForeignScan(ForeignScanState *node);
 static void ogrReScanForeignScan(ForeignScanState *node);
 static void ogrEndForeignScan(ForeignScanState *node);
+
+/*
+ * FDW modify callback routines
+ */
+static void ogrAddForeignUpdateTargets (Query *parsetree,
+					RangeTblEntry *target_rte,
+					Relation target_relation);
+static void ogrBeginForeignModify (ModifyTableState *mtstate,
+					ResultRelInfo *rinfo,
+					List *fdw_private,
+					int subplan_index,
+					int eflags);
+static TupleTableSlot *ogrExecForeignInsert (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static TupleTableSlot *ogrExecForeignDelete (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static void ogrEndForeignModify (EState *estate,
+					ResultRelInfo *rinfo);
+static int ogrIsForeignRelUpdatable (Relation rel);
+
 
 #if PG_VERSION_NUM >= 90500
 static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid);
@@ -185,6 +213,7 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 {
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 
+	/* Read support */
 	fdwroutine->GetForeignRelSize = ogrGetForeignRelSize;
 	fdwroutine->GetForeignPaths = ogrGetForeignPaths;
 	fdwroutine->GetForeignPlan = ogrGetForeignPlan;
@@ -192,6 +221,15 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 	fdwroutine->IterateForeignScan = ogrIterateForeignScan;
 	fdwroutine->ReScanForeignScan = ogrReScanForeignScan;
 	fdwroutine->EndForeignScan = ogrEndForeignScan;
+	
+	/* Write support */
+	fdwroutine->AddForeignUpdateTargets = ogrAddForeignUpdateTargets;
+	fdwroutine->BeginForeignModify = ogrBeginForeignModify;
+	fdwroutine->ExecForeignInsert = ogrExecForeignInsert;
+	fdwroutine->ExecForeignUpdate = ogrExecForeignUpdate;
+	fdwroutine->ExecForeignDelete = ogrExecForeignDelete;
+	fdwroutine->EndForeignModify = ogrEndForeignModify;
+	fdwroutine->IsForeignRelUpdatable = ogrIsForeignRelUpdatable;
 
 #if PG_VERSION_NUM >= 90500
 	/*  Support functions for IMPORT FOREIGN SCHEMA */
@@ -1496,8 +1534,170 @@ ogrEndForeignScan(ForeignScanState *node)
 	return;
 }
 
+/* XXX */
 
-#endif /* PostgreSQL 9.3 version check */
+/*
+ * ogrAddForeignUpdateTargets
+ * Add a FID to the target list if necessary, to ensure that FDW 
+ * can identify the exact row to update or delete
+ */
+static void ogrAddForeignUpdateTargets (Query *parsetree,
+					RangeTblEntry *target_rte,
+					Relation target_relation)
+{
+	ListCell *cell;
+
+	elog(NOTICE, "ogrAddForeignUpdateTargets");
+
+	foreach(cell, parsetree->targetList)
+	{
+		TargetEntry *target = (TargetEntry *) lfirst(cell);
+		elog(NOTICE, "resname '%s'", target->resname);
+		elog(NOTICE, "resno   '%d'", target->resno);
+	}
+	
+	// typedef struct TargetEntry
+	// 	{
+	// 	    Expr        xpr;
+	// 	    Expr       *expr;           /* expression to evaluate */
+	// 	    AttrNumber  resno;          /* attribute number (see notes above) */
+	// 	    char       *resname;        /* name of the column (could be NULL) */
+	// 	    Index       ressortgroupref;/* nonzero if referenced by a sort/group
+	// 	                                 * clause */
+	// 	    Oid         resorigtbl;     /* OID of column's source table */
+	// 	    AttrNumber  resorigcol;     /* column's number in source table */
+	// 	    bool        resjunk;        /* set to true to eliminate the attribute from
+	// 	                                 * final target list */
+	// 	} TargetEntry;
+
+	return;
+}
+
+/* 
+ * ogrBeginForeignModify
+ * Set up the modify query (connect, etc)
+ */
+static void ogrBeginForeignModify (ModifyTableState *mtstate,
+					ResultRelInfo *rinfo,
+					List *fdw_private,
+					int subplan_index,
+					int eflags)
+{
+	Oid foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
+
+	/* if the scanning functions above respected the targetlist, 
+	we would only be getting back the SET target=foo columns in the slots below,
+	so we would need to add the "fid" to all targetlists (and also disallow fid changing
+	perhaps).
+	
+	since we always pull complete tables in the scan functions, the
+	slots below are basically full tables, in fact they include one entry
+	for each OGR column, even when the table does not include the column, 
+	just nulling out the entries that are not in the table definition
+	
+	it might be better to update the scan code to properly manage target lists
+	first, and then come back here and do things properly
+	
+	we will need a ogrSlotToFeature to feed into the OGR_L_SetFeature and
+	OGR_L_CreateFeature functions. Also will use OGR_L_DeleteFeature and
+	fid value
+	*/
+
+	/* Initialize OGR connection */
+	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
+
+	elog(NOTICE, "ogrBeginForeignModify");
+
+	/* Read the OGR layer definition and PgSQL foreign table definitions */
+	ogrReadColumnData(execstate);
+
+	/* Save OGR connection, etc, for later */
+	rinfo->ri_FdwState = execstate;
+	return;
+}
+					
+static TupleTableSlot *ogrExecForeignInsert (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	elog(NOTICE, "ogrExecForeignInsert");
+	return slot;
+}
+					
+static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	// TupleDesc *tt = slot->tts_tupleDescriptor;
+
+	int natts = slot->tts_tupleDescriptor->natts;
+	int i;
+	
+	// for ( i = 0; i < natts; i++ )
+	// {
+	// 	if ( slot->tts_values[i] )
+	// 		elog(NOTICE, "%s", DatumGetCString(slot->tts_values[i]));
+	// }
+	
+	// typedef struct TupleTableSlot
+	// {
+	//     NodeTag     type;
+	//     bool        tts_isempty;    /* true = slot is empty */
+	//     bool        tts_shouldFree; /* should pfree tts_tuple? */
+	//     bool        tts_shouldFreeMin;      /* should pfree tts_mintuple? */
+	//     bool        tts_slow;       /* saved state for slot_deform_tuple */
+	//     HeapTuple   tts_tuple;      /* physical tuple, or NULL if virtual */
+	//     TupleDesc   tts_tupleDescriptor;    /* slot's tuple descriptor */
+	//     MemoryContext tts_mcxt;     /* slot itself is in this context */
+	//     Buffer      tts_buffer;     /* tuple's buffer, or InvalidBuffer */
+	//     int         tts_nvalid;     /* # of valid values in tts_values */
+	//     Datum      *tts_values;     /* current per-attribute values */
+	//     bool       *tts_isnull;     /* current per-attribute isnull flags */
+	//     MinimalTuple tts_mintuple;  /* minimal tuple, or NULL if none */
+	//     HeapTupleData tts_minhdr;   /* workspace for minimal-tuple-only case */
+	//     long        tts_off;        /* saved state for slot_deform_tuple */
+	// } TupleTableSlot;
+	
+	elog(NOTICE, "ogrExecForeignUpdate");
+	return slot;
+}
+					
+static TupleTableSlot *ogrExecForeignDelete (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	elog(NOTICE, "ogrExecForeignDelete");
+	return slot;
+}
+					
+static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
+{
+	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	elog(NOTICE, "ogrEndForeignModify");
+	
+	return;
+}
+					
+static int ogrIsForeignRelUpdatable (Relation rel)
+{
+	static int readonly = 0;
+	static int updateable = (1 << CMD_UPDATE) | (1 << CMD_INSERT) | (1 << CMD_DELETE);
+
+	elog(NOTICE, "ogrIsForeignRelUpdatable");
+
+	/* Before we say "yes"... */
+	/*   Does it have a "fid" column? Is that column an integer? */
+	/*   Is it backed by a writable OGR driver? */
+	/*   Can we open the relation in read/write mode? */
+
+	return updateable;
+}
 
 #if PG_VERSION_NUM >= 90500
 
@@ -1716,7 +1916,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	return commands;
 }
 
-#endif /* PGSQL 9.5+ */
+#endif /* PostgreSQL 9.5+ */
 
 static void
 ogrStringLaunder (char *str)
@@ -1755,3 +1955,6 @@ ogrStringLaunder (char *str)
 	strncpy(str, tmp, STR_MAX_LEN);
 	
 }
+
+#endif /* PostgreSQL 9.3+ version check */
+
