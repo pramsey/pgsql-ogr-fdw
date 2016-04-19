@@ -427,7 +427,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	Oid catalog = PG_GETARG_OID(1);
 	ListCell *cell;
 	struct OgrFdwOption *opt;
-	const char *source = NULL, *layer = NULL, *driver = NULL;
+	const char *source = NULL, *driver = NULL;
 	const char *config_options = NULL, *open_options = NULL;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
@@ -462,8 +462,6 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 				/* Store some options for testing later */
 				if ( streq(opt->optname, OPT_SOURCE) )
 					source = defGetString(def);
-				if ( streq(opt->optname, OPT_LAYER) )
-					layer = defGetString(def);
 				if ( streq(opt->optname, OPT_DRIVER) )
 					driver = defGetString(def);
 				if ( streq(opt->optname, OPT_CONFIG_OPTIONS) )

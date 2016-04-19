@@ -37,7 +37,7 @@ usage()
 int
 main (int argc, char **argv)
 {
-    int bflag, ch;
+    int ch;
 	char *source = NULL, *layer = NULL;
 	OGRErr err = OGRERR_NONE;
 
@@ -45,7 +45,6 @@ main (int argc, char **argv)
 	if (argc == 1)
 		usage();
 
-	bflag = 0;
 	while ((ch = getopt(argc, argv, "h?s:l:")) != -1) {
 		switch (ch) {
 			case 's':
