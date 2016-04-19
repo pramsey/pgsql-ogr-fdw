@@ -646,6 +646,9 @@ ogrGetForeignPaths(PlannerInfo *root,
 	/* obtuse as OGR. (So far, have only seen it w/ the postgres_fdw */
 	add_path(baserel,
 		(Path *) create_foreignscan_path(root, baserel,
+#if PG_VERSION_NUM >= 90600
+					NULL, /* PathTarget */
+#endif
 					baserel->rows,
 					planstate->startup_cost,
 					planstate->total_cost,
