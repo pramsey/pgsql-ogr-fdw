@@ -147,7 +147,7 @@ static void ogrStringLaunder (char *str);
  */
 static OgrFdwPlanState* getOgrFdwPlanState(Oid foreigntableid);
 static OgrFdwExecState* getOgrFdwExecState(Oid foreigntableid);
-static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid);
+static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, bool updateable);
 static void ogr_fdw_exit(int code, Datum arg);
 
 /* Global to hold GEOMETRYOID */
@@ -245,7 +245,7 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
  * and in FDW options validation.
  */
 static GDALDatasetH
-ogrGetDataSource(const char *source, const char *driver, 
+ogrGetDataSource(const char *source, const char *driver, bool updateable, 
                  const char *config_options, const char *open_options)
 {
 	GDALDatasetH ogr_ds = NULL;
@@ -365,7 +365,7 @@ ogrFinishConnection(OgrConnection *ogr)
 }
 
 static OgrConnection
-ogrGetConnectionFromServer(Oid foreignserverid)
+ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 {
 	ForeignServer *server;
 	OgrConnection ogr;
@@ -398,7 +398,7 @@ ogrGetConnectionFromServer(Oid foreignserverid)
 	 */
 
 	/*  Connect! */
-	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, ogr.config_options, ogr.open_options);
+	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, updateable, ogr.config_options, ogr.open_options);
 
 	return ogr;
 }
@@ -411,7 +411,7 @@ ogrGetConnectionFromServer(Oid foreignserverid)
  * has handles for both the datasource and layer.
  */
 static OgrConnection
-ogrGetConnectionFromTable(Oid foreigntableid)
+ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
 {
 	ForeignTable *table;
 	/* UserMapping *mapping; */
@@ -423,7 +423,7 @@ ogrGetConnectionFromTable(Oid foreigntableid)
 	table = GetForeignTable(foreigntableid);
 	/* mapping = GetUserMapping(GetUserId(), table->serverid); */
 
-	ogr = ogrGetConnectionFromServer(table->serverid);
+	ogr = ogrGetConnectionFromServer(table->serverid, updateable);
 
 	foreach(cell, table->options)
 	{
@@ -553,7 +553,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if ( catalog == ForeignServerRelationId && source )
 	{
 		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver, config_options, open_options);
+		ogr_ds = ogrGetDataSource(source, driver, false, config_options, open_options);
 		if ( ogr_ds )
 		{
 			GDALClose(ogr_ds);
@@ -573,7 +573,7 @@ getOgrFdwPlanState(Oid foreigntableid)
 	OgrFdwPlanState *planstate = palloc0(sizeof(OgrFdwPlanState));
 
 	/*  Connect! */
-	planstate->ogr = ogrGetConnectionFromTable(foreigntableid);
+	planstate->ogr = ogrGetConnectionFromTable(foreigntableid, false);
 	planstate->foreigntableid = foreigntableid;
 
 	return planstate;
@@ -588,7 +588,7 @@ getOgrFdwExecState(Oid foreigntableid)
 	OgrFdwExecState *execstate = palloc0(sizeof(OgrFdwExecState));
 
 	/*  Connect! */
-	execstate->ogr = ogrGetConnectionFromTable(foreigntableid);
+	execstate->ogr = ogrGetConnectionFromTable(foreigntableid, false);
 	execstate->foreigntableid = foreigntableid;
 
 	return execstate;
@@ -1143,9 +1143,7 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
  * Rather than explicitly try and form PgSQL datums, use the type
  * input functions, that accept cstring representations, and convert
  * to the input format. We have to lookup the right input function for
- * each column in the foreign table. This is happening for every
- * column and every row, so probably a performance improvement would
- * be to cache this information once.
+ * each column in the foreign table. 
  */
 static Datum
 pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
@@ -1584,14 +1582,15 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 					int eflags)
 {
 	Oid foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
-
+	// OgrFdwTable *tbl;
+	
 	/* if the scanning functions above respected the targetlist, 
 	we would only be getting back the SET target=foo columns in the slots below,
 	so we would need to add the "fid" to all targetlists (and also disallow fid changing
 	perhaps).
 	
 	since we always pull complete tables in the scan functions, the
-	slots below are basically full tables, in fact they include one entry
+	slots below are basically full tables, in fact they include (?) one entry
 	for each OGR column, even when the table does not include the column, 
 	just nulling out the entries that are not in the table definition
 	
@@ -1601,6 +1600,9 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 	we will need a ogrSlotToFeature to feed into the OGR_L_SetFeature and
 	OGR_L_CreateFeature functions. Also will use OGR_L_DeleteFeature and
 	fid value
+	
+	in ogrGetForeignPlan we get a tlist that includes just the attributes we
+	are interested in, can use that to pare down the request perhaps
 	*/
 
 	/* Initialize OGR connection */
@@ -1610,6 +1612,7 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(execstate);
+	
 
 	/* Save OGR connection, etc, for later */
 	rinfo->ri_FdwState = execstate;
@@ -1634,8 +1637,8 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
 	// TupleDesc *tt = slot->tts_tupleDescriptor;
 
-	int natts = slot->tts_tupleDescriptor->natts;
-	int i;
+	// int natts = slot->tts_tupleDescriptor->natts;
+	// int i;
 	
 	// for ( i = 0; i < natts; i++ )
 	// {
@@ -1665,6 +1668,19 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	elog(NOTICE, "ogrExecForeignUpdate");
 	return slot;
 }
+
+	// typedef struct tupleDesc
+	// {
+	//     int         natts;          /* number of attributes in the tuple */
+	//     Form_pg_attribute *attrs;
+	//     /* attrs[N] is a pointer to the description of Attribute Number N+1 */
+	//     TupleConstr *constr;        /* constraints, or NULL if none */
+	//     Oid         tdtypeid;       /* composite type ID for tuple type */
+	//     int32       tdtypmod;       /* typmod for tuple type */
+	//     bool        tdhasoid;       /* tuple has oid attribute in its header */
+	//     int         tdrefcount;     /* reference count, or -1 if not counting */
+	// }   *TupleDesc;
+	// 
 					
 static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 					ResultRelInfo *rinfo,
@@ -1683,20 +1699,60 @@ static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
 	
 	return;
 }
-					
+				
+/* YYY */	
 static int ogrIsForeignRelUpdatable (Relation rel)
 {
 	static int readonly = 0;
-	static int updateable = (1 << CMD_UPDATE) | (1 << CMD_INSERT) | (1 << CMD_DELETE);
+	static int updateable = 0;
+	int i;
+	bool has_fid = false;
+	TupleDesc td;
+	OgrConnection ogr;
+	Oid foreigntableid = RelationGetRelid(rel);
 
 	elog(NOTICE, "ogrIsForeignRelUpdatable");
 
 	/* Before we say "yes"... */
-	/*   Does it have a "fid" column? Is that column an integer? */
+	/*  Does the foreign relation have a "fid" column? */
+	/* Is that column an integer? */
+	td = RelationGetDescr(rel);
+	for ( i = 0; i < td->natts; i++ )
+	{
+		NameData attname = td->attrs[i]->attname;
+		Oid atttypeid = td->attrs[i]->atttypid;
+		if ( (atttypeid == INT4OID || atttypeid == INT8OID) && 
+		     strcaseeq("fid", attname.data) )
+		{
+			has_fid = true;
+		}
+	}
+	
+	if ( ! has_fid )
+	{
+		elog(NOTICE, "no \"fid\" column in foreign table '%s'", get_rel_name(foreigntableid));
+		return readonly;
+	}
+	
 	/*   Is it backed by a writable OGR driver? */
 	/*   Can we open the relation in read/write mode? */
+	ogr = ogrGetConnectionFromTable(foreigntableid, true);
+	if ( ! (ogr.ds && ogr.lyr) )
+		return readonly;
 
+	if ( OGR_L_TestCapability(ogr.lyr, OLCRandomWrite) )
+		updateable |= (1 << CMD_UPDATE);
+
+	if ( OGR_L_TestCapability(ogr.lyr, OLCSequentialWrite) )
+		updateable |= (1 << CMD_INSERT);
+	
+	if ( OGR_L_TestCapability(ogr.lyr, OLCDeleteFeature) )
+		updateable |= (1 << CMD_DELETE);
+	
+	ogrFinishConnection(&ogr);
+		
 	return updateable;
+	
 }
 
 #if PG_VERSION_NUM >= 90500
@@ -1750,7 +1806,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	/* Make connection to server */
 	memset(&ogr, 0, sizeof(OgrConnection));
 	server = GetForeignServer(serverOid);
-	ogr = ogrGetConnectionFromServer(serverOid);
+	ogr = ogrGetConnectionFromServer(serverOid, false);
 
 	/* Launder by default */
 	launder_column_names = launder_table_names = true;
