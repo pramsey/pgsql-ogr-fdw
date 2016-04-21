@@ -1574,7 +1574,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, geom);
 #else
 				err = OGR_F_SetGeometryDirectly(feat, geom);
-#endif					
+#endif
 			}
 		}
 		else if ( ogrvariant == OGR_FIELD )
@@ -1977,9 +1977,8 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
  				 errmsg("failure reading OGR data source")));
 		}
 	}
-	
-	
-	/* XXX slot handling? */
+
+	/* TODO: slot handling? what happens with RETURNING clauses? */
 	
 	// int natts = slot->tts_tupleDescriptor->natts;
 	// int i;
@@ -1989,9 +1988,6 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	// 	if ( slot->tts_values[i] )
 	// 		elog(NOTICE, "%s", DatumGetCString(slot->tts_values[i]));
 	// }
-	
-
-
 	
 	return slot;
 }
@@ -2056,8 +2052,34 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 					TupleTableSlot *slot,
 					TupleTableSlot *planSlot)
 {
-	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(modstate->ogr.lyr);
+	OGRFeatureH feat = OGR_F_Create(ogr_fd);
+	OGRErr err;
+
 	elog(NOTICE, "ogrExecForeignInsert");
+	
+	/* Copy the data from the slot onto the feature */
+	if ( (! feat) || (OGRERR_NONE != ogrSlotToFeature(slot, feat, modstate->table)) )
+	{
+		const char *ogrerr = CPLGetLastErrorMsg();
+		if ( ogrerr && ! streq(ogrerr,"") )
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("failure reading OGR data source"),
+				 errhint("%s", ogrerr)));
+		}
+		else
+		{
+ 			ereport(ERROR,
+ 				(errcode(ERRCODE_FDW_ERROR),
+ 				 errmsg("failure reading OGR data source")));
+		}
+	}
+	
+	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
+		
 	return slot;
 }
 					
@@ -2068,9 +2090,39 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 					TupleTableSlot *slot,
 					TupleTableSlot *planSlot)
 {
-	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	TupleDesc td = slot->tts_tupleDescriptor;
+	Relation rel = rinfo->ri_RelationDesc;
+	Oid foreigntableid = RelationGetRelid(rel);
+	int fid_column;
+	Oid fid_type;
+	Datum fid_datum;
+	int64 fid;
+	OGRErr err;
+
 	elog(NOTICE, "ogrExecForeignDelete");
-	return slot;
+	
+	/* Is there a fid column? */
+	fid_column = ogrGetFidColumn(td);
+	if ( fid_column < 0 )
+		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
+	
+	/* What is the value of the FID for this record? */
+	fid_datum = slot->tts_values[fid_column];
+	fid_type = td->attrs[fid_column]->atttypid;
+
+	if ( fid_type == INT8OID )
+		fid = DatumGetInt64(fid_datum);
+	else
+		fid = DatumGetInt32(fid_datum);
+	
+	/* Delete the OGR feature for this fid */
+	err = OGR_L_DeleteFeature(modstate->ogr.lyr, fid);
+	
+	if ( err != OGRERR_NONE ) 
+		return NULL;
+	else
+		return slot;
 }
 					
 static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
