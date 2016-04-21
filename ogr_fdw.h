@@ -45,10 +45,13 @@
 #include "parser/parsetree.h"
 #include "storage/ipc.h"
 #include "utils/builtins.h"
+#include "utils/date.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/numeric.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
 
 /*
  * OGR library API
@@ -92,25 +95,30 @@ typedef enum
 
 typedef struct OgrFdwColumn
 {
+	/* PgSQL metadata */
 	int pgattnum;            /* PostgreSQL attribute number */
 	int pgattisdropped;      /* PostgreSQL attribute dropped? */
 	char *pgname;            /* PostgreSQL column name */
 	Oid pgtype;              /* PostgreSQL data type */
 	int pgtypmod;            /* PostgreSQL type modifier */
+	
+	/* For reading */
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
 	Oid pginputioparam;
 	Oid pgrecvfunc;          /* PostgreSQL function to convert binary to type */
 	Oid pgrecvioparam;
-
+	
+	/* For writing */
+	Oid pgoutputfunc;        /* PostgreSQL function to convert type to cstring */
+	bool pgoutputvarlena;
+	Oid pgsendfunc;        /* PostgreSQL function to convert type to binary */
+	bool pgsendvarlena;
+	
+	/* OGR metadata */
 	OgrColumnVariant ogrvariant;
 	int ogrfldnum;
 	OGRFieldType ogrfldtype;
 
-	// int used;                /* is the column used in the query? */
-	// int pkey;                /* nonzero for primary keys, later set to the resjunk attribute number */
-	// char *val;               /* buffer for OGR to return results in (LOB locator for LOBs) */
-	// size_t val_size;           /* allocated size in val */
-	// int val_null;          /* indicator for NULL value */
 } OgrFdwColumn;
 
 typedef struct OgrFdwTable
@@ -131,8 +139,23 @@ typedef struct OgrConnection
 	OGRLayerH lyr;        /* OGR layer handle */
 } OgrConnection;
 
+typedef enum 
+{
+	OGR_PLAN_STATE,
+	OGR_EXEC_STATE,
+	OGR_MODIFY_STATE
+} OgrFdwStateType;
+
+typedef struct OgrFdwState
+{
+	OgrFdwStateType type;
+	Oid foreigntableid; 
+	OgrConnection ogr;
+} OgrFdwState;
+
 typedef struct OgrFdwPlanState
 {
+	OgrFdwStateType type;
 	Oid foreigntableid; 
 	OgrConnection ogr;   /* connection object */
 	int nrows;           /* estimate of number of rows in file */
@@ -143,13 +166,23 @@ typedef struct OgrFdwPlanState
 
 typedef struct OgrFdwExecState
 {
+	OgrFdwStateType type;
 	Oid foreigntableid; 
 	OgrConnection ogr;     /* connection object */
-	char *sql;             /* OGR SQL for attribute filter */
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
+	char *sql;             /* OGR SQL for attribute filter */
 	int rownum;            /* how many rows have we read thus far? */
 } OgrFdwExecState;
+
+typedef struct OgrFdwModifyState
+{
+	OgrFdwStateType type;
+	Oid foreigntableid; 
+	OgrConnection ogr;     /* connection object */
+	OgrFdwTable *table;
+	TupleDesc tupdesc;
+} OgrFdwModifyState;
 
 /* Shared function signatures */
 bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
