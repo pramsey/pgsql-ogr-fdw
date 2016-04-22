@@ -251,7 +251,9 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 	char **open_option_list = NULL;
 	unsigned int open_flags = GDAL_OF_VECTOR;
 	
-	if ( ! updateable )
+	if ( updateable )
+		open_flags |= GDAL_OF_UPDATE;
+	else
 		open_flags |= GDAL_OF_READONLY;
 
 	if ( config_options )
