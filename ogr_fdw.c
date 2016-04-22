@@ -249,6 +249,10 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
 	char **open_option_list = NULL;
+	unsigned int open_flags = GDAL_OF_VECTOR;
+	
+	if ( ! updateable )
+		open_flags |= GDAL_OF_READONLY;
 
 	if ( config_options )
 	{
@@ -288,10 +292,10 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 					errhint("See the formats list at http://www.gdal.org/ogr_formats.html")));
 		}
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGR_Dr_Open(ogr_dr, source, false);
+		ogr_ds = OGR_Dr_Open(ogr_dr, source, updateable);
 #else
 		ogr_ds = GDALOpenEx(source,                                         /* file/data source */
-		                    GDAL_OF_VECTOR|GDAL_OF_READONLY,                /* open flags */
+		                    open_flags,                /* open flags */
 		                    (const char* const*)CSLAddString(NULL, driver), /* driver */
 		                    (const char *const *)open_option_list,          /* open options */
 		                    NULL);                                          /* sibling files */
@@ -301,10 +305,10 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 	else
 	{
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGROpen(source, false, &ogr_dr);
+		ogr_ds = OGROpen(source, updateable, &ogr_dr);
 #else
 		ogr_ds = GDALOpenEx(source, 
-		                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
+		                    open_flags, 
 		                    NULL, 
 		                    (const char *const *)open_option_list,
 		                    NULL);
