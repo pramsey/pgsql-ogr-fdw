@@ -354,6 +354,25 @@ ogrCanReallyCountFast(const OgrConnection *con)
 	return false;
 }
 
+static void 
+ogrEreportError(const char *errstr)
+{
+	const char *ogrerr = CPLGetLastErrorMsg();
+	if ( ogrerr && ! streq(ogrerr,"") )
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("%s", errstr),
+			 errhint("%s", ogrerr)));
+	}
+	else
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("%s", errstr)));
+	}
+}
+
 /*
  * Make sure the datasource is cleaned up when we're done
  * with a connection.
@@ -576,16 +595,20 @@ getOgrFdwState(Oid foreigntableid, OgrFdwStateType state_type)
 {
 	OgrFdwState *state;
 	size_t size;
+	bool updateable = false;
 	
 	switch (state_type) 
 	{
 		case OGR_PLAN_STATE:
 			size = sizeof(OgrFdwPlanState);
+			updateable = false;
 			break;
 		case OGR_EXEC_STATE:
 			size = sizeof(OgrFdwExecState);
+			updateable = false;
 			break;
 		case OGR_MODIFY_STATE:
+			updateable = true;
 			size = sizeof(OgrFdwModifyState);
 			break;
 		default:
@@ -596,7 +619,7 @@ getOgrFdwState(Oid foreigntableid, OgrFdwStateType state_type)
 	state->type = state_type;
 
 	/*  Connect! */
-	state->ogr = ogrGetConnectionFromTable(foreigntableid, false);
+	state->ogr = ogrGetConnectionFromTable(foreigntableid, updateable);
 	state->foreigntableid = foreigntableid;
 
 	return state;
@@ -1685,6 +1708,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 					char *dstr = DatumGetCString(OidFunctionCall1(pgoutputfunc, values[i]));
 					/* Cross fingers and hope OGR date parser will/can handle it */
 					OGR_F_SetFieldString(feat, ogrfldnum, dstr);
+					break;
 				}
 				/* TODO: array types for string, integer, float */
 				default:
@@ -1744,22 +1768,7 @@ ogrIterateForeignScan(ForeignScanState *node)
 	{
 		/* convert result to arrays of values and null indicators */
 		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->table) )
-		{
-			const char *ogrerr = CPLGetLastErrorMsg();
-			if ( ogrerr && ! streq(ogrerr,"") )
-			{
-				ereport(ERROR,
-					(errcode(ERRCODE_FDW_ERROR),
-					 errmsg("failure reading OGR data source"),
-					 errhint("%s", ogrerr)));
-			}
-			else
-			{
-	 			ereport(ERROR,
-	 				(errcode(ERRCODE_FDW_ERROR),
-	 				 errmsg("failure reading OGR data source")));
-			}
-		}
+			ogrEreportError("failure reading OGR data source");
 
 		/* store the virtual tuple */
 		ExecStoreVirtualTuple(slot);
@@ -1935,6 +1944,7 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	Datum fid_datum;
 	int64 fid;
 	OGRFeatureH feat;
+	OGRErr err;
 
 	elog(NOTICE, "ogrExecForeignUpdate");
 	
@@ -1955,25 +1965,20 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	/* Get the OGR feature for this fid */
 	feat = OGR_L_GetFeature (modstate->ogr.lyr, fid);
 
-	/* Copy the data from the slot onto the feature */
-	if ( (! feat) || (OGRERR_NONE != ogrSlotToFeature(slot, feat, modstate->table)) )
-	{
-		const char *ogrerr = CPLGetLastErrorMsg();
-		if ( ogrerr && ! streq(ogrerr,"") )
-		{
-			ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("failure reading OGR data source"),
-				 errhint("%s", ogrerr)));
-		}
-		else
-		{
- 			ereport(ERROR,
- 				(errcode(ERRCODE_FDW_ERROR),
- 				 errmsg("failure reading OGR data source")));
-		}
-	}
+	/* If we found a feature, then copy data from the slot onto the feature */
+	/* and then back into the layer */
+	if ( ! feat )
+		ogrEreportError("failure reading OGR feature");
 
+	err = ogrSlotToFeature(slot, feat, modstate->table);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure populating OGR feature");
+	
+	err = OGR_L_SetFeature(modstate->ogr.lyr, feat);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure writing back OGR feature");
+	
+	
 	/* TODO: slot handling? what happens with RETURNING clauses? */
 	
 	// int natts = slot->tts_tupleDescriptor->natts;
@@ -2056,25 +2061,16 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	elog(NOTICE, "ogrExecForeignInsert");
 	
 	/* Copy the data from the slot onto the feature */
-	if ( (! feat) || (OGRERR_NONE != ogrSlotToFeature(slot, feat, modstate->table)) )
-	{
-		const char *ogrerr = CPLGetLastErrorMsg();
-		if ( ogrerr && ! streq(ogrerr,"") )
-		{
-			ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("failure reading OGR data source"),
-				 errhint("%s", ogrerr)));
-		}
-		else
-		{
- 			ereport(ERROR,
- 				(errcode(ERRCODE_FDW_ERROR),
- 				 errmsg("failure reading OGR data source")));
-		}
-	}
-	
+	if ( ! feat )
+		ogrEreportError("failure creating OGR feature");
+
+	err = ogrSlotToFeature(slot, feat, modstate->table);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure populating OGR feature");
+			
 	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure writing OGR feature");
 		
 	return slot;
 }
