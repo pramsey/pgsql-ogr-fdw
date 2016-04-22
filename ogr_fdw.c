@@ -145,8 +145,6 @@ static void ogrStringLaunder (char *str);
 /*
  * Helper functions
  */
-static OgrFdwPlanState* getOgrFdwPlanState(Oid foreigntableid);
-static OgrFdwExecState* getOgrFdwExecState(Oid foreigntableid);
 static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, bool updateable);
 static void ogr_fdw_exit(int code, Datum arg);
 
@@ -567,47 +565,37 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 /*
  * Initialize an OgrFdwPlanState on the heap.
  */
-static OgrFdwPlanState*
-getOgrFdwPlanState(Oid foreigntableid)
+static OgrFdwState*
+getOgrFdwState(Oid foreigntableid, OgrFdwStateType state_type)
 {
-	OgrFdwPlanState *planstate = palloc0(sizeof(OgrFdwPlanState));
+	OgrFdwState *state;
+	size_t size;
+	
+	switch (state_type) 
+	{
+		case OGR_PLAN_STATE:
+			size = sizeof(OgrFdwPlanState);
+			break;
+		case OGR_EXEC_STATE:
+			size = sizeof(OgrFdwExecState);
+			break;
+		case OGR_MODIFY_STATE:
+			size = sizeof(OgrFdwModifyState);
+			break;
+		default:
+			elog(ERROR, "invalid state type");
+	}
+	
+	state = palloc0(size);
+	state->type = state_type;
 
 	/*  Connect! */
-	planstate->ogr = ogrGetConnectionFromTable(foreigntableid, false);
-	planstate->foreigntableid = foreigntableid;
+	state->ogr = ogrGetConnectionFromTable(foreigntableid, false);
+	state->foreigntableid = foreigntableid;
 
-	return planstate;
+	return state;
 }
 
-/*
- * Initialize an OgrFdwExecState on the heap.
- */
-static OgrFdwExecState*
-getOgrFdwExecState(Oid foreigntableid)
-{
-	OgrFdwExecState *execstate = palloc0(sizeof(OgrFdwExecState));
-
-	/*  Connect! */
-	execstate->ogr = ogrGetConnectionFromTable(foreigntableid, false);
-	execstate->foreigntableid = foreigntableid;
-
-	return execstate;
-}
-
-/*
- * Initialize an OgrFdwModifyState on the heap.
- */
-static OgrFdwModifyState*
-getOgrFdwModifyState(Oid foreigntableid)
-{
-	OgrFdwModifyState *modstate = palloc0(sizeof(OgrFdwModifyState));
-
-	/*  Connect! */
-	modstate->ogr = ogrGetConnectionFromTable(foreigntableid, true);
-	modstate->foreigntableid = foreigntableid;
-
-	return modstate;
-}
 
 
 /*
@@ -620,7 +608,8 @@ ogrGetForeignRelSize(PlannerInfo *root,
                      Oid foreigntableid)
 {
 	/* Initialize the OGR connection */
-	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
+	OgrFdwState *state = (OgrFdwState *)getOgrFdwState(foreigntableid, OGR_PLAN_STATE);
+	OgrFdwPlanState *planstate = (OgrFdwPlanState *)state;
 	List *scan_clauses = baserel->baserestrictinfo;
 
 	/* Set to NULL to clear the restriction clauses in OGR */
@@ -1183,10 +1172,11 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	ForeignScan *fsplan = (ForeignScan *)node->ss.ps.plan;
 
 	/* Initialize OGR connection */
-	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
+	OgrFdwState *state = getOgrFdwState(foreigntableid, OGR_EXEC_STATE);
+	OgrFdwExecState *execstate = (OgrFdwExecState *)state;
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
-	ogrReadColumnData((OgrFdwState*)execstate);
+	ogrReadColumnData(state);
 
 	/* Get private info created by planner functions. */
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
@@ -1889,18 +1879,18 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 					int eflags)
 {
 	Oid foreigntableid;
-	OgrFdwModifyState *modstate;
+	OgrFdwState *state;
 	
 	elog(NOTICE, "ogrBeginForeignModify");
 
 	foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
-	modstate = getOgrFdwModifyState(foreigntableid);
+	state = getOgrFdwState(foreigntableid, OGR_MODIFY_STATE);
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
-	ogrReadColumnData((OgrFdwState*)modstate);
+	ogrReadColumnData(state);
 	
 	/* Save OGR connection, etc, for later */
-	rinfo->ri_FdwState = modstate;
+	rinfo->ri_FdwState = state;
 	return;
 }
 
@@ -2127,8 +2117,11 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 					
 static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
 {
-	// OgrFdwExecState *execstate = rinfo->ri_FdwState;
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+
 	elog(NOTICE, "ogrEndForeignModify");
+
+	ogrFinishConnection( &(modstate->ogr) );
 	
 	return;
 }
