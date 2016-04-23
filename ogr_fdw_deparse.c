@@ -284,14 +284,17 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	form = (Form_pg_operator) GETSTRUCT(tuple);
 	oprkind = form->oprkind;
 	opname = NameStr(form->oprname);
-	ReleaseSysCache(tuple);
 
 	/* Don't deparse expressions we cannot support */
 	if ( ! ogrOperatorIsSupported(opname) )
+	{
+		ReleaseSysCache(tuple);
 		return false;
+	}
 
 	if ( strcmp("&&", opname) == 0 )
 	{
+		ReleaseSysCache(tuple);
 		/* TODO: this is where we add the geometry extent to the context so we can set the ogrspatialfilter */
 		elog(DEBUG1, "whoa, dude, found a && operator");
 		return false;
