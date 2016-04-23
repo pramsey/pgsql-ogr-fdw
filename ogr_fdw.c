@@ -1327,7 +1327,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 
 		if ( ogrvariant == OGR_FID )
 		{
-			long fid = OGR_F_GetFID(feat);
+			GIntBig fid = OGR_F_GetFID(feat);
 
 			if ( fid == OGRNullFID )
 			{
@@ -1336,7 +1336,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 			else
 			{
 				char fidstr[256];
-				snprintf(fidstr, 256, "%ld", fid);
+				snprintf(fidstr, 256, CPL_FRMT_GIB, fid);
 
 				nulls[i] = false;
 				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypmod, pginputfunc);
