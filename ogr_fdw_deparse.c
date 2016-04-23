@@ -284,13 +284,11 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	form = (Form_pg_operator) GETSTRUCT(tuple);
 	oprkind = form->oprkind;
 	opname = NameStr(form->oprname);
+	ReleaseSysCache(tuple);
 
 	/* Don't deparse expressions we cannot support */
 	if ( ! ogrOperatorIsSupported(opname) )
-	{
-		ReleaseSysCache(tuple);
 		return false;
-	}
 
 	if ( strcmp("&&", opname) == 0 )
 	{
