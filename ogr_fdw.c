@@ -1252,18 +1252,18 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
 	Datum cdata = CStringGetDatum(cstr);
 
 	/* pgtypmod will be -1 for types w/o typmod  */
-	if ( pgtypmod >= 0 )
-	{
+	// if ( pgtypmod >= 0 )
+	// {
 		/* These functions require a type modifier */
 		value = OidFunctionCall3(pginputfunc, cdata,
 			ObjectIdGetDatum(InvalidOid),
 			Int32GetDatum(pgtypmod));
-	}
-	else
-	{
-		/* These functions don't */
-		value = OidFunctionCall1(pginputfunc, cdata);
-	}
+	// }
+	// else
+	// {
+	// 	/* These functions don't */
+	// 	value = OidFunctionCall1(pginputfunc, cdata);
+	// }
 
 	return value;
 }

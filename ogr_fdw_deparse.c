@@ -255,14 +255,6 @@ ogrOperatorIsSupported(const char *opname)
 		return true;
 	else
 		return false;
-
-	// int i;
-	// for ( i = 0; i < 8; i++ )
-	// {
-	// 	if ( strcasecmp(opname, ogrOperators[i]) == 0 )
-	// 		return true;
-	// }
-	// return false;
 }
 
 
@@ -292,16 +284,37 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 		return false;
 	}
 
+	/* TODO: When a && operator is found, we need to do special */
+	/*       handling to send the box back up to OGR for SetSpatialFilter */
+
+	/* Overlaps operator is special case: if one side is a constant, */
+	/* then we can pass it as a spatial filter to OGR */
 	if ( strcmp("&&", opname) == 0 )
 	{
-		ReleaseSysCache(tuple);
-		/* TODO: this is where we add the geometry extent to the context so we can set the ogrspatialfilter */
+		// Expr *r_arg = lfirst(list_head(node->args));
+		// Expr *l_arg = lfirst(list_tail(node->args));
+		// Const *constant;
+
 		elog(DEBUG1, "whoa, dude, found a && operator");
+
+		/* Specifically, we need a Const on one side and a Var */
+		/* column on the other side that is from the FDW relation */
+		/* Both of those implies and OGR spatial filter can be reasonably */
+		/* set. */
+
+		// if ( nodeTag(r_arg) == T_Const )
+		// 	constant = (Const*)r_arg;
+		// else if ( nodeTag(l_arg) == T_Const)
+		// 	constant = (Const*)l_arg;
+		// else
+		// 	return false;
+		
+		// if ( constant->consttype != GEOMETRYOID )
+
+		ReleaseSysCache(tuple);
+
 		return false;
 	}
-
-	/* TODO: Maybe here coerce some operators into OGR equivalents (!= to <>) */
-	/* TODO: When a && operator is found, we need to do special handling to send the box back up to OGR for SetSpatialFilter */
 
 	/* Sanity check. */
 	Assert((oprkind == 'r' && list_length(node->args) == 1) ||
