@@ -273,6 +273,7 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 			CPLSetConfigOption(key, value);
 			CPLFree(key);
 		}
+		CSLDestroy( option_list );
 	}
 
 	if ( open_options )
@@ -296,11 +297,15 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 #if GDAL_VERSION_MAJOR < 2
 		ogr_ds = OGR_Dr_Open(ogr_dr, source, updateable);
 #else
-		ogr_ds = GDALOpenEx(source,                                         /* file/data source */
-		                    open_flags,                /* open flags */
-		                    (const char* const*)CSLAddString(NULL, driver), /* driver */
-		                    (const char *const *)open_option_list,          /* open options */
-		                    NULL);                                          /* sibling files */
+		{
+			char** driver_list = CSLAddString(NULL, driver);
+			ogr_ds = GDALOpenEx(source,                                         /* file/data source */
+					    open_flags,                /* open flags */
+					    (const char* const*)driver_list, /* driver */
+					    (const char *const *)open_option_list,          /* open options */
+					    NULL);                                          /* sibling files */
+			CSLDestroy( driver_list );
+		}
 #endif
 	}
 	/* No driver, try a blind open... */
@@ -335,6 +340,8 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
  				 errmsg("unable to connect to data source \"%s\"", source)));
 		}
 	}
+	
+	CSLDestroy( open_option_list );
 
 	return ogr_ds;
 }
