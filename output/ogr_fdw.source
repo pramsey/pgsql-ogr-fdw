@@ -2,7 +2,7 @@ CREATE EXTENSION ogr_fdw;
 CREATE SERVER myserver
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
-    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
+    datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile' );
 ------------------------------------------------
 CREATE FOREIGN TABLE pt_1 (
@@ -76,7 +76,7 @@ SELECT * FROM column_name_test ORDER BY fid;
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
-    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
+    datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile',
     config_options 'SHAPE_ENCODING=LATIN1' );
 CREATE FOREIGN TABLE e_1 (
