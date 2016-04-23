@@ -1877,7 +1877,7 @@ static void ogrAddForeignUpdateTargets (Query *parsetree,
 	TupleDesc tupdesc = target_relation->rd_att;
 	int fid_column = ogrGetFidColumn(tupdesc);
 	
-	elog(NOTICE, "ogrAddForeignUpdateTargets");
+	elog(DEBUG2, "ogrAddForeignUpdateTargets");
 	
 	if ( fid_column < 0 )
 		elog(ERROR,"table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
@@ -1971,7 +1971,7 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 	Oid foreigntableid;
 	OgrFdwState *state;
 	
-	elog(NOTICE, "ogrBeginForeignModify");
+	elog(DEBUG2, "ogrBeginForeignModify");
 
 	foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
 	state = getOgrFdwState(foreigntableid, OGR_MODIFY_STATE);
@@ -2019,7 +2019,7 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	else
 		fid = DatumGetInt32(fid_datum);
 
-	elog(NOTICE, "ogrExecForeignUpdate fid=%ld", fid);
+	elog(DEBUG2, "ogrExecForeignUpdate fid=%ld", fid);
 	
 	/* Get the OGR feature for this fid */
 	feat = OGR_L_GetFeature (modstate->ogr.lyr, fid);
@@ -2117,7 +2117,7 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	OGRFeatureH feat = OGR_F_Create(ogr_fd);
 	OGRErr err;
 
-	elog(NOTICE, "ogrExecForeignInsert");
+	elog(DEBUG2, "ogrExecForeignInsert");
 	
 	/* Copy the data from the slot onto the feature */
 	if ( ! feat )
@@ -2165,7 +2165,7 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 	else
 		fid = DatumGetInt32(fid_datum);
 	
-	elog(NOTICE, "ogrExecForeignDelete fid=%ld", fid);
+	elog(DEBUG2, "ogrExecForeignDelete fid=%ld", fid);
 	
 	/* Delete the OGR feature for this fid */
 	err = OGR_L_DeleteFeature(modstate->ogr.lyr, fid);
@@ -2180,7 +2180,7 @@ static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
 {
 	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
 	
-	elog(NOTICE, "ogrEndForeignModify");
+	elog(DEBUG2, "ogrEndForeignModify");
 	
 	ogrFinishConnection( &(modstate->ogr) );
 	
@@ -2195,7 +2195,7 @@ static int ogrIsForeignRelUpdatable (Relation rel)
 	OgrConnection ogr;
 	Oid foreigntableid = RelationGetRelid(rel);
 
-	elog(NOTICE, "ogrIsForeignRelUpdatable");
+	elog(DEBUG2, "ogrIsForeignRelUpdatable");
 
 	/* Before we say "yes"... */
 	/*  Does the foreign relation have a "fid" column? */
