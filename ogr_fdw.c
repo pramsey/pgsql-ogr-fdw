@@ -1442,6 +1442,9 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 					case OFTInteger:
 					case OFTReal:
 					case OFTString:
+#if GDAL_VERSION_MAJOR >= 2
+					case OFTInteger64:
+#endif
 					{
 						/*
 						 * Convert numbers and strings via a string representation.
