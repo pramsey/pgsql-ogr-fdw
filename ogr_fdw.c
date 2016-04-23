@@ -1990,6 +1990,7 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	if ( err != OGRERR_NONE )
 		ogrEreportError("failure writing back OGR feature");
 	
+	OGR_F_Destroy(feat);
 	
 	/* TODO: slot handling? what happens with RETURNING clauses? */
 	
@@ -2120,7 +2121,9 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
 	if ( err != OGRERR_NONE )
 		ogrEreportError("failure writing OGR feature");
-		
+	
+	OGR_F_Destroy(feat);
+	
 	return slot;
 }
 					
