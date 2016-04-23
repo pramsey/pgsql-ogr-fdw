@@ -86,28 +86,56 @@ PG_FUNCTION_INFO_V1(ogr_fdw_validator);
 void _PG_init(void);
 
 /*
- * FDW callback routines
+ * FDW query callback routines
  */
 static void ogrGetForeignRelSize(PlannerInfo *root,
-					  RelOptInfo *baserel,
-					  Oid foreigntableid);
+					RelOptInfo *baserel,
+					Oid foreigntableid);
 static void ogrGetForeignPaths(PlannerInfo *root,
 					RelOptInfo *baserel,
 					Oid foreigntableid);
 static ForeignScan *ogrGetForeignPlan(PlannerInfo *root,
-				   RelOptInfo *baserel,
-				   Oid foreigntableid,
-				   ForeignPath *best_path,
-				   List *tlist,
-				   List *scan_clauses
+				 	RelOptInfo *baserel,
+				 	Oid foreigntableid,
+				 	ForeignPath *best_path,
+				 	List *tlist,
+				 	List *scan_clauses
 #if PG_VERSION_NUM >= 90500
-				   ,Plan *outer_plan
+					,Plan *outer_plan
 #endif
 );
 static void ogrBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *ogrIterateForeignScan(ForeignScanState *node);
 static void ogrReScanForeignScan(ForeignScanState *node);
 static void ogrEndForeignScan(ForeignScanState *node);
+
+/*
+ * FDW modify callback routines
+ */
+static void ogrAddForeignUpdateTargets (Query *parsetree,
+					RangeTblEntry *target_rte,
+					Relation target_relation);
+static void ogrBeginForeignModify (ModifyTableState *mtstate,
+					ResultRelInfo *rinfo,
+					List *fdw_private,
+					int subplan_index,
+					int eflags);
+static TupleTableSlot *ogrExecForeignInsert (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static TupleTableSlot *ogrExecForeignDelete (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot);
+static void ogrEndForeignModify (EState *estate,
+					ResultRelInfo *rinfo);
+static int ogrIsForeignRelUpdatable (Relation rel);
+
 
 #if PG_VERSION_NUM >= 90500
 static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid);
@@ -117,9 +145,7 @@ static void ogrStringLaunder (char *str);
 /*
  * Helper functions
  */
-static OgrFdwPlanState* getOgrFdwPlanState(Oid foreigntableid);
-static OgrFdwExecState* getOgrFdwExecState(Oid foreigntableid);
-static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid);
+static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, bool updateable);
 static void ogr_fdw_exit(int code, Datum arg);
 
 /* Global to hold GEOMETRYOID */
@@ -185,6 +211,7 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 {
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 
+	/* Read support */
 	fdwroutine->GetForeignRelSize = ogrGetForeignRelSize;
 	fdwroutine->GetForeignPaths = ogrGetForeignPaths;
 	fdwroutine->GetForeignPlan = ogrGetForeignPlan;
@@ -192,6 +219,15 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 	fdwroutine->IterateForeignScan = ogrIterateForeignScan;
 	fdwroutine->ReScanForeignScan = ogrReScanForeignScan;
 	fdwroutine->EndForeignScan = ogrEndForeignScan;
+	
+	/* Write support */
+	fdwroutine->AddForeignUpdateTargets = ogrAddForeignUpdateTargets;
+	fdwroutine->BeginForeignModify = ogrBeginForeignModify;
+	fdwroutine->ExecForeignInsert = ogrExecForeignInsert;
+	fdwroutine->ExecForeignUpdate = ogrExecForeignUpdate;
+	fdwroutine->ExecForeignDelete = ogrExecForeignDelete;
+	fdwroutine->EndForeignModify = ogrEndForeignModify;
+	fdwroutine->IsForeignRelUpdatable = ogrIsForeignRelUpdatable;
 
 #if PG_VERSION_NUM >= 90500
 	/*  Support functions for IMPORT FOREIGN SCHEMA */
@@ -207,12 +243,18 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
  * and in FDW options validation.
  */
 static GDALDatasetH
-ogrGetDataSource(const char *source, const char *driver, 
+ogrGetDataSource(const char *source, const char *driver, bool updateable, 
                  const char *config_options, const char *open_options)
 {
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
 	char **open_option_list = NULL;
+	unsigned int open_flags = GDAL_OF_VECTOR;
+	
+	if ( updateable )
+		open_flags |= GDAL_OF_UPDATE;
+	else
+		open_flags |= GDAL_OF_READONLY;
 
 	if ( config_options )
 	{
@@ -252,10 +294,10 @@ ogrGetDataSource(const char *source, const char *driver,
 					errhint("See the formats list at http://www.gdal.org/ogr_formats.html")));
 		}
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGR_Dr_Open(ogr_dr, source, false);
+		ogr_ds = OGR_Dr_Open(ogr_dr, source, updateable);
 #else
 		ogr_ds = GDALOpenEx(source,                                         /* file/data source */
-		                    GDAL_OF_VECTOR|GDAL_OF_READONLY,                /* open flags */
+		                    open_flags,                /* open flags */
 		                    (const char* const*)CSLAddString(NULL, driver), /* driver */
 		                    (const char *const *)open_option_list,          /* open options */
 		                    NULL);                                          /* sibling files */
@@ -265,10 +307,10 @@ ogrGetDataSource(const char *source, const char *driver,
 	else
 	{
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGROpen(source, false, &ogr_dr);
+		ogr_ds = OGROpen(source, updateable, &ogr_dr);
 #else
 		ogr_ds = GDALOpenEx(source, 
-		                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
+		                    open_flags, 
 		                    NULL, 
 		                    (const char *const *)open_option_list,
 		                    NULL);
@@ -312,6 +354,25 @@ ogrCanReallyCountFast(const OgrConnection *con)
 	return false;
 }
 
+static void 
+ogrEreportError(const char *errstr)
+{
+	const char *ogrerr = CPLGetLastErrorMsg();
+	if ( ogrerr && ! streq(ogrerr,"") )
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("%s", errstr),
+			 errhint("%s", ogrerr)));
+	}
+	else
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("%s", errstr)));
+	}
+}
+
 /*
  * Make sure the datasource is cleaned up when we're done
  * with a connection.
@@ -319,15 +380,17 @@ ogrCanReallyCountFast(const OgrConnection *con)
 static void
 ogrFinishConnection(OgrConnection *ogr)
 {
+	if ( ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE )
+		elog(NOTICE, "failed to flush writes to OGR data source");
+
 	if ( ogr->ds )
-	{
 		GDALClose(ogr->ds);
-	}
+
 	ogr->ds = NULL;
 }
 
 static OgrConnection
-ogrGetConnectionFromServer(Oid foreignserverid)
+ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 {
 	ForeignServer *server;
 	OgrConnection ogr;
@@ -360,7 +423,7 @@ ogrGetConnectionFromServer(Oid foreignserverid)
 	 */
 
 	/*  Connect! */
-	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, ogr.config_options, ogr.open_options);
+	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, updateable, ogr.config_options, ogr.open_options);
 
 	return ogr;
 }
@@ -373,7 +436,7 @@ ogrGetConnectionFromServer(Oid foreignserverid)
  * has handles for both the datasource and layer.
  */
 static OgrConnection
-ogrGetConnectionFromTable(Oid foreigntableid)
+ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
 {
 	ForeignTable *table;
 	/* UserMapping *mapping; */
@@ -385,7 +448,7 @@ ogrGetConnectionFromTable(Oid foreigntableid)
 	table = GetForeignTable(foreigntableid);
 	/* mapping = GetUserMapping(GetUserId(), table->serverid); */
 
-	ogr = ogrGetConnectionFromServer(table->serverid);
+	ogr = ogrGetConnectionFromServer(table->serverid, updateable);
 
 	foreach(cell, table->options)
 	{
@@ -515,7 +578,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if ( catalog == ForeignServerRelationId && source )
 	{
 		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver, config_options, open_options);
+		ogr_ds = ogrGetDataSource(source, driver, false, config_options, open_options);
 		if ( ogr_ds )
 		{
 			GDALClose(ogr_ds);
@@ -529,31 +592,39 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 /*
  * Initialize an OgrFdwPlanState on the heap.
  */
-static OgrFdwPlanState*
-getOgrFdwPlanState(Oid foreigntableid)
+static OgrFdwState*
+getOgrFdwState(Oid foreigntableid, OgrFdwStateType state_type)
 {
-	OgrFdwPlanState *planstate = palloc0(sizeof(OgrFdwPlanState));
+	OgrFdwState *state;
+	size_t size;
+	bool updateable = false;
+	
+	switch (state_type) 
+	{
+		case OGR_PLAN_STATE:
+			size = sizeof(OgrFdwPlanState);
+			updateable = false;
+			break;
+		case OGR_EXEC_STATE:
+			size = sizeof(OgrFdwExecState);
+			updateable = false;
+			break;
+		case OGR_MODIFY_STATE:
+			updateable = true;
+			size = sizeof(OgrFdwModifyState);
+			break;
+		default:
+			elog(ERROR, "invalid state type");
+	}
+	
+	state = palloc0(size);
+	state->type = state_type;
 
 	/*  Connect! */
-	planstate->ogr = ogrGetConnectionFromTable(foreigntableid);
-	planstate->foreigntableid = foreigntableid;
+	state->ogr = ogrGetConnectionFromTable(foreigntableid, updateable);
+	state->foreigntableid = foreigntableid;
 
-	return planstate;
-}
-
-/*
- * Initialize an OgrFdwExecState on the heap.
- */
-static OgrFdwExecState*
-getOgrFdwExecState(Oid foreigntableid)
-{
-	OgrFdwExecState *execstate = palloc0(sizeof(OgrFdwExecState));
-
-	/*  Connect! */
-	execstate->ogr = ogrGetConnectionFromTable(foreigntableid);
-	execstate->foreigntableid = foreigntableid;
-
-	return execstate;
+	return state;
 }
 
 
@@ -568,7 +639,8 @@ ogrGetForeignRelSize(PlannerInfo *root,
                      Oid foreigntableid)
 {
 	/* Initialize the OGR connection */
-	OgrFdwPlanState *planstate = getOgrFdwPlanState(foreigntableid);
+	OgrFdwState *state = (OgrFdwState *)getOgrFdwState(foreigntableid, OGR_PLAN_STATE);
+	OgrFdwPlanState *planstate = (OgrFdwPlanState *)state;
 	List *scan_clauses = baserel->baserestrictinfo;
 
 	/* Set to NULL to clear the restriction clauses in OGR */
@@ -742,6 +814,55 @@ ogrGetForeignPlan(PlannerInfo *root,
 }
 
 static void
+pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char *colname, const char *tblname)
+{	
+	if ( pg_type == BOOLOID && ogr_type == OFTInteger )
+		return;
+	else if ( pg_type == INT2OID && ogr_type == OFTInteger )
+		return;
+	else if ( pg_type == INT4OID && ogr_type == OFTInteger )
+		return;
+	else if ( pg_type == INT8OID )
+	{
+#if GDAL_VERSION_MAJOR >= 2
+		if ( ogr_type == OFTInteger64 ) 
+			return;
+#endif
+	} 
+	else if ( pg_type == NUMERICOID && ogr_type == OFTReal )
+		return;
+	else if ( pg_type == FLOAT4OID && ogr_type == OFTReal )
+		return;
+	else if ( pg_type == FLOAT8OID && ogr_type == OFTReal )
+		return;
+	else if ( pg_type == TEXTOID && ogr_type == OFTString )
+		return;
+	else if ( pg_type == VARCHAROID && ogr_type == OFTString )
+		return;
+	else if ( pg_type == CHAROID && ogr_type == OFTString )
+		return;
+	else if ( pg_type == NAMEOID && ogr_type == OFTString )
+		return;
+	else if ( pg_type == BYTEAOID && ogr_type == OFTBinary )
+		return;
+	else if ( pg_type == DATEOID && ogr_type == OFTDate )
+		return;
+	else if ( pg_type == TIMEOID && ogr_type == OFTTime )
+		return;
+	else if ( pg_type == TIMESTAMPOID && ogr_type == OFTDateTime )
+		return;
+	else if ( pg_type == TIMESTAMPOID && ogr_type == OFTDateTime )
+		return;
+	
+	ereport(ERROR, (
+			errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+			errmsg("column \"%s\" of foreign table \"%s\" converts \"%s\" to OGR \"%s\"",
+				colname, tblname,
+				format_type_be(pg_type), OGR_GetFieldTypeName(ogr_type))
+			));	
+}
+
+static void
 ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const char *tblname)
 {
 	switch (ogr_type)
@@ -891,7 +1012,7 @@ static int ogrFieldEntryCmpFunc(const void * a, const void * b)
  * returns.
  */
 static void
-ogrReadColumnData(OgrFdwExecState *execstate)
+ogrReadColumnData(OgrFdwState *state)
 {
 	Relation rel;
 	TupleDesc tupdesc;
@@ -905,28 +1026,35 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 	int field_count = 0;
 	OgrFieldEntry *ogr_fields;
 	int ogr_fields_count = 0;
-	char *tblname = get_rel_name(execstate->foreigntableid);
+	char *tblname = get_rel_name(state->foreigntableid);
+	OgrFdwModifyState *modstate;
+
+	/* Only do this for exec and mod states */
+	if ( ! (state->type == OGR_EXEC_STATE || state->type == OGR_MODIFY_STATE) )
+		return;
+	
+	modstate = (OgrFdwModifyState*)state;
 
 	/* Blow away any existing table in the state */
-	if ( execstate->table )
+	if ( modstate->table )
 	{
-		freeOgrFdwTable(execstate->table);
-		execstate->table = NULL;
+		freeOgrFdwTable(modstate->table);
+		modstate->table = NULL;
 	}
 
 	/* Fresh table */
 	tbl = palloc0(sizeof(OgrFdwTable));
 
 	/* One column for each PgSQL foreign table column */
-	rel = heap_open(execstate->foreigntableid, NoLock);
+	rel = heap_open(modstate->foreigntableid, NoLock);
 	tupdesc = rel->rd_att;
-	execstate->tupdesc = tupdesc;
+	modstate->tupdesc = tupdesc;
 	tbl->ncols = tupdesc->natts;
 	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
 	tbl->tblname = pstrdup(tblname);
 
 	/* Get OGR metadata ready */
-	dfn = OGR_L_GetLayerDefn(execstate->ogr.lyr);
+	dfn = OGR_L_GetLayerDefn(modstate->ogr.lyr);
 	ogr_ncols = OGR_FD_GetFieldCount(dfn);
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
@@ -968,10 +1096,12 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 		if ( col.pgattisdropped )
 			continue;
 
-		/* Find the appropriate conversion function */
+		/* Find the appropriate conversion functions */
 		getTypeInputInfo(col.pgtype, &col.pginputfunc, &col.pginputioparam);
 		getTypeBinaryInputInfo(col.pgtype, &col.pgrecvfunc, &col.pgrecvioparam);
-
+		getTypeOutputInfo(col.pgtype, &col.pgoutputfunc, &col.pgoutputvarlena);
+		getTypeBinaryOutputInfo(col.pgtype, &col.pgsendfunc, &col.pgsendvarlena);
+			
 		/* Get the PgSQL column name */
 		col.pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
 
@@ -1012,7 +1142,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 			 * But, if there is a 'column_name' option for this column, we
 			 * want to search for *that* in the OGR layer.
 			 */
-			options = GetForeignColumnOptions(execstate->foreigntableid, i + 1);
+			options = GetForeignColumnOptions(modstate->foreigntableid, i + 1);
 			foreach(lc, options)
 			{
 				DefElem    *def = (DefElem *) lfirst(lc);
@@ -1053,7 +1183,7 @@ ogrReadColumnData(OgrFdwExecState *execstate)
 
 	/* Clean up */
 	
-	execstate->table = tbl;
+	modstate->table = tbl;
 	for( i = 0; i < 2*ogr_ncols; i++ )
 		if ( ogr_fields[i].fldname ) pfree(ogr_fields[i].fldname);
 	pfree(ogr_fields);
@@ -1073,10 +1203,11 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	ForeignScan *fsplan = (ForeignScan *)node->ss.ps.plan;
 
 	/* Initialize OGR connection */
-	OgrFdwExecState *execstate = getOgrFdwExecState(foreigntableid);
+	OgrFdwState *state = getOgrFdwState(foreigntableid, OGR_EXEC_STATE);
+	OgrFdwExecState *execstate = (OgrFdwExecState *)state;
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
-	ogrReadColumnData(execstate);
+	ogrReadColumnData(state);
 
 	/* Get private info created by planner functions. */
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
@@ -1105,9 +1236,7 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
  * Rather than explicitly try and form PgSQL datums, use the type
  * input functions, that accept cstring representations, and convert
  * to the input format. We have to lookup the right input function for
- * each column in the foreign table. This is happening for every
- * column and every row, so probably a performance improvement would
- * be to cache this information once.
+ * each column in the foreign table. 
  */
 static Datum
 pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
@@ -1154,11 +1283,12 @@ ogrNullSlot(Datum *values, bool *nulls, int i)
 * the type, then everything else.
 */
 static OGRErr
-ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc, const OgrFdwTable *tbl)
+ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable *tbl)
 {
 	int i;
 	Datum *values = slot->tts_values;
 	bool *nulls = slot->tts_isnull;
+	TupleDesc tupdesc = slot->tts_tupleDescriptor;
 
 	/* Check our assumption that slot and setup data match */
 	if ( tbl->ncols != tupdesc->natts )
@@ -1175,7 +1305,6 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 		Oid pgtype = col.pgtype;
 		int pgtypmod = col.pgtypmod;
 		Oid pginputfunc = col.pginputfunc;
-		// Oid pginputioparam = col.pginputioparam;
 		int ogrfldnum = col.ogrfldnum;
 		OGRFieldType ogrfldtype = col.ogrfldtype;
 		OgrColumnVariant ogrvariant = col.ogrvariant;
@@ -1404,6 +1533,210 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, TupleDesc tupdesc
 }
 
 
+static OGRErr
+ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable *tbl)
+{
+	int i;
+	Datum *values = slot->tts_values;
+	bool *nulls = slot->tts_isnull;
+	TupleDesc tupdesc = slot->tts_tupleDescriptor;
+
+	/* Check our assumption that slot and setup data match */
+	if ( tbl->ncols != tupdesc->natts )
+	{
+		elog(ERROR, "FDW metadata table and slot table have mismatching number of columns");
+		return OGRERR_FAILURE;
+	}
+
+	/* For each pgtable column, set a value on the feature OGR */
+	for ( i = 0; i < tbl->ncols; i++ )
+	{
+		OgrFdwColumn col = tbl->cols[i];
+		const char *pgname = col.pgname;
+		Oid pgtype = col.pgtype;
+		Oid pgoutputfunc = col.pgoutputfunc;
+		int ogrfldnum = col.ogrfldnum;
+		OGRFieldType ogrfldtype = col.ogrfldtype;
+		OgrColumnVariant ogrvariant = col.ogrvariant;
+
+		/* Skip dropped attributes */
+		if ( col.pgattisdropped )
+			continue;
+
+		/* Skip the FID, we have to treat it as immutable anyways */
+		if ( ogrvariant == OGR_FID )
+			continue;
+		
+		/* TODO: For updates, we should only set the fields that are */
+		/*       in the target list, and flag the others as unchanged */
+		if ( ogrvariant == OGR_GEOMETRY )
+		{			
+			OGRErr err;
+			if ( nulls[i] )
+			{
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, NULL);
+#else
+				err = OGR_F_SetGeometryDirectly(feat, NULL);
+#endif
+				continue;
+			}
+			else
+			{
+				OGRGeometryH geom;
+				bytea *wkb = DatumGetByteaP(OidFunctionCall1(col.pgsendfunc, values[i]));
+				int wkbsize = VARSIZE(wkb) - VARHDRSZ;
+				/* TODO, create geometry with SRS of table? */
+				err = OGR_G_CreateFromWkb((unsigned char *)VARDATA(wkb), NULL, &geom, wkbsize);
+				if ( err != OGRERR_NONE ) 
+					return err;
+				
+#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, geom);
+#else
+				err = OGR_F_SetGeometryDirectly(feat, geom);
+#endif
+			}
+		}
+		else if ( ogrvariant == OGR_FIELD )
+		{
+			/* Ensure that the OGR data type fits the destination Pg column */
+			pgCanConvertToOgr(pgtype, ogrfldtype, pgname, tbl->tblname);
+
+			/* Skip NULL case */
+			if ( nulls[i] )
+			{
+				OGR_F_UnsetField (feat, ogrfldnum);
+				continue;
+			}
+
+			switch(pgtype)
+			{
+				case BOOLOID:
+				{
+					int8 val = DatumGetBool(values[i]);
+					OGR_F_SetFieldInteger(feat, ogrfldnum, val);
+					break;
+				}
+				case INT2OID:
+				{
+					int16 val = DatumGetInt16(values[i]);
+					OGR_F_SetFieldInteger(feat, ogrfldnum, val);
+					break;
+				}
+				case INT4OID:
+				{
+					int32 val = DatumGetInt32(values[i]);
+					OGR_F_SetFieldInteger(feat, ogrfldnum, val);
+					break;
+				}
+				case INT8OID:
+				{
+					int64 val = DatumGetInt64(values[i]);
+#if GDAL_VERSION_MAJOR >= 2					
+					OGR_F_SetFieldInteger64(feat, ogrfldnum, val);
+#else
+					if ( val < INT_MAX )
+						OGR_F_SetFieldInteger(feat, ogrfldnum, (int32)val);
+					else
+						elog(ERROR, "unable to coerce int64 into int32 OGR field");
+#endif
+					break;
+					
+				}
+				
+				case NUMERICOID:
+				{
+					Datum d;
+					float8 f;
+					
+					/* Convert to string */
+					d = OidFunctionCall1(pgoutputfunc, values[i]);
+					/* Convert back to float8 */
+					f = DatumGetFloat8(DirectFunctionCall1(float8in, d));
+
+					OGR_F_SetFieldDouble(feat, ogrfldnum, f);
+					break;					
+				}
+				case FLOAT4OID:	
+				{
+					OGR_F_SetFieldDouble(feat, ogrfldnum, DatumGetFloat4(values[i]));
+					break;
+				}
+				case FLOAT8OID:	
+				{
+					OGR_F_SetFieldDouble(feat, ogrfldnum, DatumGetFloat8(values[i]));
+					break;
+				}
+
+				case TEXTOID:
+				case VARCHAROID:
+				case NAMEOID:
+				case BPCHAROID: /* char(n) */
+				{
+					char *varlena = (char *)DatumGetPointer(values[i]);
+					size_t varsize = VARSIZE(varlena)-VARHDRSZ;
+					char *str = palloc0(varsize+1);
+					memcpy(str, VARDATA(varlena), varsize);
+					OGR_F_SetFieldString(feat, ogrfldnum, str);
+					pfree(str);
+					break;
+				}
+				
+				case CHAROID: /* char */
+				{
+					char str[2];
+					str[0] = DatumGetChar(values[i]);
+					str[1] = '\0';
+					OGR_F_SetFieldString(feat, ogrfldnum, str);
+					break;
+				}
+				
+				case BYTEAOID:
+				{
+					bytea *varlena = PG_DETOAST_DATUM(values[i]);
+					size_t varsize = VARSIZE(varlena) - VARHDRSZ;
+					OGR_F_SetFieldBinary(feat, ogrfldnum, varsize, (GByte *)VARDATA(varlena));
+					break;				
+				}
+
+				case DATEOID:
+				case TIMEOID:
+				case TIMETZOID:
+				case TIMESTAMPOID:
+				case TIMESTAMPTZOID:				
+				{
+					/* TODO: Use explicit OGR_F_SetFieldDateTime functions for this */
+					char *dstr = DatumGetCString(OidFunctionCall1(pgoutputfunc, values[i]));
+					/* Cross fingers and hope OGR date parser will/can handle it */
+					OGR_F_SetFieldString(feat, ogrfldnum, dstr);
+					break;
+				}
+				/* TODO: array types for string, integer, float */
+				default:
+				{
+					elog(ERROR, "OGR FDW unsupported PgSQL column type in \"%s\", %d", pgname, pgtype);
+					return OGRERR_FAILURE;
+				}				
+			}
+		}
+		/* Fill in unmatched columns with NULL */
+		else if ( ogrvariant == OGR_UNMATCHED )
+		{
+			OGR_F_UnsetField (feat, ogrfldnum);
+		}
+		else
+		{
+			elog(ERROR, "OGR FDW unsupported column variant in \"%s\", %d", pgname, ogrvariant);
+			return OGRERR_FAILURE;
+		}
+
+	}
+
+	/* done! */
+	return OGRERR_NONE;
+}
+
 /*
  * ogrIterateForeignScan
  *		Read next record from OGR and store it into the
@@ -1436,23 +1769,8 @@ ogrIterateForeignScan(ForeignScanState *node)
 	if ( (feat = OGR_L_GetNextFeature(execstate->ogr.lyr)) )
 	{
 		/* convert result to arrays of values and null indicators */
-		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->tupdesc, execstate->table) )
-		{
-			const char *ogrerr = CPLGetLastErrorMsg();
-			if ( ogrerr && ! streq(ogrerr,"") )
-			{
-				ereport(ERROR,
-					(errcode(ERRCODE_FDW_ERROR),
-					 errmsg("failure reading OGR data source"),
-					 errhint("%s", ogrerr)));
-			}
-			else
-			{
-	 			ereport(ERROR,
-	 				(errcode(ERRCODE_FDW_ERROR),
-	 				 errmsg("failure reading OGR data source")));
-			}
-		}
+		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->table) )
+			ogrEreportError("failure reading OGR data source");
 
 		/* store the virtual tuple */
 		ExecStoreVirtualTuple(slot);
@@ -1496,8 +1814,408 @@ ogrEndForeignScan(ForeignScanState *node)
 	return;
 }
 
+/* ======================================================== */
+/* WRITE SUPPORT */
+/* ======================================================== */
 
-#endif /* PostgreSQL 9.3 version check */
+// OgrFdwTable *tbl;
+
+/* if the scanning functions above respected the targetlist, 
+we would only be getting back the SET target=foo columns in the slots below,
+so we would need to add the "fid" to all targetlists (and also disallow fid changing
+perhaps).
+
+since we always pull complete tables in the scan functions, the
+slots below are basically full tables, in fact they include (?) one entry
+for each OGR column, even when the table does not include the column, 
+just nulling out the entries that are not in the table definition
+
+it might be better to update the scan code to properly manage target lists
+first, and then come back here and do things properly
+
+we will need a ogrSlotToFeature to feed into the OGR_L_SetFeature and
+OGR_L_CreateFeature functions. Also will use OGR_L_DeleteFeature and
+fid value
+
+in ogrGetForeignPlan we get a tlist that includes just the attributes we
+are interested in, can use that to pare down the request perhaps
+*/
+
+static int ogrGetFidColumn(const TupleDesc td)
+{
+	int i;
+	for ( i = 0; i < td->natts; i++ )
+	{
+		NameData attname = td->attrs[i]->attname;
+		Oid atttypeid = td->attrs[i]->atttypid;
+		if ( (atttypeid == INT4OID || atttypeid == INT8OID) && 
+		     strcaseeq("fid", attname.data) )
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+/*
+ * ogrAddForeignUpdateTargets
+ * 
+ * For now we no-op this callback, as we are making the presence of
+ * "fid" in the FDW table definition a requirement for any update.
+ * It might be possible to add nonexisting "junk" columns? In which case
+ * there could always be a virtual fid travelling with the queries,
+ * and the FDW table itself wouldn't need such a column?
+ */
+static void ogrAddForeignUpdateTargets (Query *parsetree,
+					RangeTblEntry *target_rte,
+					Relation target_relation)
+{
+	ListCell *cell;
+	Form_pg_attribute att;
+	Var *var;
+	TargetEntry *tle;
+	TupleDesc tupdesc = target_relation->rd_att;
+	int fid_column = ogrGetFidColumn(tupdesc);
+	
+	elog(DEBUG2, "ogrAddForeignUpdateTargets");
+	
+	if ( fid_column < 0 )
+		elog(ERROR,"table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
+	
+	att = tupdesc->attrs[fid_column];
+	
+	/* Make a Var representing the desired value */
+	var = makeVar(parsetree->resultRelation,
+			att->attnum,
+			att->atttypid,
+			att->atttypmod,
+			att->attcollation,
+			0);
+
+	/* Wrap it in a resjunk TLE with the right name ... */
+	tle = makeTargetEntry((Expr *)var,
+			list_length(parsetree->targetList) + 1,
+			pstrdup(NameStr(att->attname)),
+			true);
+
+	parsetree->targetList = lappend(parsetree->targetList, tle);
+	
+	foreach(cell, parsetree->targetList)
+	{
+		TargetEntry *target = (TargetEntry *) lfirst(cell);
+		elog(DEBUG4, "parsetree->targetList %s:%d", target->resname, target->resno);
+	}
+	
+	return;
+
+}
+
+/* 
+ * ogrBeginForeignModify
+ * For now the only thing we'll do here is set up the connection
+ * and pass that on to the next functions.
+ */
+static void ogrBeginForeignModify (ModifyTableState *mtstate,
+					ResultRelInfo *rinfo,
+					List *fdw_private,
+					int subplan_index,
+					int eflags)
+{
+	Oid foreigntableid;
+	OgrFdwState *state;
+	
+	elog(DEBUG2, "ogrBeginForeignModify");
+
+	foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
+	state = getOgrFdwState(foreigntableid, OGR_MODIFY_STATE);
+
+	/* Read the OGR layer definition and PgSQL foreign table definitions */
+	ogrReadColumnData(state);
+	
+	/* Save OGR connection, etc, for later */
+	rinfo->ri_FdwState = state;
+	return;
+}
+
+/*
+ * ogrExecForeignUpdate
+ * Find out what the fid is, get the OGR feature for that FID, 
+ * and then update the values on that feature.
+ */
+static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	TupleDesc td = slot->tts_tupleDescriptor;
+	Relation rel = rinfo->ri_RelationDesc;
+	Oid foreigntableid = RelationGetRelid(rel);
+	int fid_column;
+	Oid fid_type;
+	Datum fid_datum;
+	int64 fid;
+	OGRFeatureH feat;
+	OGRErr err;
+	
+	/* Is there a fid column? */
+	fid_column = ogrGetFidColumn(td);
+	if ( fid_column < 0 )
+		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
+	
+	/* What is the value of the FID for this record? */
+	fid_datum = slot->tts_values[fid_column];
+	fid_type = td->attrs[fid_column]->atttypid;
+
+	if ( fid_type == INT8OID )
+		fid = DatumGetInt64(fid_datum);
+	else
+		fid = DatumGetInt32(fid_datum);
+
+	elog(DEBUG2, "ogrExecForeignUpdate fid=%ld", fid);
+	
+	/* Get the OGR feature for this fid */
+	feat = OGR_L_GetFeature (modstate->ogr.lyr, fid);
+
+	/* If we found a feature, then copy data from the slot onto the feature */
+	/* and then back into the layer */
+	if ( ! feat )
+		ogrEreportError("failure reading OGR feature");
+
+	err = ogrSlotToFeature(slot, feat, modstate->table);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure populating OGR feature");
+	
+	err = OGR_L_SetFeature(modstate->ogr.lyr, feat);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure writing back OGR feature");
+	
+	
+	/* TODO: slot handling? what happens with RETURNING clauses? */
+	
+	return slot;
+}
+
+// typedef struct TupleTableSlot
+// {
+//     NodeTag     type;
+//     bool        tts_isempty;    /* true = slot is empty */
+//     bool        tts_shouldFree; /* should pfree tts_tuple? */
+//     bool        tts_shouldFreeMin;      /* should pfree tts_mintuple? */
+//     bool        tts_slow;       /* saved state for slot_deform_tuple */
+//     HeapTuple   tts_tuple;      /* physical tuple, or NULL if virtual */
+//     TupleDesc   tts_tupleDescriptor;    /* slot's tuple descriptor */
+//     MemoryContext tts_mcxt;     /* slot itself is in this context */
+//     Buffer      tts_buffer;     /* tuple's buffer, or InvalidBuffer */
+//     int         tts_nvalid;     /* # of valid values in tts_values */
+//     Datum      *tts_values;     /* current per-attribute values */
+//     bool       *tts_isnull;     /* current per-attribute isnull flags */
+//     MinimalTuple tts_mintuple;  /* minimal tuple, or NULL if none */
+//     HeapTupleData tts_minhdr;   /* workspace for minimal-tuple-only case */
+//     long        tts_off;        /* saved state for slot_deform_tuple */
+// } TupleTableSlot;
+
+// typedef struct tupleDesc
+// {
+//     int         natts;          /* number of attributes in the tuple */
+//     Form_pg_attribute *attrs;
+//     /* attrs[N] is a pointer to the description of Attribute Number N+1 */
+//     TupleConstr *constr;        /* constraints, or NULL if none */
+//     Oid         tdtypeid;       /* composite type ID for tuple type */
+//     int32       tdtypmod;       /* typmod for tuple type */
+//     bool        tdhasoid;       /* tuple has oid attribute in its header */
+//     int         tdrefcount;     /* reference count, or -1 if not counting */
+// }   *TupleDesc;
+// 
+
+// typedef struct ResultRelInfo
+// {
+//     NodeTag     type;
+//     Index       ri_RangeTableIndex;
+//     Relation    ri_RelationDesc;
+//     int         ri_NumIndices;
+//     RelationPtr ri_IndexRelationDescs;
+//     IndexInfo **ri_IndexRelationInfo;
+//     TriggerDesc *ri_TrigDesc;
+//     FmgrInfo   *ri_TrigFunctions;
+//     List      **ri_TrigWhenExprs;
+//     Instrumentation *ri_TrigInstrument;
+//     struct FdwRoutine *ri_FdwRoutine;
+//     void       *ri_FdwState;
+//     List       *ri_WithCheckOptions;
+//     List       *ri_WithCheckOptionExprs;
+//     List      **ri_ConstraintExprs;
+//     JunkFilter *ri_junkFilter;
+//     ProjectionInfo *ri_projectReturning;
+//     ProjectionInfo *ri_onConflictSetProj;
+//     List       *ri_onConflictSetWhere;
+// } ResultRelInfo;
+
+// typedef struct TargetEntry
+// 	{
+// 	    Expr        xpr;
+// 	    Expr       *expr;           /* expression to evaluate */
+// 	    AttrNumber  resno;          /* attribute number (see notes above) */
+// 	    char       *resname;        /* name of the column (could be NULL) */
+// 	    Index       ressortgroupref;/* nonzero if referenced by a sort/group
+// 	                                 * clause */
+// 	    Oid         resorigtbl;     /* OID of column's source table */
+// 	    AttrNumber  resorigcol;     /* column's number in source table */
+// 	    bool        resjunk;        /* set to true to eliminate the attribute from
+// 	                                 * final target list */
+// 	} TargetEntry;
+
+// TargetEntry *
+// makeTargetEntry(Expr *expr,
+//                 AttrNumber resno,
+//                 char *resname,
+//                 bool resjunk)
+
+// Var *
+// makeVar(Index varno,
+//         AttrNumber varattno,
+//         Oid vartype,
+//         int32 vartypmod,
+//         Oid varcollid,
+//         Index varlevelsup)
+
+// typedef struct Var
+// {
+//     Expr        xpr;
+//     Index       varno;          /* index of this var's relation in the range
+//                                  * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
+//     AttrNumber  varattno;       /* attribute number of this var, or zero for
+//                                  * all */
+//     Oid         vartype;        /* pg_type OID for the type of this var */
+//     int32       vartypmod;      /* pg_attribute typmod value */
+//     Oid         varcollid;      /* OID of collation, or InvalidOid if none */
+//     Index       varlevelsup;    /* for subquery variables referencing outer
+//                                  * relations; 0 in a normal var, >0 means N
+//                                  * levels up */
+//     Index       varnoold;       /* original value of varno, for debugging */
+//     AttrNumber  varoattno;      /* original value of varattno */
+//     int         location;       /* token location, or -1 if unknown */
+// } Var;
+
+static TupleTableSlot *ogrExecForeignInsert (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(modstate->ogr.lyr);
+	OGRFeatureH feat = OGR_F_Create(ogr_fd);
+	OGRErr err;
+
+	elog(DEBUG2, "ogrExecForeignInsert");
+	
+	/* Copy the data from the slot onto the feature */
+	if ( ! feat )
+		ogrEreportError("failure creating OGR feature");
+
+	err = ogrSlotToFeature(slot, feat, modstate->table);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure populating OGR feature");
+			
+	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
+	if ( err != OGRERR_NONE )
+		ogrEreportError("failure writing OGR feature");
+		
+	return slot;
+}
+					
+
+					
+static TupleTableSlot *ogrExecForeignDelete (EState *estate,
+					ResultRelInfo *rinfo,
+					TupleTableSlot *slot,
+					TupleTableSlot *planSlot)
+{
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	TupleDesc td = planSlot->tts_tupleDescriptor;
+	Relation rel = rinfo->ri_RelationDesc;
+	Oid foreigntableid = RelationGetRelid(rel);
+	int fid_column;
+	Oid fid_type;
+	Datum fid_datum;
+	int64 fid;
+	OGRErr err;
+
+	/* Is there a fid column? */
+	fid_column = ogrGetFidColumn(td);
+	if ( fid_column < 0 )
+		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
+	
+	/* What is the value of the FID for this record? */
+	fid_datum = planSlot->tts_values[fid_column];
+	fid_type = td->attrs[fid_column]->atttypid;
+
+	if ( fid_type == INT8OID )
+		fid = DatumGetInt64(fid_datum);
+	else
+		fid = DatumGetInt32(fid_datum);
+	
+	elog(DEBUG2, "ogrExecForeignDelete fid=%ld", fid);
+	
+	/* Delete the OGR feature for this fid */
+	err = OGR_L_DeleteFeature(modstate->ogr.lyr, fid);
+	
+	if ( err != OGRERR_NONE ) 
+		return NULL;
+	else
+		return slot;
+}
+					
+static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
+{
+	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
+	
+	elog(DEBUG2, "ogrEndForeignModify");
+	
+	ogrFinishConnection( &(modstate->ogr) );
+	
+	return;
+}
+				
+static int ogrIsForeignRelUpdatable (Relation rel)
+{
+	static int readonly = 0;
+	static int updateable = 0;
+	TupleDesc td = RelationGetDescr(rel);
+	OgrConnection ogr;
+	Oid foreigntableid = RelationGetRelid(rel);
+
+	elog(DEBUG2, "ogrIsForeignRelUpdatable");
+
+	/* Before we say "yes"... */
+	/*  Does the foreign relation have a "fid" column? */
+	/* Is that column an integer? */
+	if ( ogrGetFidColumn(td) < 0 )
+	{
+		elog(NOTICE, "no \"fid\" column in foreign table '%s'", get_rel_name(foreigntableid));
+		return readonly;
+	}
+	
+	/*   Is it backed by a writable OGR driver? */
+	/*   Can we open the relation in read/write mode? */
+	ogr = ogrGetConnectionFromTable(foreigntableid, true);
+	if ( ! (ogr.ds && ogr.lyr) )
+		return readonly;
+
+	if ( OGR_L_TestCapability(ogr.lyr, OLCRandomWrite) )
+		updateable |= (1 << CMD_UPDATE);
+
+	if ( OGR_L_TestCapability(ogr.lyr, OLCSequentialWrite) )
+		updateable |= (1 << CMD_INSERT);
+	
+	if ( OGR_L_TestCapability(ogr.lyr, OLCDeleteFeature) )
+		updateable |= (1 << CMD_DELETE);
+	
+	ogrFinishConnection(&ogr);
+		
+	return updateable;
+	
+}
 
 #if PG_VERSION_NUM >= 90500
 
@@ -1550,7 +2268,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	/* Make connection to server */
 	memset(&ogr, 0, sizeof(OgrConnection));
 	server = GetForeignServer(serverOid);
-	ogr = ogrGetConnectionFromServer(serverOid);
+	ogr = ogrGetConnectionFromServer(serverOid, false);
 
 	/* Launder by default */
 	launder_column_names = launder_table_names = true;
@@ -1716,7 +2434,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	return commands;
 }
 
-#endif /* PGSQL 9.5+ */
+#endif /* PostgreSQL 9.5+ */
 
 static void
 ogrStringLaunder (char *str)
@@ -1755,3 +2473,6 @@ ogrStringLaunder (char *str)
 	strncpy(str, tmp, STR_MAX_LEN);
 	
 }
+
+#endif /* PostgreSQL 9.3+ version check */
+
