@@ -249,12 +249,14 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
 	char **open_option_list = NULL;
+#if GDAL_VERSION_MAJOR >= 2
 	unsigned int open_flags = GDAL_OF_VECTOR;
 	
 	if ( updateable )
 		open_flags |= GDAL_OF_UPDATE;
 	else
 		open_flags |= GDAL_OF_READONLY;
+#endif
 
 	if ( config_options )
 	{
@@ -2383,8 +2385,6 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 				pggeomtype = "bytea";
 			else
 				pggeomtype = "geometry";
-
-			geom_field_count = OGR_FD_GetGeomFieldCount(ogr_fd);
 
 			if( geom_field_count == 1 )
 			{
