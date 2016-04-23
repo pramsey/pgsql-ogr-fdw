@@ -77,4 +77,9 @@ CREATE FOREIGN TABLE e_1 (
   
 SELECT * FROM e_1 WHERE fid = 1;
 
+------------------------------------------------
+
+CREATE SCHEMA ntrl;
+IMPORT FOREIGN SCHEMA ogr_all LIMIT TO ("natural") FROM SERVER myserver INTO ntrl;
+SELECT "natural" FROM ntrl."natural";
 

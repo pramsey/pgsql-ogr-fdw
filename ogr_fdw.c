@@ -2227,7 +2227,7 @@ ogrImportForeignColumn(StringInfoData *buf, const char *ogrcolname, const char *
 	ogrStringLaunder(pgcolname);
 	if ( launder_column_names )
 	{
-		appendStringInfo(buf, ",\n %s %s", pgcolname, pgtype);
+		appendStringInfo(buf, ",\n %s %s", quote_identifier(pgcolname), pgtype);
 		if ( ! strcaseeq(pgcolname, ogrcolname) )
 			appendStringInfo(buf, " OPTIONS (column_name '%s')", ogrcolname);
 	}
@@ -2235,7 +2235,7 @@ ogrImportForeignColumn(StringInfoData *buf, const char *ogrcolname, const char *
 	{
 		/* OGR column is PgSQL compliant, we're all good */
 		if ( streq(pgcolname, ogrcolname) )
-			appendStringInfo(buf, ",\n %s %s", ogrcolname, pgtype);
+			appendStringInfo(buf, ",\n %s %s", quote_identifier(ogrcolname), pgtype);
 		/* OGR is mixed case or non-compliant, we need to quote it */
 		else
 			appendStringInfo(buf, ",\n \"%s\" %s", ogrcolname, pgtype);
