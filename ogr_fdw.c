@@ -1906,53 +1906,6 @@ static void ogrAddForeignUpdateTargets (Query *parsetree,
 		elog(DEBUG4, "parsetree->targetList %s:%d", target->resname, target->resno);
 	}
 	
-	// typedef struct TargetEntry
-	// 	{
-	// 	    Expr        xpr;
-	// 	    Expr       *expr;           /* expression to evaluate */
-	// 	    AttrNumber  resno;          /* attribute number (see notes above) */
-	// 	    char       *resname;        /* name of the column (could be NULL) */
-	// 	    Index       ressortgroupref;/* nonzero if referenced by a sort/group
-	// 	                                 * clause */
-	// 	    Oid         resorigtbl;     /* OID of column's source table */
-	// 	    AttrNumber  resorigcol;     /* column's number in source table */
-	// 	    bool        resjunk;        /* set to true to eliminate the attribute from
-	// 	                                 * final target list */
-	// 	} TargetEntry;
-
-		// TargetEntry *
-		// makeTargetEntry(Expr *expr,
-		//                 AttrNumber resno,
-		//                 char *resname,
-		//                 bool resjunk)
-
-		// Var *
-		// makeVar(Index varno,
-		//         AttrNumber varattno,
-		//         Oid vartype,
-		//         int32 vartypmod,
-		//         Oid varcollid,
-		//         Index varlevelsup)
-
-
-		// typedef struct Var
-		// {
-		//     Expr        xpr;
-		//     Index       varno;          /* index of this var's relation in the range
-		//                                  * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
-		//     AttrNumber  varattno;       /* attribute number of this var, or zero for
-		//                                  * all */
-		//     Oid         vartype;        /* pg_type OID for the type of this var */
-		//     int32       vartypmod;      /* pg_attribute typmod value */
-		//     Oid         varcollid;      /* OID of collation, or InvalidOid if none */
-		//     Index       varlevelsup;    /* for subquery variables referencing outer
-		//                                  * relations; 0 in a normal var, >0 means N
-		//                                  * levels up */
-		//     Index       varnoold;       /* original value of varno, for debugging */
-		//     AttrNumber  varoattno;      /* original value of varattno */
-		//     int         location;       /* token location, or -1 if unknown */
-		// } Var;
-	
 	return;
 
 }
@@ -2040,15 +1993,6 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	
 	/* TODO: slot handling? what happens with RETURNING clauses? */
 	
-	// int natts = slot->tts_tupleDescriptor->natts;
-	// int i;
-	
-	// for ( i = 0; i < natts; i++ )
-	// {
-	// 	if ( slot->tts_values[i] )
-	// 		elog(NOTICE, "%s", DatumGetCString(slot->tts_values[i]));
-	// }
-	
 	return slot;
 }
 
@@ -2106,6 +2050,52 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 //     ProjectionInfo *ri_onConflictSetProj;
 //     List       *ri_onConflictSetWhere;
 // } ResultRelInfo;
+
+// typedef struct TargetEntry
+// 	{
+// 	    Expr        xpr;
+// 	    Expr       *expr;           /* expression to evaluate */
+// 	    AttrNumber  resno;          /* attribute number (see notes above) */
+// 	    char       *resname;        /* name of the column (could be NULL) */
+// 	    Index       ressortgroupref;/* nonzero if referenced by a sort/group
+// 	                                 * clause */
+// 	    Oid         resorigtbl;     /* OID of column's source table */
+// 	    AttrNumber  resorigcol;     /* column's number in source table */
+// 	    bool        resjunk;        /* set to true to eliminate the attribute from
+// 	                                 * final target list */
+// 	} TargetEntry;
+
+// TargetEntry *
+// makeTargetEntry(Expr *expr,
+//                 AttrNumber resno,
+//                 char *resname,
+//                 bool resjunk)
+
+// Var *
+// makeVar(Index varno,
+//         AttrNumber varattno,
+//         Oid vartype,
+//         int32 vartypmod,
+//         Oid varcollid,
+//         Index varlevelsup)
+
+// typedef struct Var
+// {
+//     Expr        xpr;
+//     Index       varno;          /* index of this var's relation in the range
+//                                  * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
+//     AttrNumber  varattno;       /* attribute number of this var, or zero for
+//                                  * all */
+//     Oid         vartype;        /* pg_type OID for the type of this var */
+//     int32       vartypmod;      /* pg_attribute typmod value */
+//     Oid         varcollid;      /* OID of collation, or InvalidOid if none */
+//     Index       varlevelsup;    /* for subquery variables referencing outer
+//                                  * relations; 0 in a normal var, >0 means N
+//                                  * levels up */
+//     Index       varnoold;       /* original value of varno, for debugging */
+//     AttrNumber  varoattno;      /* original value of varattno */
+//     int         location;       /* token location, or -1 if unknown */
+// } Var;
 
 static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 					ResultRelInfo *rinfo,
