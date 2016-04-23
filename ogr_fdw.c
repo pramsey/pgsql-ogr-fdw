@@ -258,14 +258,14 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 
 	if ( config_options )
 	{
-		const char *option;
+		char **option_iter;
 		char **option_list = CSLTokenizeString(config_options);
 
-		for ( option = *option_list; *option_list; option_list++ )
+		for ( option_iter = option_list; option_iter && *option_iter; option_iter++ )
 		{
 			char *key;
 			const char *value;
-			value = CPLParseNameValue(option, &key);
+			value = CPLParseNameValue(*option_iter, &key);
 			if ( ! (key && value) )
 				elog(ERROR, "bad config option string '%s'", config_options);
 			
