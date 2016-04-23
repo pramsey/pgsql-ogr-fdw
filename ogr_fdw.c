@@ -380,10 +380,12 @@ ogrEreportError(const char *errstr)
 static void
 ogrFinishConnection(OgrConnection *ogr)
 {
+	if ( ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE )
+		elog(NOTICE, "failed to flush writes to OGR data source");
+
 	if ( ogr->ds )
-	{
 		GDALClose(ogr->ds);
-	}
+
 	ogr->ds = NULL;
 }
 
@@ -1839,30 +1841,70 @@ in ogrGetForeignPlan we get a tlist that includes just the attributes we
 are interested in, can use that to pare down the request perhaps
 */
 
+static int ogrGetFidColumn(const TupleDesc td)
+{
+	int i;
+	for ( i = 0; i < td->natts; i++ )
+	{
+		NameData attname = td->attrs[i]->attname;
+		Oid atttypeid = td->attrs[i]->atttypid;
+		if ( (atttypeid == INT4OID || atttypeid == INT8OID) && 
+		     strcaseeq("fid", attname.data) )
+		{
+			return i;
+		}
+	}
+	return -1;
+}
 
 /*
  * ogrAddForeignUpdateTargets
  * 
  * For now we no-op this callback, as we are making the presence of
  * "fid" in the FDW table definition a requirement for any update.
- * If in the future the read code can restrict the columns retrieved
- * based on the target list, then this code in turn can add the "fid"
- * back in for queries that do not include it.
+ * It might be possible to add nonexisting "junk" columns? In which case
+ * there could always be a virtual fid travelling with the queries,
+ * and the FDW table itself wouldn't need such a column?
  */
 static void ogrAddForeignUpdateTargets (Query *parsetree,
 					RangeTblEntry *target_rte,
 					Relation target_relation)
 {
-	// ListCell *cell;
-
+	ListCell *cell;
+	Form_pg_attribute att;
+	Var *var;
+	TargetEntry *tle;
+	TupleDesc tupdesc = target_relation->rd_att;
+	int fid_column = ogrGetFidColumn(tupdesc);
+	
 	elog(NOTICE, "ogrAddForeignUpdateTargets");
+	
+	if ( fid_column < 0 )
+		elog(ERROR,"table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
+	
+	att = tupdesc->attrs[fid_column];
+	
+	/* Make a Var representing the desired value */
+	var = makeVar(parsetree->resultRelation,
+			att->attnum,
+			att->atttypid,
+			att->atttypmod,
+			att->attcollation,
+			0);
 
-	// foreach(cell, parsetree->targetList)
-	// {
-	// 	TargetEntry *target = (TargetEntry *) lfirst(cell);
-	// 	elog(NOTICE, "resname '%s'", target->resname);
-	// 	elog(NOTICE, "resno   '%d'", target->resno);
-	// }
+	/* Wrap it in a resjunk TLE with the right name ... */
+	tle = makeTargetEntry((Expr *)var,
+			list_length(parsetree->targetList) + 1,
+			pstrdup(NameStr(att->attname)),
+			true);
+
+	parsetree->targetList = lappend(parsetree->targetList, tle);
+	
+	foreach(cell, parsetree->targetList)
+	{
+		TargetEntry *target = (TargetEntry *) lfirst(cell);
+		elog(DEBUG4, "parsetree->targetList %s:%d", target->resname, target->resno);
+	}
 	
 	// typedef struct TargetEntry
 	// 	{
@@ -1877,6 +1919,39 @@ static void ogrAddForeignUpdateTargets (Query *parsetree,
 	// 	    bool        resjunk;        /* set to true to eliminate the attribute from
 	// 	                                 * final target list */
 	// 	} TargetEntry;
+
+		// TargetEntry *
+		// makeTargetEntry(Expr *expr,
+		//                 AttrNumber resno,
+		//                 char *resname,
+		//                 bool resjunk)
+
+		// Var *
+		// makeVar(Index varno,
+		//         AttrNumber varattno,
+		//         Oid vartype,
+		//         int32 vartypmod,
+		//         Oid varcollid,
+		//         Index varlevelsup)
+
+
+		// typedef struct Var
+		// {
+		//     Expr        xpr;
+		//     Index       varno;          /* index of this var's relation in the range
+		//                                  * table, or INNER_VAR/OUTER_VAR/INDEX_VAR */
+		//     AttrNumber  varattno;       /* attribute number of this var, or zero for
+		//                                  * all */
+		//     Oid         vartype;        /* pg_type OID for the type of this var */
+		//     int32       vartypmod;      /* pg_attribute typmod value */
+		//     Oid         varcollid;      /* OID of collation, or InvalidOid if none */
+		//     Index       varlevelsup;    /* for subquery variables referencing outer
+		//                                  * relations; 0 in a normal var, >0 means N
+		//                                  * levels up */
+		//     Index       varnoold;       /* original value of varno, for debugging */
+		//     AttrNumber  varoattno;      /* original value of varattno */
+		//     int         location;       /* token location, or -1 if unknown */
+		// } Var;
 	
 	return;
 
@@ -1909,22 +1984,6 @@ static void ogrBeginForeignModify (ModifyTableState *mtstate,
 	return;
 }
 
-static int ogrGetFidColumn(const TupleDesc td)
-{
-	int i;
-	for ( i = 0; i < td->natts; i++ )
-	{
-		NameData attname = td->attrs[i]->attname;
-		Oid atttypeid = td->attrs[i]->atttypid;
-		if ( (atttypeid == INT4OID || atttypeid == INT8OID) && 
-		     strcaseeq("fid", attname.data) )
-		{
-			return i;
-		}
-	}
-	return -1;
-}
-
 /*
  * ogrExecForeignUpdate
  * Find out what the fid is, get the OGR feature for that FID, 
@@ -1945,8 +2004,6 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	int64 fid;
 	OGRFeatureH feat;
 	OGRErr err;
-
-	elog(NOTICE, "ogrExecForeignUpdate");
 	
 	/* Is there a fid column? */
 	fid_column = ogrGetFidColumn(td);
@@ -1961,6 +2018,8 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 		fid = DatumGetInt64(fid_datum);
 	else
 		fid = DatumGetInt32(fid_datum);
+
+	elog(NOTICE, "ogrExecForeignUpdate fid=%ld", fid);
 	
 	/* Get the OGR feature for this fid */
 	feat = OGR_L_GetFeature (modstate->ogr.lyr, fid);
@@ -2083,7 +2142,7 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 					TupleTableSlot *planSlot)
 {
 	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
-	TupleDesc td = slot->tts_tupleDescriptor;
+	TupleDesc td = planSlot->tts_tupleDescriptor;
 	Relation rel = rinfo->ri_RelationDesc;
 	Oid foreigntableid = RelationGetRelid(rel);
 	int fid_column;
@@ -2092,21 +2151,21 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 	int64 fid;
 	OGRErr err;
 
-	elog(NOTICE, "ogrExecForeignDelete");
-	
 	/* Is there a fid column? */
 	fid_column = ogrGetFidColumn(td);
 	if ( fid_column < 0 )
 		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
 	
 	/* What is the value of the FID for this record? */
-	fid_datum = slot->tts_values[fid_column];
+	fid_datum = planSlot->tts_values[fid_column];
 	fid_type = td->attrs[fid_column]->atttypid;
 
 	if ( fid_type == INT8OID )
 		fid = DatumGetInt64(fid_datum);
 	else
 		fid = DatumGetInt32(fid_datum);
+	
+	elog(NOTICE, "ogrExecForeignDelete fid=%ld", fid);
 	
 	/* Delete the OGR feature for this fid */
 	err = OGR_L_DeleteFeature(modstate->ogr.lyr, fid);
@@ -2120,9 +2179,9 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
 {
 	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
-
+	
 	elog(NOTICE, "ogrEndForeignModify");
-
+	
 	ogrFinishConnection( &(modstate->ogr) );
 	
 	return;
