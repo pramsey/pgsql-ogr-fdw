@@ -201,7 +201,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 
 	/* Output TABLE definition */
 	printf("CREATE FOREIGN TABLE %s (\n", layer_name);
-	printf("  fid integer");
+	printf("  fid bigint");
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
 	geom_field_count = OGR_FD_GetGeomFieldCount(ogr_fd);
 	if( geom_field_count == 1 )
