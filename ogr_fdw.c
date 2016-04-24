@@ -2445,6 +2445,8 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 	/* Clean up */
 	pfree(buf.data);
+	
+	ogrFinishConnection(&ogr);
 
 	return commands;
 }
