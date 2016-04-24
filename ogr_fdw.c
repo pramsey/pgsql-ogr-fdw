@@ -48,6 +48,12 @@ struct OgrFdwOption
 #define OPT_CONFIG_OPTIONS "config_options"
 #define OPT_OPEN_OPTIONS "open_options"
 
+#ifdef WIN32
+# define OGR_FDW_FRMT_GIB "%lld"
+#else
+# define OGR_FDW_FRMT_GIB PRId64
+#endif
+
 /*
  * Valid options for ogr_fdw.
  * ForeignDataWrapperRelationId (no options)
@@ -1336,7 +1342,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 			else
 			{
 				char fidstr[256];
-				snprintf(fidstr, 256, CPL_FRMT_GIB, fid);
+				snprintf(fidstr, 256, OGR_FDW_FRMT_GIB, fid);
 
 				nulls[i] = false;
 				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypmod, pginputfunc);
@@ -1982,7 +1988,7 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	else
 		fid = DatumGetInt32(fid_datum);
 
-	elog(DEBUG2, "ogrExecForeignUpdate fid=%ld", fid);
+	elog(DEBUG2, "ogrExecForeignUpdate fid=" OGR_FDW_FRMT_GIB, fid);
 	
 	/* Get the OGR feature for this fid */
 	feat = OGR_L_GetFeature (modstate->ogr.lyr, fid);
@@ -2168,7 +2174,7 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 	else
 		fid = DatumGetInt32(fid_datum);
 	
-	elog(DEBUG2, "ogrExecForeignDelete fid=%ld", fid);
+	elog(DEBUG2, "ogrExecForeignDelete fid=" OGR_FDW_FRMT_GIB, fid);
 	
 	/* Delete the OGR feature for this fid */
 	err = OGR_L_DeleteFeature(modstate->ogr.lyr, fid);
