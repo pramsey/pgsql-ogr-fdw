@@ -1,0 +1,38 @@
+sudo: required
+
+compiler: gcc
+
+
+matrix:
+  include:
+    - os: linux
+      language: c
+      env:
+        - GDAL_VERSION=1
+    - os: linux
+      language: cpp
+      env:
+        - GDAL_VERSION=2
+
+before_script:
+  - sudo /etc/init.d/postgresql stop
+  - sudo apt-get -y remove --purge postgresql-9.1
+  - sudo apt-get -y remove --purge postgresql-9.2
+  - sudo apt-get -y remove --purge postgresql-9.3
+  - sudo apt-get -y remove --purge postgresql-9.4
+  - sudo apt-get -y autoremove
+  - sudo apt-key adv --keyserver keys.gnupg.net --recv-keys 7FCC7D46ACCC4CF8
+  - sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main 9.5" >> /etc/apt/sources.list.d/postgresql.list'
+  - sudo apt-get update
+  - sudo apt-get -y install postgresql-9.5 postgresql-server-dev-9.5
+  - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.5/main/pg_hba.conf'
+  - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.5/main/pg_hba.conf'
+  - sudo /etc/init.d/postgresql restart
+  - psql --version
+  - if test "$GDAL_VERSION" = "1"; then sudo apt-get install libgdal-dev; fi
+  - if test "$GDAL_VERSION" = "2"; then wget http://download.osgeo.org/gdal/2.0.2/gdal-2.0.2.tar.xz; tar xJf gdal-2.0.2.tar.xz; cd gdal-2.0.2; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
+
+script:
+  - make
+  - sudo make install
+  - PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
