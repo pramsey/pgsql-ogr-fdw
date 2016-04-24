@@ -592,7 +592,6 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 		{
 			GDALClose(ogr_ds);
 		}
-		OGRCleanupAll();
 	}
 
 	PG_RETURN_VOID();
