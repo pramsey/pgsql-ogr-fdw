@@ -2380,7 +2380,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			resetStringInfo(&buf);
 
 			appendStringInfo(&buf, "CREATE FOREIGN TABLE %s (\n", quote_identifier(table_name));
-			appendStringInfoString(&buf, " fid integer");
+			appendStringInfoString(&buf, " fid bigint");
 
 			/* What column type to use for OGR geometries? */
 			if ( GEOMETRYOID == BYTEAOID )
