@@ -1,5 +1,19 @@
 sudo: required
 
+compiler: gcc
+
+
+matrix:
+  include:
+    - os: linux
+      language: c
+      env:
+        - GDAL_VERSION=1
+    - os: linux
+      language: cpp
+      env:
+        - GDAL_VERSION=2
+
 before_script:
   - sudo /etc/init.d/postgresql stop
   - sudo apt-get -y remove --purge postgresql-9.1
@@ -15,12 +29,8 @@ before_script:
   - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.5/main/pg_hba.conf'
   - sudo /etc/init.d/postgresql restart
   - psql --version
-# Would be nice to have GDAL 2
-  - sudo apt-get install libgdal-dev
-
-language: c
-
-compiler: gcc
+  - if test "$GDAL_VERSION" = "1"; then sudo apt-get install libgdal-dev; fi
+  - if test "$GDAL_VERSION" = "2"; then wget http://download.osgeo.org/gdal/2.0.2/gdal-2.0.2.tar.xz; tar xJf gdal-2.0.2.tar.xz; cd gdal-2.0.2; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
 
 script:
   - make
