@@ -1,6 +1,7 @@
 *.o
 *.a
 *.so
+*.dll
 *.pc
 ogr_fdw_info*
 sql/ogr_fdw.sql
