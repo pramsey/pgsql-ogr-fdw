@@ -1096,6 +1096,11 @@ ogrReadColumnData(OgrFdwState *state)
 	/* loop through foreign table columns */
 	for ( i = 0; i < tbl->ncols; i++ )
 	{
+		List *options;
+		ListCell *lc;
+		OgrFieldEntry *found_entry;
+		OgrFieldEntry entry;
+		
 		Form_pg_attribute att_tuple = tupdesc->attrs[i];
 		OgrFdwColumn col = tbl->cols[i];
 		col.pgattnum = att_tuple->attnum;
@@ -1116,6 +1121,7 @@ ogrReadColumnData(OgrFdwState *state)
 		/* Get the PgSQL column name */
 		col.pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
 
+		/* Handle FID first */
 		if ( strcaseeq(col.pgname, "fid") && (col.pgtype == INT4OID || col.pgtype == INT8OID) )
 		{
 			if ( fid_count >= 1 )
@@ -1123,69 +1129,63 @@ ogrReadColumnData(OgrFdwState *state)
 
 			col.ogrvariant = OGR_FID;
 			col.ogrfldnum = fid_count++;
+			tbl->cols[i] = col;
+			continue;
 		}
-		else if ( col.pgtype == GEOMETRYOID )
+		
+		/* If the OGR source has geometries, can we match them to Pg columns? */
+		/* We'll match to the first ones we find, irrespective of name */
+		if ( geom_count < ogr_geom_count && col.pgtype == GEOMETRYOID )
 		{
-			/* Stop if there are more geometry columns than we can support */
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			if ( geom_count >= ogr_geom_count )
-				elog(ERROR, "FDW table includes more geometry columns than exist in the OGR source");
-#else
-			if ( geom_count >= ogr_geom_count )
-				elog(ERROR, "FDW table includes more than one geometry column");
-#endif
 			col.ogrvariant = OGR_GEOMETRY;
 			col.ogrfldtype = OFTBinary;
 			col.ogrfldnum = geom_count++;
+			tbl->cols[i] = col;
+			continue;
+		}
+
+		/* Now we search for matches in the OGR fields */
+
+		/* By default, search for the PgSQL column name */
+		entry.fldname = col.pgname;
+		entry.fldnum = 0;
+
+		/*
+		 * But, if there is a 'column_name' option for this column, we
+		 * want to search for *that* in the OGR layer.
+		 */
+		options = GetForeignColumnOptions(modstate->foreigntableid, i + 1);
+		foreach(lc, options)
+		{
+			DefElem    *def = (DefElem *) lfirst(lc);
+
+			if ( streq(def->defname, "column_name") )
+			{
+				entry.fldname = defGetString(def);
+				break;
+			}
+		}
+
+		/* Search PgSQL column name in the OGR column name list */
+		found_entry = bsearch(&entry, ogr_fields, ogr_fields_count, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
+
+		/* Column name matched, so save this entry, if the types are consistent */
+		if ( found_entry )
+		{
+			OGRFieldDefnH fld = OGR_FD_GetFieldDefn(dfn, found_entry->fldnum);
+			OGRFieldType fldtype = OGR_Fld_GetType(fld);
+
+			/* Error if types mismatched when column names match */
+			ogrCanConvertToPg(fldtype, col.pgtype, col.pgname, tblname);
+
+			col.ogrvariant = OGR_FIELD;
+			col.ogrfldnum = found_entry->fldnum;
+			col.ogrfldtype = fldtype;
+			field_count++;
 		}
 		else
 		{
-			List *options;
-			ListCell *lc;
-			OgrFieldEntry *found_entry;
-
-			/* By default, search for the PgSQL column name */
-			OgrFieldEntry entry;
-			entry.fldname = col.pgname;
-			entry.fldnum = 0;
-
-			/*
-			 * But, if there is a 'column_name' option for this column, we
-			 * want to search for *that* in the OGR layer.
-			 */
-			options = GetForeignColumnOptions(modstate->foreigntableid, i + 1);
-			foreach(lc, options)
-			{
-				DefElem    *def = (DefElem *) lfirst(lc);
-
-				if ( streq(def->defname, "column_name") )
-				{
-					entry.fldname = defGetString(def);
-					break;
-				}
-			}
-
-			/* Search PgSQL column name in the OGR column name list */
-			found_entry = bsearch(&entry, ogr_fields, ogr_fields_count, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
-
-			/* Column name matched, so save this entry, if the types are consistent */
-			if ( found_entry )
-			{
-				OGRFieldDefnH fld = OGR_FD_GetFieldDefn(dfn, found_entry->fldnum);
-				OGRFieldType fldtype = OGR_Fld_GetType(fld);
-
-				/* Error if types mismatched when column names match */
-				ogrCanConvertToPg(fldtype, col.pgtype, col.pgname, tblname);
-
-				col.ogrvariant = OGR_FIELD;
-				col.ogrfldnum = found_entry->fldnum;
-				col.ogrfldtype = fldtype;
-				field_count++;
-			}
-			else
-			{
-				col.ogrvariant = OGR_UNMATCHED;
-			}
+			col.ogrvariant = OGR_UNMATCHED;
 		}
 		tbl->cols[i] = col;
 	}
