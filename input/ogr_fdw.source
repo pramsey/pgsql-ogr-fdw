@@ -100,7 +100,7 @@ CREATE TABLE bytea_local (
   happened time
 );
 INSERT INTO bytea_local VALUES 
-  (1, 'Jim', '14232'::bytea, 1111, '99999'::bytea, '13:23:21'::time);
+  (1, 'Jim', '14232'::bytea, 1112, '99999'::bytea, '13:23:21'::time);
 INSERT INTO bytea_local VALUES 
   (2, 'James', '55555'::bytea, 2222, '88888'::bytea, '15:55:55'::time);
 
