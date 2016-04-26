@@ -126,12 +126,21 @@ main (int argc, char **argv)
 static OGRErr
 ogrListLayers(const char *source)
 {
-	OGRDataSourceH ogr_ds = NULL;
-	OGRSFDriverH ogr_dr = NULL;
+	GDALDatasetH ogr_ds = NULL;
+	GDALDriverH ogr_dr = NULL;
 	int i;
 	
-	OGRRegisterAll();
+	GDALAllRegister();
+	
+#if GDAL_VERSION_MAJOR < 2
 	ogr_ds = OGROpen(source, FALSE, &ogr_dr);			
+#else
+	ogr_ds = GDALOpenEx(source, 
+	                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
+	                    NULL, NULL, NULL);
+	if ( ogr_ds )
+		ogr_dr = GDALGetDatasetDriver(ogr_ds);
+#endif
 
 	if ( ! ogr_ds )
 	{
@@ -140,9 +149,9 @@ ogrListLayers(const char *source)
 	}
 
 	printf("Layers:\n");
-	for ( i = 0; i < OGR_DS_GetLayerCount(ogr_ds); i++ )
+	for ( i = 0; i < GDALDatasetGetLayerCount(ogr_ds); i++ )
 	{
-		OGRLayerH ogr_lyr = OGR_DS_GetLayer(ogr_ds, i);
+		OGRLayerH ogr_lyr = GDALDatasetGetLayer(ogr_ds, i);
 		if ( ! ogr_lyr ) 
 		{
 			return OGRERR_FAILURE;
@@ -151,7 +160,7 @@ ogrListLayers(const char *source)
 	}
 	printf("\n");
 	
-	OGR_DS_Destroy(ogr_ds);
+	GDALClose(ogr_ds);
 	
 	return OGRERR_NONE;
 }
@@ -191,8 +200,8 @@ static void strlaunder (char *str)
 static OGRErr
 ogrGenerateSQL(const char *source, const char *layer)
 {	
-	OGRDataSourceH ogr_ds = NULL;
-	OGRSFDriverH ogr_dr = NULL;
+	GDALDatasetH ogr_ds = NULL;
+	GDALDriverH ogr_dr = NULL;
 	OGRLayerH ogr_lyr = NULL;
 	OGRFeatureDefnH ogr_fd = NULL;
 	char server_name[STR_MAX_LEN];
@@ -202,8 +211,17 @@ ogrGenerateSQL(const char *source, const char *layer)
 	int geom_field_count;
 #endif
 
-	OGRRegisterAll();
+	GDALAllRegister();
+	
+#if GDAL_VERSION_MAJOR < 2
 	ogr_ds = OGROpen(source, FALSE, &ogr_dr);			
+#else
+	ogr_ds = GDALOpenEx(source, 
+	                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
+	                    NULL, NULL, NULL);
+	if ( ogr_ds )
+		ogr_dr = GDALGetDatasetDriver(ogr_ds);
+#endif
 
 	if ( ! ogr_ds )
 	{
@@ -214,7 +232,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 	/* There should be a nicer way to do this */
 	strcpy(server_name, "myserver");
 
-	ogr_lyr = OGR_DS_GetLayerByName(ogr_ds, layer);
+	ogr_lyr = GDALDatasetGetLayerByName(ogr_ds, layer);
 	if ( ! ogr_lyr )
 	{
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not find layer '%s' in source '%s'", layer, source);
@@ -229,7 +247,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 		"  OPTIONS (\n"
 		"    datasource '%s',\n"
 		"    format '%s' );\n\n",
-		server_name, OGR_DS_GetName(ogr_ds), OGR_Dr_GetName(ogr_dr));
+		server_name, source, GDALGetDriverShortName(ogr_dr));
 
 	
 	ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
@@ -327,6 +345,8 @@ ogrGenerateSQL(const char *source, const char *layer)
 	printf(" )\n  SERVER %s\n", server_name);
 	printf("  OPTIONS ( layer '%s' );\n", OGR_L_GetName(ogr_lyr));
 	printf("\n");
+	
+	GDALClose(ogr_ds);
 		
 	return OGRERR_NONE;
 }
