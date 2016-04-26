@@ -43,12 +43,6 @@ SELECT * FROM pt_3 ORDER BY name;
 
 ------------------------------------------------
 
-CREATE SCHEMA fdw_import;
-IMPORT FOREIGN SCHEMA ogr_all LIMIT TO (n2launder) FROM SERVER myserver INTO fdw_import;
-SELECT * FROM fdw_import.n2launder WHERE fid = 0;
-
-------------------------------------------------
-
 CREATE FOREIGN TABLE column_name_test (
  fid integer,
  name varchar OPTIONS (column_name '2ame'),
@@ -79,47 +73,6 @@ SELECT * FROM e_1 WHERE fid = 1;
 
 ------------------------------------------------
 
-CREATE SCHEMA ntrl;
-IMPORT FOREIGN SCHEMA ogr_all LIMIT TO ("natural") FROM SERVER myserver INTO ntrl;
-SELECT "natural" FROM ntrl."natural";
-
-------------------------------------------------
-
-CREATE SERVER pgserver
-  FOREIGN DATA WRAPPER ogr_fdw
-  OPTIONS (
-    datasource 'PG:dbname=contrib_regression host=localhost',
-    format 'PostgreSQL' );
-
-CREATE TABLE bytea_local (
-  fid integer primary key,
-  name varchar,
-  geom bytea,
-  age bigint,
-  bin bytea,
-  happened time
-);
-INSERT INTO bytea_local VALUES 
-  (1, 'Jim', '14232'::bytea, 1112, '99999'::bytea, '13:23:21'::time);
-INSERT INTO bytea_local VALUES 
-  (2, 'James', '55555'::bytea, 2222, '88888'::bytea, '15:55:55'::time);
-
-SELECT * FROM bytea_local;
-  
-CREATE FOREIGN TABLE bytea_fdw (
-  fid integer,
-  name text,
-  geom bytea,
-  age bigint,
-  bin bytea,
-  happened time
-) SERVER pgserver OPTIONS (layer 'bytea_local');
-
-SELECT * FROM bytea_fdw;
-EXPLAIN VERBOSE SELECT * FROM bytea_fdw;
-
-------------------------------------------------
-
 CREATE SERVER csvserver
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
@@ -137,4 +90,4 @@ SELECT c.*
   JOIN csv.no_geom c 
   ON (c.fid = g.g);
 
-
+------------------------------------------------
