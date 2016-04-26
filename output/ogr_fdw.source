@@ -150,3 +150,28 @@ EXPLAIN VERBOSE SELECT * FROM bytea_fdw;
    Output: fid, name, geom, age, bin, happened
 (2 rows)
 
+------------------------------------------------
+CREATE SERVER csvserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data/no_geom.csv',
+    format 'CSV' );
+DROP SCHEMA IF EXISTS csv;
+NOTICE:  schema "csv" does not exist, skipping
+CREATE SCHEMA csv;
+IMPORT FOREIGN SCHEMA ogr_all 
+  FROM SERVER csvserver 
+  INTO csv;
+NOTICE:  Number of tables to be created 1
+SELECT c.* 
+  FROM generate_series(1,4) g 
+  JOIN csv.no_geom c 
+  ON (c.fid = g.g);
+ fid |  name   | age | value 
+-----+---------+-----+-------
+   1 | Peter   | 34  | 10.2
+   2 | John    | 77  | 3.4
+   3 | Paul    | 45  | 19.2
+   4 | Matthew | 35  | 18.2
+(4 rows)
+

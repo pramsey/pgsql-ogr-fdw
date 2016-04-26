@@ -118,3 +118,23 @@ CREATE FOREIGN TABLE bytea_fdw (
 SELECT * FROM bytea_fdw;
 EXPLAIN VERBOSE SELECT * FROM bytea_fdw;
 
+------------------------------------------------
+
+CREATE SERVER csvserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data/no_geom.csv',
+    format 'CSV' );
+
+DROP SCHEMA IF EXISTS csv;
+CREATE SCHEMA csv;
+IMPORT FOREIGN SCHEMA ogr_all 
+  FROM SERVER csvserver 
+  INTO csv;
+
+SELECT c.* 
+  FROM generate_series(1,4) g 
+  JOIN csv.no_geom c 
+  ON (c.fid = g.g);
+
+
