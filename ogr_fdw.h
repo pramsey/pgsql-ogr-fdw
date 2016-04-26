@@ -148,6 +148,8 @@ typedef struct OgrFdwExecState
 	TupleDesc tupdesc;
 	char *sql;             /* OGR SQL for attribute filter */
 	int rownum;            /* how many rows have we read thus far? */
+	Oid setsridfunc;       /* ST_SetSRID() */
+	Oid typmodsridfunc;    /* postgis_typmod_srid() */
 } OgrFdwExecState;
 
 typedef struct OgrFdwModifyState
