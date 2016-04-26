@@ -1,0 +1,67 @@
+CREATE SERVER pgserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'PG:dbname=contrib_regression host=localhost',
+    format 'PostgreSQL' );
+CREATE TABLE bytea_local (
+  fid integer primary key,
+  name varchar,
+  geom bytea,
+  age bigint,
+  bin bytea,
+  happened time
+);
+INSERT INTO bytea_local VALUES 
+  (1, 'Jim', '14232'::bytea, 1112, '99999'::bytea, '13:23:21'::time);
+INSERT INTO bytea_local VALUES 
+  (2, 'James', '55555'::bytea, 2222, '88888'::bytea, '15:55:55'::time);
+SELECT * FROM bytea_local;
+ fid | name  |     geom     | age  |     bin      | happened 
+-----+-------+--------------+------+--------------+----------
+   1 | Jim   | \x3134323332 | 1112 | \x3939393939 | 13:23:21
+   2 | James | \x3535353535 | 2222 | \x3838383838 | 15:55:55
+(2 rows)
+
+ fid | name  |     geom     | age  |     bin      | happened 
+-----+-------+--------------+------+--------------+----------
+   1 | Jim   | \x3134323332 | 1112 | \x3939393939 | 13:23:21
+invalid command \x3134323332
+   2 | James | \x3535353535 | 2222 | \x3838383838 | 15:55:55
+invalid command \x3535353535
+(2 rows)
+  
+CREATE FOREIGN TABLE bytea_fdw (
+  fid integer,
+  name text,
+  geom bytea,
+  age bigint,
+  bin bytea,
+  happened time
+) SERVER pgserver OPTIONS (layer 'bytea_local');
+ERROR:  syntax error at or near "fid"
+LINE 1: fid | name  |     geom     | age  |     bin      | happened 
+        ^
+SELECT * FROM bytea_fdw;
+ERROR:  relation "bytea_fdw" does not exist
+LINE 1: SELECT * FROM bytea_fdw;
+                      ^
+ fid | name  |     geom     | age  |     bin      | happened 
+-----+-------+--------------+------+--------------+----------
+   1 | Jim   | \x3134323332 | 1112 | \x3939393939 | 13:23:21
+invalid command \x3134323332
+   2 | James | \x3535353535 | 2222 | \x3838383838 | 15:55:55
+invalid command \x3535353535
+(2 rows)
+EXPLAIN VERBOSE SELECT * FROM bytea_fdw;
+ERROR:  syntax error at or near "fid"
+LINE 1: fid | name  |     geom     | age  |     bin      | happened 
+        ^
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Foreign Scan on public.bytea_fdw  (cost=25.00..1025.00 rows=1000 width=116)
+   Output: fid, name, geom, age, bin, happened
+(2 rows)
+------------------------------------------------
+ERROR:  syntax error at or near "QUERY"
+LINE 1: QUERY PLAN                                  
+        ^
