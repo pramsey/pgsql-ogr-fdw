@@ -12,11 +12,8 @@
 /* getopt */
 #include <unistd.h>
 
-/*
- * OGR library API
- */
-#include "ogr_api.h"
-#include "cpl_error.h"
+/* GDAL/OGR includes and compat */
+#include "ogr_fdw_gdal.h"
 
 static void usage();
 static OGRErr ogrListLayers(const char *source);
@@ -30,7 +27,45 @@ usage()
 	printf(
 		"usage: ogr_fdw_info -s <ogr datasource> -l <ogr layer>\n"
 		"       ogr_fdw_info -s <ogr datasource>\n"
+		"       ogr_fdw_info -f\n"
 		"\n");	
+	exit(0);
+}
+
+static void 
+formats()
+{
+	int i;
+	
+	GDALAllRegister();
+	
+    printf( "Supported Formats:\n" );
+    for ( i = 0; i < GDALGetDriverCount(); i++ )
+    {
+		GDALDriverH ogr_dr = GDALGetDriver(i);
+		int vector = FALSE;
+		int createable = TRUE;
+		const char *tmpl;
+
+#if GDAL_VERSION_MAJOR >= 2
+		char** papszMD = GDALGetMetadata(ogr_dr, NULL);
+		vector = CSLFetchBoolean(papszMD, GDAL_DCAP_VECTOR, FALSE);
+		createable = CSLFetchBoolean(papszMD, GDAL_DCAP_CREATE, FALSE);
+#else
+		createable = GDALDatasetTestCapability(ogr_dr, ODrCCreateDataSource);
+#endif
+		/* Skip raster data sources */
+		if ( ! vector ) continue;
+
+		/* Report sources w/ create capability as r/w */
+		if( createable )
+			tmpl = "  -> \"%s\" (read/write)\n";
+		else
+			tmpl = "  -> \"%s\" (readonly)\n";
+		
+		printf(tmpl, GDALGetDriverShortName(ogr_dr));
+	}
+
 	exit(0);
 }
 
@@ -45,13 +80,16 @@ main (int argc, char **argv)
 	if (argc == 1)
 		usage();
 
-	while ((ch = getopt(argc, argv, "h?s:l:")) != -1) {
+	while ((ch = getopt(argc, argv, "h?s:l:f")) != -1) {
 		switch (ch) {
 			case 's':
 				source = optarg;
 				break;
 			case 'l':
 				layer = optarg;
+				break;
+			case 'f':
+				formats();
 				break;
 			case '?':
 			case 'h':
@@ -95,7 +133,7 @@ ogrListLayers(const char *source)
 
 	if ( ! ogr_ds )
 	{
-		CPLError(CE_Failure, CPLE_AppDefined, "Could not conect to source '%s'", source);
+		CPLError(CE_Failure, CPLE_AppDefined, "Could not connect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
 
