@@ -133,7 +133,7 @@ ogrListLayers(const char *source)
 	GDALAllRegister();
 	
 #if GDAL_VERSION_MAJOR < 2
-	ogr_ds = OGROpen(source, FALSE, &ogr_dr);			
+	ogr_ds = OGROpen(source, FALSE, NULL);
 #else
 	ogr_ds = GDALOpenEx(source, 
 	                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
