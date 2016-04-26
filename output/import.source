@@ -1,0 +1,29 @@
+------------------------------------------------
+CREATE SCHEMA imp1;
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (n2launder) 
+  FROM SERVER myserver 
+  INTO imp1;
+NOTICE:  Number of tables to be created 1
+  
+SELECT * FROM imp1.n2launder WHERE fid = 0;
+ fid |                     geom                     | n2ame | age | height | b_rthdate  
+-----+----------------------------------------------+-------+-----+--------+------------
+   0 | \x0101000000c00497d1162cb93f8cbaef08a080e63f | Peter |  45 |    5.6 | 04-12-1965
+(1 row)
+
+------------------------------------------------
+CREATE SCHEMA imp2;
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO ("natural") 
+  FROM SERVER myserver 
+  INTO imp2;
+NOTICE:  Number of tables to be created 1
+SELECT "natural" FROM imp2."natural";
+ natural 
+---------
+ wood
+ land
+(2 rows)
+
+------------------------------------------------

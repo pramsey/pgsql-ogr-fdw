@@ -1,0 +1,24 @@
+------------------------------------------------
+
+CREATE SCHEMA imp1;
+
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (n2launder) 
+  FROM SERVER myserver 
+  INTO imp1;
+  
+SELECT * FROM imp1.n2launder WHERE fid = 0;
+
+------------------------------------------------
+
+CREATE SCHEMA imp2;
+
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO ("natural") 
+  FROM SERVER myserver 
+  INTO imp2;
+
+SELECT "natural" FROM imp2."natural";
+
+------------------------------------------------
+
