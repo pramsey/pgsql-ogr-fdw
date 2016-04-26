@@ -128,7 +128,6 @@ static OGRErr
 ogrListLayers(const char *source)
 {
 	GDALDatasetH ogr_ds = NULL;
-	GDALDriverH ogr_dr = NULL;
 	int i;
 	
 	GDALAllRegister();
@@ -146,9 +145,6 @@ ogrListLayers(const char *source)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not conect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
-
-	if ( ! ogr_dr )
-		GDALGetDatasetDriver(ogr_ds);
 
 	printf("Layers:\n");
 	for ( i = 0; i < GDALDatasetGetLayerCount(ogr_ds); i++ )
