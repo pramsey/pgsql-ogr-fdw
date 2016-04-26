@@ -16,6 +16,7 @@
  * OGR library API
  */
 #include "ogr_fdw_gdal.h"
+#include "ogr_fdw_common.h"
 
 static void usage();
 static OGRErr ogrListLayers(const char *source);
@@ -138,15 +139,16 @@ ogrListLayers(const char *source)
 	ogr_ds = GDALOpenEx(source, 
 	                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
 	                    NULL, NULL, NULL);
-	if ( ogr_ds )
-		ogr_dr = GDALGetDatasetDriver(ogr_ds);
 #endif
-
+	
 	if ( ! ogr_ds )
 	{
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not conect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
+
+	if ( ! ogr_dr )
+		GDALGetDatasetDriver(ogr_ds);
 
 	printf("Layers:\n");
 	for ( i = 0; i < GDALDatasetGetLayerCount(ogr_ds); i++ )
@@ -163,38 +165,6 @@ ogrListLayers(const char *source)
 	GDALClose(ogr_ds);
 	
 	return OGRERR_NONE;
-}
-
-static void strlaunder (char *str)
-{
-	int i, j = 0;
-	for(i = 0; str[i]; i++)
-	{
-		char c = tolower(str[i]);
-		
-		/* First character is a numeral, prefix with 'n' */
-		if ( i == 0 && (c >= 48 && c <= 57) )
-		{
-			str[j++] = 'n';
-		}
-		
-		/* Replace non-safe characters w/ _ */
-		if ( (c >= 48 && c <= 57) || /* 0-9 */
-			 (c >= 65 && c <= 90) || /* A-Z */
-			 (c >= 97 && c <= 122 ) /* a-z */ )
-		{
-			/* Good character, do nothing */
-		}
-		else
-		{
-			c = '_';
-		}
-		str[j++] = c;
-		
-		/* Avoid mucking with data beyond the end of our stack-allocated strings */
-		if ( j >= STR_MAX_LEN )
-			j = STR_MAX_LEN - 1;
-	}
 }
 
 static OGRErr
@@ -219,8 +189,6 @@ ogrGenerateSQL(const char *source, const char *layer)
 	ogr_ds = GDALOpenEx(source, 
 	                    GDAL_OF_VECTOR|GDAL_OF_READONLY, 
 	                    NULL, NULL, NULL);
-	if ( ogr_ds )
-		ogr_dr = GDALGetDatasetDriver(ogr_ds);
 #endif
 
 	if ( ! ogr_ds )
@@ -228,6 +196,9 @@ ogrGenerateSQL(const char *source, const char *layer)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not connect to source '%s'", source);
 		return OGRERR_FAILURE; 
 	}
+
+	if ( ! ogr_dr )
+		GDALGetDatasetDriver(ogr_ds);
 
 	/* There should be a nicer way to do this */
 	strcpy(server_name, "myserver");
@@ -239,7 +210,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 		return OGRERR_FAILURE; 
 	}
 	strncpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
-	strlaunder(layer_name);
+	ogrStringLaunder(layer_name);
 
 	/* Output SERVER definition */
 	printf("\nCREATE SERVER %s\n" 
@@ -285,7 +256,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 		OGRFieldType ogr_fld_type = OGR_Fld_GetType(ogr_fld);
 		const char *ogr_field_name = OGR_Fld_GetNameRef(ogr_fld);
 		strncpy(field_name, ogr_field_name, STR_MAX_LEN);
-		strlaunder(field_name);
+		ogrStringLaunder(field_name);
 		printf(",\n  %s ", field_name);
 		switch( ogr_fld_type )
 		{

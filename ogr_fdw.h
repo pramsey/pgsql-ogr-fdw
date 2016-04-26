@@ -55,6 +55,7 @@
 
 /* GDAL/OGR includes and compat */
 #include "ogr_fdw_gdal.h"
+#include "ogr_fdw_common.h"
 
 /* Utility macros for string equality */
 #define streq(s1,s2) (strcmp((s1),(s2)) == 0)
