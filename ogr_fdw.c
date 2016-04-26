@@ -143,7 +143,6 @@ static int ogrIsForeignRelUpdatable (Relation rel);
 #if PG_VERSION_NUM >= 90500
 static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid);
 #endif
-static void ogrStringLaunder (char *str);
 
 /*
  * Helper functions
@@ -154,7 +153,6 @@ static void ogr_fdw_exit(int code, Datum arg);
 /* Global to hold GEOMETRYOID */
 Oid GEOMETRYOID = InvalidOid;
 
-#define STR_MAX_LEN 256
 
 
 void
@@ -2453,43 +2451,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 #endif /* PostgreSQL 9.5+ */
 
-static void
-ogrStringLaunder (char *str)
-{
-	int i, j = 0;
-	char tmp[STR_MAX_LEN];
-	memset(tmp, 0, STR_MAX_LEN);
-	
-	for(i = 0; str[i]; i++)
-	{
-		char c = tolower(str[i]);
 
-		/* First character is a numeral, prefix with 'n' */
-		if ( i == 0 && (c >= 48 && c <= 57) )
-		{
-			tmp[j++] = 'n';
-		}
-
-		/* Replace non-safe characters w/ _ */
-		if ( (c >= 48 && c <= 57) || /* 0-9 */
-			 (c >= 65 && c <= 90) || /* A-Z */
-			 (c >= 97 && c <= 122)   /* a-z */ )
-		{
-			/* Good character, do nothing */
-		}
-		else
-		{
-			c = '_';
-		}
-		tmp[j++] = c;
-
-		/* Avoid mucking with data beyond the end of our stack-allocated strings */
-		if ( j >= STR_MAX_LEN )
-			j = STR_MAX_LEN - 1;
-	}
-	strncpy(str, tmp, STR_MAX_LEN);
-	
-}
 
 #endif /* PostgreSQL 9.3+ version check */
 
