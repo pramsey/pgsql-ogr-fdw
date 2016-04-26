@@ -37,6 +37,15 @@ For a test data set, copy the `pt_two` example shape file from the `data` direct
 
 Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility makes it a little more foolproof.)
 
+    > ogr_fdw_info -f
+
+    Supported Formats:
+      -> "PCIDSK" (read/write)
+      -> "netCDF" (read/write)
+      ...
+      -> "HTTP" (readonly)
+
+
     > ogr_fdw_info -s /tmp/test
     
     Layers:
