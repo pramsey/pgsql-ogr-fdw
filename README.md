@@ -50,6 +50,7 @@ Use the `ogr_fdw_info` tool to read an OGR data source and output a server and t
     
     Layers:
       pt_two
+
     
     > ogr_fdw_info -s /tmp/test -l pt_two
     
