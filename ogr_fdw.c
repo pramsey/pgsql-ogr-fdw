@@ -1447,7 +1447,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 				strinfo.cursor = 0;
 
 				/*
-				 * Use the recv function to convert the EWKB from OGR into 
+				 * Use the recv function to convert the WKB from OGR into
 				 * a PostGIS internal format.
 				 */
 				nulls[i] = false;
