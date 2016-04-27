@@ -1201,6 +1201,44 @@ ogrReadColumnData(OgrFdwState *state)
 	return;
 }
 
+/* 
+ * ogrLookupGeometryFunctionOid
+ * 
+ * Find the procedure Oids of useful functions so we can call 
+ * them later.
+ */
+static Oid 
+ogrLookupGeometryFunctionOid(const char *proname)
+{
+	List *names;
+	FuncCandidateList clist;
+	
+	/* This only works if PostGIS is installed */
+	if ( GEOMETRYOID == InvalidOid || GEOMETRYOID == BYTEAOID )
+		return InvalidOid;
+	
+	names = stringToQualifiedNameList(proname);
+	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
+	if ( streq(proname, "st_setsrid") )
+	{
+		do
+		{
+			int i;
+			for ( i = 0; i < clist->nargs; i++ )
+			{
+				if ( clist->args[i] == GEOMETRYOID )
+					return clist->oid;
+			}
+		}
+		while( (clist = clist->next) );
+	}
+	else if ( streq(proname, "postgis_typmod_srid") )
+	{
+		return clist->oid;
+	}
+	
+	return InvalidOid;
+}
 
 /*
  * ogrBeginForeignScan
@@ -1217,6 +1255,10 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(state);
+	
+	/* Collect the procedure Oids for PostGIS functions we might need */
+	execstate->setsridfunc = ogrLookupGeometryFunctionOid("st_setsrid");
+	execstate->typmodsridfunc = ogrLookupGeometryFunctionOid("postgis_typmod_srid");
 
 	/* Get private info created by planner functions. */
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
@@ -1292,12 +1334,14 @@ ogrNullSlot(Datum *values, bool *nulls, int i)
 * the type, then everything else.
 */
 static OGRErr
-ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable *tbl)
+ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecState *execstate)
 {
+	const OgrFdwTable *tbl = execstate->table;
 	int i;
 	Datum *values = slot->tts_values;
 	bool *nulls = slot->tts_isnull;
 	TupleDesc tupdesc = slot->tts_tupleDescriptor;
+	int have_typmod_funcs = (execstate->setsridfunc && execstate->typmodsridfunc);
 
 	/* Check our assumption that slot and setup data match */
 	if ( tbl->ncols != tupdesc->natts )
@@ -1410,12 +1454,25 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwTable
 				strinfo.cursor = 0;
 
 				/*
-				 * TODO: We should probably find out the typmod and send
-				 * this along to the recv function too, but we can ignore it now
-				 * and just have no typmod checking.
+				 * Use the recv function to convert the WKB from OGR into
+				 * a PostGIS internal format.
 				 */
 				nulls[i] = false;
 				values[i] = OidFunctionCall1(col.pgrecvfunc, PointerGetDatum(&strinfo));
+				
+				/* 
+				 * Apply the typmod restriction to the incoming geometry, so it's
+				 * not really a restriction anymore, it's more like a requirement.
+				 * 
+				 * TODO: In the case where the OGR input actually *knows* what SRID
+				 * it is, we should actually apply *that* and let the restriction run
+				 * its usual course.
+				 */
+				if ( have_typmod_funcs && col.pgtypmod >= 0 ) 
+				{
+					Datum srid = OidFunctionCall1(execstate->typmodsridfunc, Int32GetDatum(col.pgtypmod));
+					values[i] = OidFunctionCall2(execstate->setsridfunc, values[i], srid);
+				}
 			}
 			else
 			{
@@ -1781,7 +1838,7 @@ ogrIterateForeignScan(ForeignScanState *node)
 	if ( (feat = OGR_L_GetNextFeature(execstate->ogr.lyr)) )
 	{
 		/* convert result to arrays of values and null indicators */
-		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate->table) )
+		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate) )
 			ogrEreportError("failure reading OGR data source");
 
 		/* store the virtual tuple */
