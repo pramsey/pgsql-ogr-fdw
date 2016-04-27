@@ -6,6 +6,8 @@ IMPORT FOREIGN SCHEMA ogr_all
   LIMIT TO (n2launder) 
   FROM SERVER myserver 
   INTO imp1;
+
+\d imp1.n2launder
   
 SELECT * FROM imp1.n2launder WHERE fid = 0;
 
@@ -17,6 +19,8 @@ IMPORT FOREIGN SCHEMA ogr_all
   LIMIT TO ("natural") 
   FROM SERVER myserver 
   INTO imp2;
+
+\d imp2."natural"
 
 SELECT "natural" FROM imp2."natural";
 
