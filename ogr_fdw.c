@@ -1201,6 +1201,37 @@ ogrReadColumnData(OgrFdwState *state)
 	return;
 }
 
+/* 
+ * ogrLookupGeometryFunctionOid
+ * 
+ * Find the procedure Oids of useful functions so we can call 
+ * them later.
+ */
+static Oid 
+ogrLookupGeometryFunctionOid(const char *proname)
+{
+	List *names;
+	FuncCandidateList clist;
+	
+	/* This only works if PostGIS is installed */
+	if ( GEOMETRYOID == InvalidOid || GEOMETRYOID == BYTEAOID )
+		return InvalidOid;
+	
+	names = stringToQualifiedNameList(proname);
+	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
+	do
+	{
+		int i;
+		for ( i = 0; i < clist->nargs; i++ )
+		{
+			if ( clist->args[i] == GEOMETRYOID )
+				return clist->oid;
+		}
+	}
+	while( (clist = clist->next) );
+	
+	return InvalidOid;
+}
 
 /*
  * ogrBeginForeignScan
@@ -1217,6 +1248,10 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(state);
+	
+	/* Collect the procedure Oids for PostGIS functions we might need */
+	execstate->setsridfunc = ogrLookupGeometryFunctionOid("st_setsrid");
+	execstate->typmodsridfunc = ogrLookupGeometryFunctionOid("postgis_typmod_srid");
 
 	/* Get private info created by planner functions. */
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
