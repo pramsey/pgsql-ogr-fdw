@@ -34,7 +34,7 @@ CFLAGS = $(GDAL_CFLAGS)
 LIBS = $(GDAL_LIBS)
 
 ogr_fdw_info$(X): ogr_fdw_info.o ogr_fdw_common.o stringbuffer.o
-	$(CC) $(CFLAGS) -o $@ $? $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 stringbuffer_pg.o: stringbuffer.c stringbuffer.h
 	$(CC) $(CFLAGS) -D USE_PG_MEM -c -o $@ $<

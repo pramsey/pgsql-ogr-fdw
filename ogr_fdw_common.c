@@ -184,8 +184,10 @@ ogrGeomTypeToPgGeomType(stringbuffer_t *buf, OGRwkbGeometryType gtype)
 
 	if ( wkbHasZ(gtype) )
 		stringbuffer_append(buf, "Z");
+#if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 1
 	if ( wkbHasM(gtype) )
 		stringbuffer_append(buf, "M");
+#endif
 
 	return;
 }
