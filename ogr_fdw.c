@@ -1219,16 +1219,23 @@ ogrLookupGeometryFunctionOid(const char *proname)
 	
 	names = stringToQualifiedNameList(proname);
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
-	do
+	if ( streq(proname, "st_setsrid") )
 	{
-		int i;
-		for ( i = 0; i < clist->nargs; i++ )
+		do
 		{
-			if ( clist->args[i] == GEOMETRYOID )
-				return clist->oid;
+			int i;
+			for ( i = 0; i < clist->nargs; i++ )
+			{
+				if ( clist->args[i] == GEOMETRYOID )
+					return clist->oid;
+			}
 		}
+		while( (clist = clist->next) );
 	}
-	while( (clist = clist->next) );
+	else if ( streq(proname, "postgis_typmod_srid") )
+	{
+		return clist->oid;
+	}
 	
 	return InvalidOid;
 }
