@@ -942,49 +942,7 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 			));
 }
 
-static char*
-ogrTypeToPgType(OGRFieldDefnH ogr_fld)
-{
 
-	OGRFieldType ogr_type = OGR_Fld_GetType(ogr_fld);
-	switch(ogr_type)
-	{
-		case OFTInteger:
-#if GDAL_VERSION_MAJOR >= 2
-			if( OGR_Fld_GetSubType(ogr_fld) == OFSTBoolean )
-				return "boolean";
-			else
-#endif
-				return "integer";
-		case OFTReal:
-			return "real";
-		case OFTString:
-			return "varchar";
-		case OFTBinary:
-			return "bytea";
-		case OFTDate:
-			return "date";
-		case OFTTime:
-			return "time";
-		case OFTDateTime:
-			return "timestamp";
-		case OFTIntegerList:
-			return "integer[]";
-		case OFTRealList:
-			return "real[]";
-		case OFTStringList:
-			return "varchar[]";
-#if GDAL_VERSION_MAJOR >= 2
-		case OFTInteger64:
-			return "bigint";
-#endif
-		default:
-			elog(ERROR,
-			     "Unsupported GDAL type '%s'",
-			     OGR_GetFieldTypeName(ogr_type));
-	}
-
-}
 
 static void
 freeOgrFdwTable(OgrFdwTable *table)
@@ -1157,7 +1115,7 @@ ogrReadColumnData(OgrFdwState *state)
 		{
 			DefElem    *def = (DefElem *) lfirst(lc);
 
-			if ( streq(def->defname, "column_name") )
+			if ( streq(def->defname, OPT_COLUMN) )
 			{
 				entry.fldname = defGetString(def);
 				break;
@@ -2291,29 +2249,6 @@ static int ogrIsForeignRelUpdatable (Relation rel)
 
 #if PG_VERSION_NUM >= 90500
 
-static void
-ogrImportForeignColumn(StringInfoData *buf, const char *ogrcolname, const char *pgtype, bool launder_column_names)
-{
-	char pgcolname[STR_MAX_LEN];
-	strncpy(pgcolname, ogrcolname, STR_MAX_LEN);
-	ogrStringLaunder(pgcolname);
-	if ( launder_column_names )
-	{
-		appendStringInfo(buf, ",\n %s %s", quote_identifier(pgcolname), pgtype);
-		if ( ! strcaseeq(pgcolname, ogrcolname) )
-			appendStringInfo(buf, " OPTIONS (column_name '%s')", ogrcolname);
-	}
-	else
-	{
-		/* OGR column is PgSQL compliant, we're all good */
-		if ( streq(pgcolname, ogrcolname) )
-			appendStringInfo(buf, ",\n %s %s", quote_identifier(ogrcolname), pgtype);
-		/* OGR is mixed case or non-compliant, we need to quote it */
-		else
-			appendStringInfo(buf, ",\n \"%s\" %s", ogrcolname, pgtype);
-	}
-}
-
 /*
  * PostgreSQL 9.5 or above.  Import a foreign schema
  */
@@ -2325,14 +2260,10 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	ListCell *lc;
 	bool import_all = false;
 	bool launder_column_names, launder_table_names;
-	StringInfoData buf;
 	OgrConnection ogr;
 	int i;
 	char layer_name[STR_MAX_LEN];
 	char table_name[STR_MAX_LEN];
-
-	/* Create workspace for strings */
-	initStringInfo(&buf);
 
 	/* Are we importing all layers in the OGR datasource? */
 	import_all = streq(stmt->remote_schema, "ogr_all");
@@ -2418,88 +2349,24 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 		if (import_layer)
 		{
+			OGRErr err;
+			stringbuffer_t buf;
+			stringbuffer_init(&buf);
+			
+			err = ogrLayerToSQL(ogr_lyr,
+			         quote_identifier(server->servername), 
+			         launder_table_names, 
+			         launder_column_names,
+			         GEOMETRYOID != BYTEAOID, 
+			         &buf
+			      );		
 
-			OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
-			char *pggeomtype;
-			int j;
-
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			int geom_field_count = OGR_FD_GetGeomFieldCount(ogr_fd);
-#else
-			int geom_field_count = (OGR_L_GetGeomType(ogr_lyr) != wkbNone);
-#endif
-
-			if ( ! ogr_fd )
-				elog(ERROR, "unable to read layer definition for OGR layer `%s`", layer_name);
-
-			resetStringInfo(&buf);
-
-			appendStringInfo(&buf, "CREATE FOREIGN TABLE %s (\n", quote_identifier(table_name));
-			appendStringInfoString(&buf, " fid bigint");
-
-			/* What column type to use for OGR geometries? */
-			if ( GEOMETRYOID == BYTEAOID )
-				pggeomtype = "bytea";
-			else
-				pggeomtype = "geometry";
-
-			if( geom_field_count == 1 )
-			{
-				appendStringInfo(&buf, ",\n geom %s", pggeomtype);
-			}
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-			else
-			{
-				for ( j = 0; j < geom_field_count; j++ )
-				{
-					OGRGeomFieldDefnH gfld = OGR_FD_GetGeomFieldDefn(ogr_fd, j);
-					const char *geomfldname = OGR_GFld_GetNameRef(gfld);
-
-					/* TODO reflect geometry type/srid info from OGR */
-					if ( geomfldname )
-					{
-						ogrImportForeignColumn(&buf, geomfldname, pggeomtype, launder_column_names);
-					}
-					else
-					{
-						if ( geom_field_count > 1 )
-							appendStringInfo(&buf, ",\n geom%d %s", j + 1, pggeomtype);
-						else
-							appendStringInfo(&buf, ",\n geom %s", pggeomtype);
-					}
-				}
-			}
-#endif
-			/* Write out attribute fields */
-			for ( j = 0; j < OGR_FD_GetFieldCount(ogr_fd); j++ )
-			{
-				OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, j);
-				char *pgcoltype = ogrTypeToPgType(ogr_fld);
-				ogrImportForeignColumn(&buf, OGR_Fld_GetNameRef(ogr_fld), pgcoltype, launder_column_names);
-			}
-
-			/*
-			 * Add server name and layer-level options.  We specify remote
-			 *  layer name as option
-			 */
-			appendStringInfo(&buf, "\n) SERVER %s\nOPTIONS (",
-							 quote_identifier(server->servername));
-
-			appendStringInfoString(&buf, "layer ");
-			ogrDeparseStringLiteral(&buf, layer_name);
-
-			appendStringInfoString(&buf, ");");
-
-			elog(DEBUG2, "%s", buf.data);
-
-			commands = lappend(commands, pstrdup(buf.data));
+			commands = lappend(commands, pstrdup(stringbuffer_getstring(&buf)));
+			stringbuffer_release(&buf);
 		}
 	}
 
 	elog(NOTICE, "Number of tables to be created %d", list_length(commands) );
-
-	/* Clean up */
-	pfree(buf.data);
 	
 	ogrFinishConnection(&ogr);
 

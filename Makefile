@@ -1,7 +1,7 @@
 # ogr_fdw/Makefile
 
 MODULE_big = ogr_fdw
-OBJS = ogr_fdw.o ogr_fdw_deparse.o ogr_fdw_common.o
+OBJS = ogr_fdw.o ogr_fdw_deparse.o ogr_fdw_common.o stringbuffer_pg.o
 EXTENSION = ogr_fdw
 DATA = ogr_fdw--1.0.sql
 
@@ -33,11 +33,14 @@ include $(PGXS)
 CFLAGS = $(GDAL_CFLAGS)
 LIBS = $(GDAL_LIBS)
 
-ogr_fdw_info$(X): ogr_fdw_info.o ogr_fdw_common.o
+ogr_fdw_info$(X): ogr_fdw_info.o ogr_fdw_common.o stringbuffer.o
 	$(CC) $(CFLAGS) -o $@ $? $(LIBS)
 
+stringbuffer_pg.o: stringbuffer.c stringbuffer.h
+	$(CC) $(CFLAGS) -D USE_PG_MEM -c -o $@ $<
+
 clean-exe:
-	rm -f ogr_fdw_info$(X) ogr_fdw_info.o
+	rm -f ogr_fdw_info$(X) ogr_fdw_info.o stringbuffer.o
 
 install-exe: all
 	$(INSTALL_PROGRAM) ogr_fdw_info$(X) '$(DESTDIR)$(bindir)'
