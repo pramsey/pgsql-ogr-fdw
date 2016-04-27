@@ -87,16 +87,16 @@ CREATE SERVER csvserver
   OPTIONS (
     datasource '@abs_srcdir@/data/no_geom.csv',
     format 'CSV' );
-DROP SCHEMA IF EXISTS csv;
-NOTICE:  schema "csv" does not exist, skipping
-CREATE SCHEMA csv;
-IMPORT FOREIGN SCHEMA ogr_all 
-  FROM SERVER csvserver 
-  INTO csv;
-NOTICE:  Number of tables to be created 1
+CREATE FOREIGN TABLE no_geom (
+  fid bigint,
+  name varchar,
+  age varchar,
+  value varchar
+) SERVER csvserver
+OPTIONS (layer 'no_geom');
 SELECT c.* 
   FROM generate_series(1,4) g 
-  JOIN csv.no_geom c 
+  JOIN no_geom c 
   ON (c.fid = g.g);
  fid |  name   | age | value 
 -----+---------+-----+-------

@@ -20,6 +20,7 @@ PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
 SHLIB_LINK := $(LIBS)
 
+# order matters, file first, import last
 REGRESS = file pgsql import
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)

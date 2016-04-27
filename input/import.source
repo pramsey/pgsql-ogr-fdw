@@ -21,4 +21,3 @@ IMPORT FOREIGN SCHEMA ogr_all
 SELECT "natural" FROM imp2."natural";
 
 ------------------------------------------------
-
