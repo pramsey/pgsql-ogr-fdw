@@ -2269,7 +2269,6 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	import_all = streq(stmt->remote_schema, "ogr_all");
 
 	/* Make connection to server */
-	memset(&ogr, 0, sizeof(OgrConnection));
 	server = GetForeignServer(serverOid);
 	ogr = ogrGetConnectionFromServer(serverOid, false);
 
