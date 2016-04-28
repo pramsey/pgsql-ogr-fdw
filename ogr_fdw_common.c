@@ -182,8 +182,11 @@ ogrGeomTypeToPgGeomType(stringbuffer_t *buf, OGRwkbGeometryType gtype)
 			CPLError(CE_Failure, CPLE_AssertionFailed, "Cannot handle OGR geometry type '%d'", gtype);
 	}
 
+#if GDAL_VERSION_MAJOR >= 2 
 	if ( wkbHasZ(gtype) )
 		stringbuffer_append(buf, "Z");
+#endif
+	
 #if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 1
 	if ( wkbHasM(gtype) )
 		stringbuffer_append(buf, "M");
