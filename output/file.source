@@ -47,6 +47,7 @@ SELECT * FROM pt_3 ORDER BY name;
 (2 rows)
 
 ------------------------------------------------
+-- Laundering and explicit column naming test
 CREATE FOREIGN TABLE column_name_test (
  fid integer,
  name varchar OPTIONS (column_name '2ame'),
@@ -62,13 +63,25 @@ SELECT * FROM column_name_test ORDER BY fid;
    1 | Paul  |     33 |   5.84 | 03-25-1971
 (2 rows)
 
+-- Check that columns are reverse-laundered when generating
+-- OGR SQL filters
+SET client_min_messages = debug1;
+SELECT name FROM column_name_test WHERE name = 'Paul';
+DEBUG:  OGR SQL: ("2ame" = 'Paul')
+ name 
+------
+ Paul
+(1 row)
+
 ------------------------------------------------
+-- GDAL options passing tests
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
     datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile',
     config_options 'SHAPE_ENCODING=LATIN1' );
+DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
 CREATE FOREIGN TABLE e_1 (
   fid integer,
   name varchar )
@@ -76,12 +89,16 @@ CREATE FOREIGN TABLE e_1 (
   OPTIONS ( layer 'enc' );
   
 SELECT * FROM e_1 WHERE fid = 1;
+DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
+DEBUG:  OGR SQL: (fid = 1)
+DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
  fid | name 
 -----+------
    1 | Pàul
 (1 row)
 
 ------------------------------------------------
+-- Geometryless test
 CREATE SERVER csvserver
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
@@ -98,6 +115,7 @@ SELECT c.*
   FROM generate_series(1,4) g 
   JOIN csv.no_geom c 
   ON (c.fid = g.g);
+DEBUG:  OGR SQL: 
  fid |  name   | age | value 
 -----+---------+-----+-------
    1 | Peter   | 34  | 10.2

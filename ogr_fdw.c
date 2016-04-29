@@ -149,6 +149,7 @@ static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid
  */
 static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, bool updateable);
 static void ogr_fdw_exit(int code, Datum arg);
+static void ogrReadColumnData(OgrFdwState *state);
 
 /* Global to hold GEOMETRYOID */
 Oid GEOMETRYOID = InvalidOid;
@@ -766,6 +767,10 @@ ogrGetForeignPlan(PlannerInfo *root,
 	List *params_list = NULL;
 	List *fdw_private;
 	OgrFdwPlanState *planstate = (OgrFdwPlanState *)(baserel->fdw_private);
+	OgrFdwState *state = (OgrFdwState *)(baserel->fdw_private);
+
+	/* Add in column mapping data to build SQL with the right OGR column names */
+	ogrReadColumnData(state);
 
 	/*
 	 * TODO: Review the columns requested (via params_list) and only pull those back, using
@@ -773,7 +778,7 @@ ogrGetForeignPlan(PlannerInfo *root,
 	 * down to OGR via OGR_L_SetAttributeFilter (done) and (TODO) OGR_L_SetSpatialFilter.
 	 */
 	initStringInfo(&sql);
-	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, &params_list);
+	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, state, &params_list);
 	elog(DEBUG1,"OGR SQL: %s", sql.data);
 
 	/*
@@ -1036,34 +1041,27 @@ ogrReadColumnData(OgrFdwState *state)
 	OgrFieldEntry *ogr_fields;
 	int ogr_fields_count = 0;
 	char *tblname = get_rel_name(state->foreigntableid);
-	OgrFdwModifyState *modstate;
-
-	/* Only do this for exec and mod states */
-	if ( ! (state->type == OGR_EXEC_STATE || state->type == OGR_MODIFY_STATE) )
-		return;
-	
-	modstate = (OgrFdwModifyState*)state;
 
 	/* Blow away any existing table in the state */
-	if ( modstate->table )
+	if ( state->table )
 	{
-		freeOgrFdwTable(modstate->table);
-		modstate->table = NULL;
+		freeOgrFdwTable(state->table);
+		state->table = NULL;
 	}
 
 	/* Fresh table */
 	tbl = palloc0(sizeof(OgrFdwTable));
 
 	/* One column for each PgSQL foreign table column */
-	rel = heap_open(modstate->foreigntableid, NoLock);
+	rel = heap_open(state->foreigntableid, NoLock);
 	tupdesc = rel->rd_att;
-	modstate->tupdesc = tupdesc;
+	state->tupdesc = tupdesc;
 	tbl->ncols = tupdesc->natts;
 	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
 	tbl->tblname = pstrdup(tblname);
 
 	/* Get OGR metadata ready */
-	dfn = OGR_L_GetLayerDefn(modstate->ogr.lyr);
+	dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
 	ogr_ncols = OGR_FD_GetFieldCount(dfn);
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
@@ -1152,7 +1150,7 @@ ogrReadColumnData(OgrFdwState *state)
 		 * But, if there is a 'column_name' option for this column, we
 		 * want to search for *that* in the OGR layer.
 		 */
-		options = GetForeignColumnOptions(modstate->foreigntableid, i + 1);
+		options = GetForeignColumnOptions(state->foreigntableid, i + 1);
 		foreach(lc, options)
 		{
 			DefElem    *def = (DefElem *) lfirst(lc);
@@ -1192,7 +1190,7 @@ ogrReadColumnData(OgrFdwState *state)
 
 	/* Clean up */
 	
-	modstate->table = tbl;
+	state->table = tbl;
 	for( i = 0; i < 2*ogr_ncols; i++ )
 		if ( ogr_fields[i].fldname ) pfree(ogr_fields[i].fldname);
 	pfree(ogr_fields);
@@ -1269,7 +1267,21 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 		OGRErr err = OGR_L_SetAttributeFilter(execstate->ogr.lyr, execstate->sql);
 		if ( err != OGRERR_NONE )
 		{
-			elog(NOTICE, "unable to set OGR SQL '%s' on layer", execstate->sql);
+			const char *ogrerr = CPLGetLastErrorMsg();
+			
+			if ( ogrerr && ! streq(ogrerr,"") )
+			{
+				ereport(NOTICE,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("unable to set OGR SQL '%s' on layer", execstate->sql),
+					 errhint("%s", ogrerr)));
+			}
+			else
+			{
+				ereport(NOTICE,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("unable to set OGR SQL '%s' on layer", execstate->sql)));
+			}
 		}
 	}
 	else

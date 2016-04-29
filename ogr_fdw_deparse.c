@@ -26,6 +26,7 @@ typedef struct OgrDeparseCtx
 	StringInfo buf;           /* output buffer to append to */
 	List **params_list;       /* exprs that will become remote Params */
 	OGRGeometryH geom;        /* if filter contains a geometry constant, it resides here */
+	OgrFdwState *state;       /* to convert local column names to OGR names */
 } OgrDeparseCtx;
 
 /* Local function signatures */
@@ -193,49 +194,92 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 
 
 static bool
-ogrDeparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root)
-{
-	RangeTblEntry *rte;
-	char *colname = NULL;
-
-	/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
-	Assert(!IS_SPECIAL_VARNO(varno));
-
-	/* Get RangeTblEntry from array in PlannerInfo. */
-	rte = planner_rt_fetch(varno, root);
-
-	/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
-	/* TODO: This also seems necessary to hand geometry column restrictions */
-	/* TODO: Lookup OGR column name by going from varattno -> OGR via a table/OGR map */
-
-	if (colname == NULL)
-		colname = get_relid_attribute_name(rte->relid, varattno);
-
-	appendStringInfoString(buf, quote_identifier(colname));
-	return true;
-}
-
-static bool
 ogrDeparseParam(Param *node, OgrDeparseCtx *context)
 {
 	elog(ERROR, "got into ogrDeparseParam code");
 	return false;
 }
 
+static bool
+ogrIsLegalVarName(const char *varname)
+{
+	size_t len = strlen(varname);
+	int i;
+		
+	for ( i = 0; i < len; i++ )
+	{
+		char c = varname[i];
+			
+		/* First char must be a-zA-Z */
+		if ( i == 0 && ! ((c>=97&&c<=122)||(c>=65&&c<=90)) )
+			return false;
+		
+		/* All other chars must be 0-9a-zA-Z_ */
+		if ( ! ((c>=97&&c<=122)||(c>=65&&c<=90)||(c>=48&&c<=59)||(c==96)) )
+			return false;
+
+	}
+	return true;
+}
 
 static bool
 ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 {
+	StringInfoData *buf = context->buf;
+	
 	if (node->varno == context->foreignrel->relid && node->varlevelsup == 0)
 	{
 		/* Var belongs to foreign table */
-		ogrDeparseColumnRef(context->buf, node->varno, node->varattno, context->root);
+		int i;
+		OgrFdwTable *table = context->state->table;
+		OGRLayerH lyr = context->state->ogr.lyr;
+		bool done = false;
+
+		/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
+		Assert(!IS_SPECIAL_VARNO(node->varno));
+
+		/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
+		/* TODO: Lookup OGR column name by going from varattno -> OGR via a table/OGR map */
+
+		for ( i = 0; i < table->ncols; i++ )
+		{
+			if ( table->cols[i].pgattnum == node->varattno )
+			{
+				const char *fldname = NULL;
+				
+				if ( table->cols[i].ogrvariant == OGR_FID )
+				{
+					fldname = OGR_L_GetFIDColumn(lyr);
+					if ( ! fldname || strlen(fldname) == 0 )
+						fldname = "fid";
+				}
+				else if ( table->cols[i].ogrvariant == OGR_FIELD )
+				{
+					OGRFeatureDefnH fd = OGR_L_GetLayerDefn(lyr);
+					OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, table->cols[i].ogrfldnum);
+					fldname = OGR_Fld_GetNameRef(fld);
+				}
+				
+				if ( fldname )
+				{
+					if ( ogrIsLegalVarName(fldname) )
+						appendStringInfoString(buf, fldname);
+					else
+						appendStringInfo(buf, "\"%s\"", fldname);
+					
+					done = true;
+				}
+			}
+		}
+		
+		return done;
 	}
 	else
 	{
 		elog(ERROR, "got to param handling section of ogrDeparseVar");
 		return false;
 	}
+	
 	return true;
 }
 
@@ -475,7 +519,7 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 
 
 bool
-ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **params)
+ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, OgrFdwState *state, List **params)
 {
 	OgrDeparseCtx context;
 	ListCell *lc;
@@ -491,6 +535,7 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 	context.foreignrel = foreignrel;
 	context.params_list = params;
 	context.geom = NULL;
+	context.state = state;
 	// context.geom_op = NULL;
 	// context.geom_func = NULL;
 

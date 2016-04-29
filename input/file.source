@@ -42,6 +42,7 @@ CREATE FOREIGN TABLE pt_3 (
 SELECT * FROM pt_3 ORDER BY name;
 
 ------------------------------------------------
+-- Laundering and explicit column naming test
 
 CREATE FOREIGN TABLE column_name_test (
  fid integer,
@@ -54,7 +55,13 @@ OPTIONS (layer '2launder');
 
 SELECT * FROM column_name_test ORDER BY fid;
 
+-- Check that columns are reverse-laundered when generating
+-- OGR SQL filters
+SET client_min_messages = debug1;
+SELECT name FROM column_name_test WHERE name = 'Paul';
+
 ------------------------------------------------
+-- GDAL options passing tests
 
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
@@ -72,6 +79,7 @@ CREATE FOREIGN TABLE e_1 (
 SELECT * FROM e_1 WHERE fid = 1;
 
 ------------------------------------------------
+-- Geometryless test
 
 CREATE SERVER csvserver
   FOREIGN DATA WRAPPER ogr_fdw

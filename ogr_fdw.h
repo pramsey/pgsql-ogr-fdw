@@ -94,7 +94,6 @@ typedef struct OgrFdwColumn
 	OgrColumnVariant ogrvariant;
 	int ogrfldnum;
 	OGRFieldType ogrfldtype;
-
 } OgrFdwColumn;
 
 typedef struct OgrFdwTable
@@ -126,14 +125,18 @@ typedef struct OgrFdwState
 {
 	OgrFdwStateType type;
 	Oid foreigntableid; 
-	OgrConnection ogr;
+	OgrConnection ogr;  /* connection object */
+	OgrFdwTable *table;
+	TupleDesc tupdesc;
 } OgrFdwState;
 
 typedef struct OgrFdwPlanState
 {
 	OgrFdwStateType type;
 	Oid foreigntableid; 
-	OgrConnection ogr;   /* connection object */
+	OgrConnection ogr; 
+	OgrFdwTable *table;
+	TupleDesc tupdesc;
 	int nrows;           /* estimate of number of rows in file */
 	Cost startup_cost; 
 	Cost total_cost;
@@ -144,7 +147,7 @@ typedef struct OgrFdwExecState
 {
 	OgrFdwStateType type;
 	Oid foreigntableid; 
-	OgrConnection ogr;     /* connection object */
+	OgrConnection ogr;   
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
 	char *sql;             /* OGR SQL for attribute filter */
@@ -163,7 +166,7 @@ typedef struct OgrFdwModifyState
 } OgrFdwModifyState;
 
 /* Shared function signatures */
-bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, List **param);
+bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, OgrFdwState *state, List **param);
 
 void ogrDeparseStringLiteral(StringInfo buf, const char *val);
 
