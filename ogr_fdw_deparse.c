@@ -196,7 +196,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 static bool
 ogrDeparseParam(Param *node, OgrDeparseCtx *context)
 {
-	elog(ERROR, "got into ogrDeparseParam code");
+	elog(DEBUG3, "got into ogrDeparseParam code");
 	return false;
 }
 
