@@ -47,6 +47,7 @@ struct OgrFdwOption
 #define OPT_COLUMN "column_name"
 #define OPT_CONFIG_OPTIONS "config_options"
 #define OPT_OPEN_OPTIONS "open_options"
+#define OPT_UPDATEABLE "updateable"
 
 #define OGR_FDW_FRMT_INT64	 "%lld"
 #define OGR_FDW_CAST_INT64(x)	 (long long)(x)
@@ -66,17 +67,18 @@ static struct OgrFdwOption valid_options[] = {
 	/* OGR datasource options */
 	{OPT_SOURCE, ForeignServerRelationId, true, false},
 	{OPT_DRIVER, ForeignServerRelationId, false, false},
+	{OPT_UPDATEABLE, ForeignServerRelationId, false, false},
 	{OPT_CONFIG_OPTIONS, ForeignServerRelationId, false, false},
 #if GDAL_VERSION_MAJOR >= 2
 	{OPT_OPEN_OPTIONS, ForeignServerRelationId, false, false},
 #endif
 	/* OGR layer options */
 	{OPT_LAYER, ForeignTableRelationId, true, false},
+	{OPT_UPDATEABLE, ForeignTableRelationId, false, false},
 
 	/* EOList marker */
 	{NULL, InvalidOid, false, false}
 };
-
 
 /*
  * SQL functions
@@ -409,7 +411,9 @@ ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 
 	/* Null all values */
 	memset(&ogr, 0, sizeof(OgrConnection));
-
+	ogr.ds_updateable = OGR_UPDATEABLE_UNSET;
+	ogr.lyr_updateable = OGR_UPDATEABLE_UNSET;
+	
 	server = GetForeignServer(foreignserverid);
 
 	foreach(cell, server->options)
@@ -423,11 +427,24 @@ ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 			ogr.config_options = defGetString(def);
 		if (streq(def->defname, OPT_OPEN_OPTIONS))
 			ogr.open_options = defGetString(def);
+		if (streq(def->defname, OPT_UPDATEABLE))
+		{
+			if ( defGetBoolean(def) )
+				ogr.ds_updateable = OGR_UPDATEABLE_TRUE;
+			else
+				ogr.ds_updateable = OGR_UPDATEABLE_FALSE;				
+		}
 	}
 
 	if ( ! ogr.ds_str )
 		elog(ERROR, "FDW table '%s' option is missing", OPT_SOURCE);
 
+	if ( updateable && ogr.ds_updateable == OGR_UPDATEABLE_FALSE )
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("updates are not allowed on foreign server '%s'", server->servername),
+			 errhint("ALTER FOREIGN SERVER %s OPTIONS (SET updatable 'true')", server->servername)));
+		
 	/*
 	 * TODO: Connections happen twice for each query, having a
 	 * connection pool will certainly make things faster.
@@ -466,10 +483,23 @@ ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
 		DefElem *def = (DefElem *) lfirst(cell);
 		if (streq(def->defname, OPT_LAYER))
 			ogr.lyr_str = defGetString(def);
+		if (streq(def->defname, OPT_UPDATEABLE))
+		{
+			if ( defGetBoolean(def) )
+				ogr.lyr_updateable = OGR_UPDATEABLE_TRUE;
+			else
+				ogr.lyr_updateable = OGR_UPDATEABLE_FALSE;				
+		}
 	}
 
 	if ( ! ogr.lyr_str )
 		elog(ERROR, "FDW table '%s' option is missing", OPT_LAYER);
+
+	if ( updateable && ogr.lyr_updateable == OGR_UPDATEABLE_FALSE )
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("updates are not allowed on foreign table '%s'", get_rel_name(table->relid)),
+			 errhint("ALTER FOREIGN TABLE %s OPTIONS (SET updatable 'true')", get_rel_name(table->relid))));
 
 	/* Does the layer exist in the data source? */
 	ogr.lyr = GDALDatasetGetLayerByName(ogr.ds, ogr.lyr_str);
@@ -503,6 +533,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	struct OgrFdwOption *opt;
 	const char *source = NULL, *driver = NULL;
 	const char *config_options = NULL, *open_options = NULL;
+	bool updateable = false;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
 	if ( GetDatabaseEncoding() != PG_UTF8 )
@@ -542,6 +573,8 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 					config_options = defGetString(def);
 				if ( streq(opt->optname, OPT_OPEN_OPTIONS) )
 					open_options = defGetString(def);
+				if ( streq(opt->optname, OPT_UPDATEABLE) )
+					updateable = defGetBoolean(def);
 
 				break;
 			}
@@ -589,7 +622,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if ( catalog == ForeignServerRelationId && source )
 	{
 		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver, false, config_options, open_options);
+		ogr_ds = ogrGetDataSource(source, driver, updateable, config_options, open_options);
 		if ( ogr_ds )
 		{
 			GDALClose(ogr_ds);
@@ -1847,6 +1880,8 @@ static void
 ogrEndForeignScan(ForeignScanState *node)
 {
 	OgrFdwExecState *execstate = (OgrFdwExecState *) node->fdw_state;
+
+	elog(DEBUG2, "processed %d rows from OGR", execstate->rownum);
 
 	ogrFinishConnection( &(execstate->ogr) );
 

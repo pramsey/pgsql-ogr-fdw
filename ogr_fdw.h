@@ -67,6 +67,12 @@ typedef enum
 	OGR_FIELD
 } OgrColumnVariant;
 
+typedef enum {
+	OGR_UPDATEABLE_FALSE,
+	OGR_UPDATEABLE_TRUE,
+	OGR_UPDATEABLE_UNSET
+} OgrUpdateable;
+
 typedef struct OgrFdwColumn
 {
 	/* PgSQL metadata */
@@ -108,7 +114,9 @@ typedef struct OgrConnection
 	char *lyr_str;        /* layer name */
 	char *config_options; /* GDAL config options */
 	char *open_options;   /* GDAL open options */
-	GDALDatasetH ds;
+	bool ds_updateable;
+	bool lyr_updateable;
+	GDALDatasetH ds;      /* GDAL datasource handle */
 	OGRLayerH lyr;        /* OGR layer handle */
 } OgrConnection;
 
