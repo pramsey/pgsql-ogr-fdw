@@ -67,7 +67,7 @@ Use the `ogr_fdw_info` tool to read an OGR data source and output a server and t
       height real,
       birthdate date )
       SERVER myserver
-      OPTIONS ( layer 'pt_two' );
+      OPTIONS (layer 'pt_two');
     
 Copy the `CREATE SERVER` and `CREATE FOREIGN SERVER` SQL commands into the database and you'll have your foreign table definition.
 
@@ -135,7 +135,7 @@ Since we can access any OGR data source as a table, how about a public WFS serve
       p_female real,
       samp_pop real )
       SERVER opengeo
-      OPTIONS ( layer 'topp:states' );
+      OPTIONS (layer 'topp:states');
 
 ### FGDB FDW
 
@@ -161,7 +161,7 @@ Unzip the `Querying.zip` file from the `data` directory to get a `Querying.gdb` 
       pop1990 integer,
       popcat integer )
       SERVER fgdbtest
-      OPTIONS ( layer 'Cities' );
+      OPTIONS (layer 'Cities');
 
 Query away!
 
@@ -200,7 +200,7 @@ Wraparound action! Handy for testing. Connect your database back to your databas
       calendar date,
       tstmp timestamp )
       SERVER wraparound
-      OPTIONS ( layer 'typetest' );
+      OPTIONS (layer 'typetest');
 
     SELECT * FROM typetest_fdw;
     
@@ -231,17 +231,17 @@ You can create an FDW table with any subset of columns from the OGR source you l
       name varchar 
       )
       SERVER wraparound
-      OPTIONS ( layer 'typetest' );
+      OPTIONS (layer 'typetest');
       
 You can also explicitly map remote column names to different local names using the `column_name` option:
 
     CREATE FOREIGN TABLE typetest_fdw_mapped (
       fid bigint,
-      supertime time OPTIONS ( column_name 'clock' ),
-      thebestnamething varchar OPTIONS ( column_name 'name' ) 
+      supertime time OPTIONS (column_name 'clock'),
+      thebestnamething varchar OPTIONS (column_name 'name') 
       )
       SERVER wraparound
-      OPTIONS ( layer 'typetest' );
+      OPTIONS (layer 'typetest');
       
 
 ### Automatic Foreign Table Creation
