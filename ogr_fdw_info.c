@@ -23,6 +23,18 @@ static OGRErr ogrListLayers(const char *source);
 static OGRErr ogrGenerateSQL(const char *source, const char *layer);
 
 #define STR_MAX_LEN 256 
+
+
+/* Define this no-op here, so that code */
+/* in the ogr_fdw_common module works */
+const char * quote_identifier(const char *ident);
+
+const char *
+quote_identifier(const char *ident)
+{
+	return ident;
+}
+
 	
 static void 
 formats()
@@ -166,16 +178,12 @@ ogrListLayers(const char *source)
 static OGRErr
 ogrGenerateSQL(const char *source, const char *layer)
 {	
+	OGRErr err;
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
 	OGRLayerH ogr_lyr = NULL;
-	OGRFeatureDefnH ogr_fd = NULL;
 	char server_name[STR_MAX_LEN];
-	char layer_name[STR_MAX_LEN];
-	int i;
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-	int geom_field_count;
-#endif
+	stringbuffer_t buf;
 
 	GDALAllRegister();
 	
@@ -194,7 +202,7 @@ ogrGenerateSQL(const char *source, const char *layer)
 	}
 
 	if ( ! ogr_dr )
-		GDALGetDatasetDriver(ogr_ds);
+		ogr_dr = GDALGetDatasetDriver(ogr_ds);
 
 	/* There should be a nicer way to do this */
 	strcpy(server_name, "myserver");
@@ -205,116 +213,32 @@ ogrGenerateSQL(const char *source, const char *layer)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not find layer '%s' in source '%s'", layer, source);
 		return OGRERR_FAILURE; 
 	}
-	strncpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
-	ogrStringLaunder(layer_name);
 
 	/* Output SERVER definition */
 	printf("\nCREATE SERVER %s\n" 
 		"  FOREIGN DATA WRAPPER ogr_fdw\n"
 		"  OPTIONS (\n"
 		"    datasource '%s',\n"
-		"    format '%s' );\n\n",
+		"    format '%s' );\n",
 		server_name, source, GDALGetDriverShortName(ogr_dr));
 
-	
-	ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
-	if ( ! ogr_fd )
-	{
-		CPLError(CE_Failure, CPLE_AppDefined, "Could not read layer definition for layer '%s' in source '%s'", layer, source);
-		return OGRERR_FAILURE;
-	}
-
-	/* Output TABLE definition */
-	printf("CREATE FOREIGN TABLE %s (\n", layer_name);
-	printf("  fid bigint");
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
-	geom_field_count = OGR_FD_GetGeomFieldCount(ogr_fd);
-	if( geom_field_count == 1 )
-	{
-		printf(",\n  geom geometry");
-	}
-	else
-	{
-		for ( i = 0; i < geom_field_count; i++ )
-		{
-			printf(",\n  geom%d geometry", i + 1);
-		}
-	}
-#else
-	if( OGR_L_GetGeomType(ogr_lyr) != wkbNone )
-		printf(",\n  geom geometry");
-#endif
-	
-	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
-	{
-		char field_name[STR_MAX_LEN];
-		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		OGRFieldType ogr_fld_type = OGR_Fld_GetType(ogr_fld);
-		const char *ogr_field_name = OGR_Fld_GetNameRef(ogr_fld);
-		strncpy(field_name, ogr_field_name, STR_MAX_LEN);
-		ogrStringLaunder(field_name);
-		printf(",\n  %s ", field_name);
-		switch( ogr_fld_type )
-		{
-			case OFTInteger:
-#if GDAL_VERSION_MAJOR >= 2 
-				if( OGR_Fld_GetSubType(ogr_fld) == OFSTBoolean )
-					printf("boolean");
-				else
-#endif
-				printf("integer");
-				break;
-			case OFTReal:
-				printf("real");
-				break;
-			case OFTString:
-				printf("varchar");
-				break;
-			case OFTBinary:
-				printf("bytea");
-				break;
-			case OFTDate:
-				printf("date");
-				break;			
-			case OFTTime:
-				printf("time");
-				break;
-			case OFTDateTime:
-				printf("timestamp");
-				break;
-			case OFTIntegerList:
-				printf("integer[]");
-				break;
-			case OFTRealList:
-				printf("real[]");
-				break;
-			case OFTStringList:
-				printf("varchar[]");
-				break;
-				
-#if GDAL_VERSION_MAJOR >= 2
-            case OFTInteger64:
-                printf("bigint");
-                break;
-#endif
-			default:
-				CPLError(CE_Failure, CPLE_AppDefined, 
-				         "Unsupported GDAL type '%s'", 
-				         OGR_GetFieldTypeName(ogr_fld_type));
-				return OGRERR_FAILURE;
-		}
-		
-		if ( strncasecmp(field_name, ogr_field_name, STR_MAX_LEN) != 0 )
-		{
-            printf(" OPTIONS (column_name '%s')", ogr_field_name);
-		}
-	}
-	printf(" )\n  SERVER %s\n", server_name);
-	printf("  OPTIONS ( layer '%s' );\n", OGR_L_GetName(ogr_lyr));
-	printf("\n");
+	stringbuffer_init(&buf);
+	err = ogrLayerToSQL(ogr_lyr, 
+			server_name, 
+			TRUE, /* launder table names */
+			TRUE, /* launder column names */
+			TRUE, /* use postgis geometry */
+			&buf);
 	
 	GDALClose(ogr_ds);
-		
+
+	if ( err != OGRERR_NONE )
+	{
+		return err;
+	}
+	
+	printf("\n%s\n", stringbuffer_getstring(&buf));
+	stringbuffer_release(&buf);
 	return OGRERR_NONE;
 }
 

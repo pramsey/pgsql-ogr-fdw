@@ -5,6 +5,19 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp1;
 NOTICE:  Number of tables to be created 1
+\d imp1.n2launder
+                    Foreign table "imp1.n2launder"
+  Column   |       Type        | Modifiers |        FDW Options        
+-----------+-------------------+-----------+---------------------------
+ fid       | bigint            |           | 
+ geom      | bytea             |           | 
+ n2ame     | character varying |           | (column_name '2ame')
+ age       | integer           |           | 
+ height    | real              |           | 
+ b_rthdate | date              |           | (column_name 'b-rthdate')
+Server: myserver
+FDW Options: (layer '2launder')
+
   
 SELECT * FROM imp1.n2launder WHERE fid = 0;
  fid |                     geom                     | n2ame | age | height | b_rthdate  
@@ -19,6 +32,16 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp2;
 NOTICE:  Number of tables to be created 1
+\d imp2."natural"
+             Foreign table "imp2.natural"
+ Column  |       Type        | Modifiers | FDW Options 
+---------+-------------------+-----------+-------------
+ fid     | bigint            |           | 
+ id      | real              |           | 
+ natural | character varying |           | 
+Server: myserver
+FDW Options: (layer 'natural')
+
 SELECT "natural" FROM imp2."natural";
  natural 
 ---------

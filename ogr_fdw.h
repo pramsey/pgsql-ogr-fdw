@@ -8,6 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
+#ifndef _OGR_FDW_H
+#define _OGR_FDW_H 1
 
 /*
  * PostgreSQL
@@ -56,10 +58,6 @@
 /* GDAL/OGR includes and compat */
 #include "ogr_fdw_gdal.h"
 #include "ogr_fdw_common.h"
-
-/* Utility macros for string equality */
-#define streq(s1,s2) (strcmp((s1),(s2)) == 0)
-#define strcaseeq(s1,s2) (strcasecmp((s1),(s2)) == 0)
 
 typedef enum 
 {
@@ -168,8 +166,8 @@ typedef struct OgrFdwModifyState
 /* Shared function signatures */
 bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, OgrFdwState *state, List **param);
 
-void ogrDeparseStringLiteral(StringInfo buf, const char *val);
 
 /* Shared global value of the Geometry OId */
 extern Oid GEOMETRYOID;
 
+#endif /* _OGR_FDW_H */
