@@ -192,7 +192,7 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
     CREATE FOREIGN TABLE typetest_fdw (
       fid integer,
-      geom geometry,
+      geom geometry(point, 4326),
       id integer,
       num real,
       name varchar,
@@ -210,9 +210,39 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
 If the OGR driver you are using supports it, you can insert/update/delete records from your FDW tables. 
 
-For file-backed drivers, the user under which `postgres` runs will need read/write access to the file being altered. For database-backed drivers, your connection need a user with read/write permissions to the database.
+For file-backed drivers, the user under which `postgres` runs will need read/write access to the file being altered. For database-backed drivers, your connection needs a user with read/write permissions to the database.
+
+By default, servers and tables are updateable if the OGR driver supports it, but you can turn off updateability at a server or table level using the `updateable` option:
+
+    ALTER FOREIGN SERVER myserver 
+      OPTIONS (ADD updatable 'false');
+
+    ALTER FOREIGN TABLE mytable 
+      OPTIONS (ADD updatable 'false');
 
 Writeable tables only work if you have included a `fid` column in your table definition. By default, tables imported by `IMPORT FOREIGN SCHEMA` or using the example SQL code from `ogr_fdw_info` include a `fid` column.
+
+### Column Name Mapping
+
+You can create an FDW table with any subset of columns from the OGR source you like, just by using the same column names as the source:
+
+    CREATE FOREIGN TABLE typetest_fdw_partial (
+      clock time,
+      name varchar 
+      )
+      SERVER wraparound
+      OPTIONS ( layer 'typetest' );
+      
+You can also explicitly map remote column names to different local names using the `column_name` option:
+
+    CREATE FOREIGN TABLE typetest_fdw_mapped (
+      fid bigint,
+      supertime time OPTIONS ( column_name 'clock' ),
+      thebestnamething varchar OPTIONS ( column_name 'name' ) 
+      )
+      SERVER wraparound
+      OPTIONS ( layer 'typetest' );
+      
 
 ### Automatic Foreign Table Creation
 
