@@ -214,7 +214,7 @@ For file-backed drivers, the user under which `postgres` runs will need read/wri
 
 By default, servers and tables are updateable if the OGR driver supports it, but you can turn off updateability at a server or table level using the `updateable` option:
 
-    ALTER FOREIGN SERVER myserver 
+    ALTER SERVER myserver 
       OPTIONS (ADD updatable 'false');
 
     ALTER FOREIGN TABLE mytable 
