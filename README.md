@@ -322,7 +322,7 @@ To preserve casing and other funky characters in both column names and table nam
 
 ###  GDAL Options
 
-The behavior of your GDAL/OGR connection can be altered by passing GDAL `config_options` to the connection when you set up the server. Must GDAL/OGR drivers have some specific behaviours that are controlled by configuration options. For example, the "[ESRI Shapefile](http://www.gdal.org/drv_shapefile.html)" driver includes a `SHAPE_ENCODING` option that controls the character encoding applied to text data.
+The behavior of your GDAL/OGR connection can be altered by passing GDAL `config_options` to the connection when you set up the server. Most GDAL/OGR drivers have some specific behaviours that are controlled by configuration options. For example, the "[ESRI Shapefile](http://www.gdal.org/drv_shapefile.html)" driver includes a `SHAPE_ENCODING` option that controls the character encoding applied to text data.
 
 Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases are encoded in UTF-8, it is useful to specify the encoding to get proper handling of special characters like accents.
 
@@ -333,7 +333,7 @@ Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases ar
         format 'ESRI Shapefile',
         config_options 'SHAPE_ENCODING=LATIN1' );
 
-If you are using GDAL 2.0 or higher, you can also pass "open options" to your OGR foreign data wrapper, using the `open_options` parameter. In GDAL 2.0, the global "SHAPE_ENCODING" option has be superceded by a driver-specific "ENCODING" option, which can be called like this:
+If you are using GDAL 2.0 or higher, you can also pass "open options" to your OGR foreign data wrapper, using the `open_options` parameter. In GDAL 2.0, the global `SHAPE_ENCODING` option has been superceded by a driver-specific `ENCODING` option, which can be called like this:
 
     CREATE SERVER myserver_latin1
       FOREIGN DATA WRAPPER ogr_fdw
