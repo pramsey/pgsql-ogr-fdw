@@ -6,7 +6,7 @@
  * Copyright (c) 2014-2015, Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * Convert parse tree to a QueryExpression as described at 
- * http://ogdi.sourceforge.net/prop/6.2.CapabilitiesMetadata.html
+ * http://gdal.org/ogr_sql.html
  *-------------------------------------------------------------------------
  */
 
