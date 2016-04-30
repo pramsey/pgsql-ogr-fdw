@@ -5,7 +5,7 @@ CREATE SERVER pgserver
     format 'PostgreSQL' );
 	
 CREATE TABLE bytea_local (
-  fid integer primary key,
+  fid serial primary key,
   name varchar,
   geom bytea,
   age bigint,
