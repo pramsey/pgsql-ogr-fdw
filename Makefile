@@ -7,7 +7,7 @@ DATA = ogr_fdw--1.0.sql
 
 REGRESS = ogr_fdw
 
-EXTRA_CLEAN = sql/ogr_fdw.sql expected/ogr_fdw.out
+EXTRA_CLEAN = sql/*.sql expected/*.out
 
 GDAL_CONFIG = gdal-config
 GDAL_CFLAGS = $(shell $(GDAL_CONFIG) --cflags)
