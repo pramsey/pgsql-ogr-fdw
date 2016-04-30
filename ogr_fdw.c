@@ -1207,7 +1207,11 @@ ogrLookupGeometryFunctionOid(const char *proname)
 		return InvalidOid;
 	
 	names = stringToQualifiedNameList(proname);
+#if PG_VERSION_NUM < 90400
+	clist = FuncnameGetCandidates(names, -1, NIL, false, false);
+#else
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
+#endif
 	if ( streq(proname, "st_setsrid") )
 	{
 		do
