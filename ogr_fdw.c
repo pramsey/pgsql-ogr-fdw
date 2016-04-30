@@ -1641,7 +1641,32 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 
 		/* Skip the FID, we have to treat it as immutable anyways */
 		if ( ogrvariant == OGR_FID )
-			continue;
+		{
+			if ( nulls[i] )
+			{
+				OGR_F_SetFID(feat, OGRNullFID);
+			}
+			else
+			{
+				if ( pgtype == INT4OID )
+				{
+					int32 val = DatumGetInt32(values[i]);
+					OGR_F_SetFID(feat, val);
+					break;
+				}
+				else if ( pgtype == INT8OID )
+				{
+					int64 val = DatumGetInt64(values[i]);
+					OGR_F_SetFID(feat, val);
+					break;
+				}
+				else
+				{
+					elog(ERROR, "unable to handle non-integer fid");
+				}
+			}
+			continue;				
+		}
 		
 		/* TODO: For updates, we should only set the fields that are */
 		/*       in the target list, and flag the others as unchanged */
@@ -2184,7 +2209,10 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
 	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(modstate->ogr.lyr);
 	OGRFeatureH feat = OGR_F_Create(ogr_fd);
+	TupleDesc td = slot->tts_tupleDescriptor;
+	int fid_column;
 	OGRErr err;
+	GIntBig fid;
 
 	elog(DEBUG2, "ogrExecForeignInsert");
 	
@@ -2195,12 +2223,22 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	err = ogrSlotToFeature(slot, feat, modstate->table);
 	if ( err != OGRERR_NONE )
 		ogrEreportError("failure populating OGR feature");
-			
+				
 	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
 	if ( err != OGRERR_NONE )
 		ogrEreportError("failure writing OGR feature");
-	
+
+	fid = OGR_F_GetFID(feat);	
 	OGR_F_Destroy(feat);
+
+	/* Update the FID for RETURNING slot */
+	fid_column = ogrGetFidColumn(td);
+	if ( fid_column >= 0 )
+	{
+		slot->tts_values[fid_column] = Int64GetDatum(fid);
+		slot->tts_isnull[fid_column] = false;
+		slot->tts_nvalid++;
+	}
 	
 	return slot;
 }
