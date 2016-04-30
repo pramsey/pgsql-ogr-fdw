@@ -59,6 +59,7 @@ SELECT * FROM column_name_test ORDER BY fid;
 -- OGR SQL filters
 SET client_min_messages = debug1;
 SELECT name FROM column_name_test WHERE name = 'Paul';
+SET client_min_messages = notice;
 
 ------------------------------------------------
 -- GDAL options passing tests
@@ -75,8 +76,10 @@ CREATE FOREIGN TABLE e_1 (
   name varchar )
   SERVER myserver_latin1
   OPTIONS ( layer 'enc' );
-  
+
+SET client_min_messages = debug1;  
 SELECT * FROM e_1 WHERE fid = 1;
+SET client_min_messages = notice;  
 
 ------------------------------------------------
 -- Geometryless test

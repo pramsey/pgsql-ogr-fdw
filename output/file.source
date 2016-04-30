@@ -73,6 +73,7 @@ DEBUG:  OGR SQL: ("2ame" = 'Paul')
  Paul
 (1 row)
 
+SET client_min_messages = notice;
 ------------------------------------------------
 -- GDAL options passing tests
 CREATE SERVER myserver_latin1
@@ -81,13 +82,12 @@ CREATE SERVER myserver_latin1
     datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile',
     config_options 'SHAPE_ENCODING=LATIN1' );
-DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
 CREATE FOREIGN TABLE e_1 (
   fid integer,
   name varchar )
   SERVER myserver_latin1
   OPTIONS ( layer 'enc' );
-  
+SET client_min_messages = debug1;  
 SELECT * FROM e_1 WHERE fid = 1;
 DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
 DEBUG:  OGR SQL: (fid = 1)
@@ -97,6 +97,7 @@ DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
    1 | Pàul
 (1 row)
 
+SET client_min_messages = notice;  
 ------------------------------------------------
 -- Geometryless test
 CREATE SERVER csvserver
@@ -115,7 +116,6 @@ SELECT c.*
   FROM generate_series(1,4) g 
   JOIN no_geom c 
   ON (c.fid = g.g);
-DEBUG:  OGR SQL: 
  fid |  name   | age | value 
 -----+---------+-----+-------
    1 | Peter   | 34  | 10.2
