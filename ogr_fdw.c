@@ -980,7 +980,33 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 			));
 }
 
+#ifdef OGR_FDW_HEXWKB
 
+static char *hexchr = "0123456789ABCDEF";
+
+static char * 
+ogrBytesToHex(unsigned char *bytes, size_t size)
+{
+	char *hex;
+	int i;
+	if ( ! bytes || ! size )
+	{
+		elog(ERROR, "hexbytes_from_bytes: invalid input");
+		return NULL;
+	}
+	hex = palloc(size * 2 + 1);
+	hex[2*size] = '\0';
+	for( i = 0; i < size; i++ )
+	{
+		/* Top four bits to 0-F */
+		hex[2*i] = hexchr[bytes[i] >> 4];
+		/* Bottom four bits to 0-F */
+		hex[2*i+1] = hexchr[bytes[i] & 0x0F];
+	}
+	return hex;
+}
+
+#endif
 
 static void
 freeOgrFdwTable(OgrFdwTable *table)
@@ -1400,6 +1426,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			int wkbsize;
 			int varsize;
 			bytea *varlena;
+			unsigned char *wkb;
 			OGRErr err;
 
 #if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
@@ -1423,7 +1450,8 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			wkbsize = OGR_G_WkbSize(geom);
 			varsize = wkbsize + VARHDRSZ;
 			varlena = palloc(varsize);
-			err = OGR_G_ExportToWkb(geom, wkbNDR, (unsigned char *)VARDATA(varlena));
+			wkb = (unsigned char *)VARDATA(varlena);
+			err = OGR_G_ExportToWkb(geom, wkbNDR, wkb);
 			SET_VARSIZE(varlena, varsize);
 
 			/* Couldn't create WKB from OGR geometry? error */
@@ -1445,17 +1473,31 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 				/*
 				 * For geometry we need to convert the varlena WKB data into a serialized
 				 * geometry (aka "gserialized"). For that, we can use the type's "recv" function
-				 * which takes in WKB and spits out serialized form.
+				 * which takes in WKB and spits out serialized form, or the "input" function
+				 * that takes in HEXWKB. The "input" function is more lax about geometry
+				 * structure errors (unclosed polys, etc).
 				 */
-				StringInfoData strinfo;
-
+#ifdef OGR_FDW_HEXWKB
+				char *hexwkb = ogrBytesToHex(wkb, wkbsize);
+				/*
+				 * Use the input function to convert the WKB from OGR into
+				 * a PostGIS internal format.
+				 */
+				nulls[i] = false;
+				values[i] = OidFunctionCall1(col.pginputfunc, PointerGetDatum(hexwkb));
+				pfree(hexwkb);
+#else
 				/*
 				 * The "recv" function expects to receive a StringInfo pointer
 				 * on the first argument, so we form one of those ourselves by
 				 * hand. Rather than copy into a fresh buffer, we'll just use the
 				 * existing varlena buffer and point to the data area.
+				 *
+				 * The "recv" function tests for basic geometry validity,
+				 * things like polygon closure, etc. So don't feed it junk.
 				 */
-				strinfo.data = (char *)VARDATA(varlena);
+				StringInfoData strinfo;
+				strinfo.data = (char *)wkb;
 				strinfo.len = wkbsize;
 				strinfo.maxlen = strinfo.len;
 				strinfo.cursor = 0;
@@ -1466,6 +1508,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 				 */
 				nulls[i] = false;
 				values[i] = OidFunctionCall1(col.pgrecvfunc, PointerGetDatum(&strinfo));
+#endif
 				
 				/* 
 				 * Apply the typmod restriction to the incoming geometry, so it's
@@ -1479,13 +1522,14 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 				{
 					Datum srid = OidFunctionCall1(execstate->typmodsridfunc, Int32GetDatum(col.pgtypmod));
 					values[i] = OidFunctionCall2(execstate->setsridfunc, values[i], srid);
-				}
+				}			
 			}
 			else
 			{
 				elog(NOTICE, "conversion to geometry called with column type not equal to bytea or geometry");
 				ogrNullSlot(values, nulls, i);
 			}
+			
 		}
 		else if ( ogrvariant == OGR_FIELD )
 		{
