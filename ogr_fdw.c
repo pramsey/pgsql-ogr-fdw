@@ -2491,7 +2491,12 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			         launder_column_names,
 			         GEOMETRYOID != BYTEAOID, 
 			         &buf
-			      );		
+			      );
+					 
+			if (err != OGRERR_NONE)
+			{
+				elog(ERROR, "unable to generate IMPORT SQL for '%s'", table_name);
+			}
 
 			commands = lappend(commands, pstrdup(stringbuffer_getstring(&buf)));
 			stringbuffer_release(&buf);
