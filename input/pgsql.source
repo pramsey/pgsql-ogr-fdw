@@ -53,7 +53,8 @@ EXPLAIN VERBOSE
 ----------------------------------------------------------------------
 
 INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, yes) 
-VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) RETURNING fid;
+VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) 
+RETURNING fid, name, geom, age, value, num, dt, tm, dttm, yes;
 
 SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
   FROM bytea_fdw
@@ -63,12 +64,20 @@ UPDATE bytea_fdw
   SET name = 'Maggie', num = 45.34 
   WHERE age = 12;
 
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+SELECT fid, name, num
+  FROM bytea_fdw
+  WHERE fid = 3;
+
+UPDATE bytea_fdw 
+  SET dt = '2089-12-13', tm = '01:23:45'
+  WHERE num = 45.34;
+
+SELECT fid, dt, tm
   FROM bytea_fdw
   WHERE fid = 3;
 
 DELETE FROM bytea_fdw 
-  WHERE num = 45.34;
+  WHERE fid = 3;
   
 SELECT a.fid, a.name, b.name 
   FROM bytea_local a 

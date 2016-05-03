@@ -62,33 +62,45 @@ EXPLAIN VERBOSE
 
 ----------------------------------------------------------------------
 INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, yes) 
-VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) RETURNING fid;
- fid 
------
-   3
+VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) 
+RETURNING fid, name, geom, age, value, num, dt, tm, dttm, yes;
+ fid |   name   |    geom    | age | value |  num  |     dt     |    tm    |           dttm           | yes 
+-----+----------+------------+-----+-------+-------+------------+----------+--------------------------+-----
+   3 | Margaret | \x32323232 |  12 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | t
 (1 row)
 
 SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
   FROM bytea_fdw
   WHERE fid = 3;
- fid |   name   |    geom    | age | value |  num  | dt |    tm    | dttm | yes 
------+----------+------------+-----+-------+-------+----+----------+------+-----
-   3 | Margaret | \x32323232 |  12 |   1.4 | 19.13 |    | 09:12:34 |      | t
+ fid |   name   |    geom    | age | value |  num  |     dt     |    tm    |           dttm           | yes 
+-----+----------+------------+-----+-------+-------+------------+----------+--------------------------+-----
+   3 | Margaret | \x32323232 |  12 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | t
 (1 row)
 
 UPDATE bytea_fdw 
   SET name = 'Maggie', num = 45.34 
   WHERE age = 12;
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+SELECT fid, name, num
   FROM bytea_fdw
   WHERE fid = 3;
- fid |  name  |    geom    | age | value |  num  | dt |    tm    | dttm | yes 
------+--------+------------+-----+-------+-------+----+----------+------+-----
-   3 | Maggie | \x32323232 |  12 |   1.4 | 45.34 |    | 09:12:34 |      | t
+ fid |  name  |  num  
+-----+--------+-------
+   3 | Maggie | 45.34
+(1 row)
+
+UPDATE bytea_fdw 
+  SET dt = '2089-12-13', tm = '01:23:45'
+  WHERE num = 45.34;
+SELECT fid, dt, tm
+  FROM bytea_fdw
+  WHERE fid = 3;
+ fid |     dt     |    tm    
+-----+------------+----------
+   3 | 12-13-2089 | 01:23:45
 (1 row)
 
 DELETE FROM bytea_fdw 
-  WHERE num = 45.34;
+  WHERE fid = 3;
   
 SELECT a.fid, a.name, b.name 
   FROM bytea_local a 

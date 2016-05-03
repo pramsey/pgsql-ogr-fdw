@@ -1652,6 +1652,13 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 	return OGRERR_NONE;
 }
 
+static void ogrStaticText(char *text, const char *str)
+{
+	size_t len = strlen(str);
+	memcpy(VARDATA(text), str, len);
+	SET_VARSIZE(text, len + VARHDRSZ);
+	return;
+}
 
 static OGRErr
 ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable *tbl)
@@ -1660,6 +1667,23 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 	Datum *values = slot->tts_values;
 	bool *nulls = slot->tts_isnull;
 	TupleDesc tupdesc = slot->tts_tupleDescriptor;
+
+	int year, month, day, hour, minute, second;
+	
+	/* Prepare date-time part tokens for use later */
+	char txtyear[STR_MAX_LEN];
+	char txtmonth[STR_MAX_LEN];
+	char txtday[STR_MAX_LEN];
+	char txthour[STR_MAX_LEN];
+	char txtminute[STR_MAX_LEN];
+	char txtsecond[STR_MAX_LEN];
+
+	ogrStaticText(txtyear, "year");
+	ogrStaticText(txtmonth, "month");
+	ogrStaticText(txtday, "day");
+	ogrStaticText(txthour, "hour");
+	ogrStaticText(txtminute, "minute");
+	ogrStaticText(txtsecond, "second");
 
 	/* Check our assumption that slot and setup data match */
 	if ( tbl->ncols != tupdesc->natts )
@@ -1844,17 +1868,54 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				}
 
 				case DATEOID:
-				case TIMEOID:
-				case TIMETZOID:
-				case TIMESTAMPOID:
-				case TIMESTAMPTZOID:				
 				{
-					/* TODO: Use explicit OGR_F_SetFieldDateTime functions for this */
-					char *dstr = DatumGetCString(OidFunctionCall1(pgoutputfunc, values[i]));
-					/* Cross fingers and hope OGR date parser will/can handle it */
-					OGR_F_SetFieldString(feat, ogrfldnum, dstr);
+					/* Convert date to timestamp */
+					Datum d = DirectFunctionCall1(date_timestamp, values[i]);
+					
+					/* Read out the parts */
+					year = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtyear), d)));
+					month = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtmonth), d)));
+					day = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtday), d)));
+					OGR_F_SetFieldDateTime(feat, ogrfldnum, year, month, day, 0, 0, 0, 0);
 					break;
 				}
+				
+				/* TODO: handle time zones explicitly */
+				case TIMEOID:
+				case TIMETZOID:
+				{
+					/* Read the parts of the time */
+					hour = lround(DatumGetFloat8(DirectFunctionCall2(time_part, PointerGetDatum(txthour), values[i])));
+					minute = lround(DatumGetFloat8(DirectFunctionCall2(time_part, PointerGetDatum(txtminute), values[i])));
+					second = lround(DatumGetFloat8(DirectFunctionCall2(time_part, PointerGetDatum(txtsecond), values[i])));
+					OGR_F_SetFieldDateTime(feat, ogrfldnum, 0, 0, 0, hour, minute, second, 0);
+					break;
+				}
+
+
+				case TIMESTAMPOID:
+				case TIMESTAMPTZOID:
+				{
+					Datum d = values[i];
+					year = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtyear), d)));
+					month = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtmonth), d)));
+					day = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtday), d)));
+					hour = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txthour), d)));
+					minute = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtminute), d)));
+					second = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtsecond), d)));
+					OGR_F_SetFieldDateTime(feat, ogrfldnum, year, month, day, hour, minute, second, 0);
+					break;
+					
+					
+					/* TODO: Use explicit OGR_F_SetFieldDateTime functions for this */
+					// char *dstr = DatumGetCString(OidFunctionCall1(pgoutputfunc, values[i]));
+					/* Cross fingers and hope OGR date parser will/can handle it */
+					// OGR_F_SetFieldString(feat, ogrfldnum, dstr);
+					// elog(NOTICE, "dstr: %s", dstr);
+					// elog(NOTICE, "ogr: %s", OGR_F_GetFieldAsString(feat, ogrfldnum));
+					// break;
+				}
+
 				/* TODO: array types for string, integer, float */
 				default:
 				{
