@@ -6,32 +6,72 @@ CREATE SERVER pgserver
 	
 CREATE TABLE bytea_local (
   fid serial primary key,
-  name varchar,
   geom bytea,
+  name varchar,
   age bigint,
-  bin bytea,
-  happened time
+  value float8,
+  num numeric(6,2),
+  dt date,
+  tm time,
+  dttm timestamp,
+  yes boolean
 );
 
-INSERT INTO bytea_local (name, geom, age, bin, happened) 
-  VALUES ('Jim', '14232'::bytea, 1112, '99999'::bytea, '13:23:21'::time);
-INSERT INTO bytea_local (name, geom, age, bin, happened) 
-    VALUES ('James', '55555'::bytea, 2222, '88888'::bytea, '15:55:55'::time);
-  
+----------------------------------------------------------------------
+
+INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, yes) 
+  VALUES ('Jim', '14232'::bytea, 23, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, true );
+INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, yes) 
+  VALUES ('Marvin', '55555'::bytea, 34, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, false );
+
+----------------------------------------------------------------------
+
 CREATE FOREIGN TABLE bytea_fdw (
   fid integer,
-  name text,
   geom bytea,
+  name varchar,
   age bigint,
-  bin bytea,
-  happened time
+  value float8,
+  num numeric(6,2),
+  dt date,
+  tm time,
+  dttm timestamp,
+  yes boolean
 ) SERVER pgserver OPTIONS (layer 'bytea_local');
 
-SELECT * FROM bytea_fdw;
+SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes FROM bytea_fdw;
 
 SELECT a.name, b.name 
   FROM bytea_local a 
   JOIN bytea_fdw b 
   USING (fid);
 
-EXPLAIN VERBOSE SELECT * FROM bytea_fdw;
+EXPLAIN VERBOSE 
+  SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+  FROM bytea_fdw;
+
+----------------------------------------------------------------------
+
+INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, yes) 
+VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) RETURNING fid;
+
+SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+  FROM bytea_fdw
+  WHERE fid = 3;
+
+UPDATE bytea_fdw 
+  SET name = 'Maggie', num = 45.34 
+  WHERE age = 12;
+
+SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+  FROM bytea_fdw
+  WHERE fid = 3;
+
+DELETE FROM bytea_fdw 
+  WHERE num = 45.34;
+  
+SELECT a.fid, a.name, b.name 
+  FROM bytea_local a 
+  JOIN bytea_fdw b 
+  USING (fid);
+  
