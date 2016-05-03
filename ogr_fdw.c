@@ -1905,15 +1905,6 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 					second = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtsecond), d)));
 					OGR_F_SetFieldDateTime(feat, ogrfldnum, year, month, day, hour, minute, second, 0);
 					break;
-					
-					
-					/* TODO: Use explicit OGR_F_SetFieldDateTime functions for this */
-					// char *dstr = DatumGetCString(OidFunctionCall1(pgoutputfunc, values[i]));
-					/* Cross fingers and hope OGR date parser will/can handle it */
-					// OGR_F_SetFieldString(feat, ogrfldnum, dstr);
-					// elog(NOTICE, "dstr: %s", dstr);
-					// elog(NOTICE, "ogr: %s", OGR_F_GetFieldAsString(feat, ogrfldnum));
-					// break;
 				}
 
 				/* TODO: array types for string, integer, float */
