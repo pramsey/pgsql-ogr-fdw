@@ -1696,13 +1696,11 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				{
 					int32 val = DatumGetInt32(values[i]);
 					OGR_F_SetFID(feat, val);
-					break;
 				}
 				else if ( pgtype == INT8OID )
 				{
 					int64 val = DatumGetInt64(values[i]);
 					OGR_F_SetFID(feat, val);
-					break;
 				}
 				else
 				{
