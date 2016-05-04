@@ -61,7 +61,7 @@ Use the `ogr_fdw_info` tool to read an OGR data source and output a server and t
 
     CREATE FOREIGN TABLE pt_two (
       fid integer,
-      geom geometry,
+      geom geometry(Point, 4326),
       name varchar,
       age integer,
       height real,
@@ -149,7 +149,7 @@ Unzip the `Querying.zip` file from the `data` directory to get a `Querying.gdb` 
 
     CREATE FOREIGN TABLE cities (
       fid integer,
-      geom geometry,
+      geom geometry(Point, 4326),
       city_fips varchar,
       city_name varchar,
       state_fips varchar,
@@ -170,8 +170,8 @@ Query away!
 Wraparound action! Handy for testing. Connect your database back to your database and watch the fur fly.
 
     CREATE TABLE typetest ( 
-      id integer, 
-      geom geometry(point, 4326),
+      fid serial primary key,
+      geom geometry(Point, 4326),
       num real, 
       name varchar, 
       clock time, 
@@ -192,8 +192,7 @@ Wraparound action! Handy for testing. Connect your database back to your databas
 
     CREATE FOREIGN TABLE typetest_fdw (
       fid integer,
-      geom geometry(point, 4326),
-      id integer,
+      geom geometry(Point, 4326),
       num real,
       name varchar,
       clock time,
