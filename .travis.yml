@@ -28,9 +28,10 @@ before_script:
   - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.5/main/pg_hba.conf'
   - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.5/main/pg_hba.conf'
   - sudo /etc/init.d/postgresql stop
-  - sudo apt-get install valgrind
+  - sudo /etc/init.d/postgresql start
+#  - sudo apt-get install valgrind
 # Run the Postgres instance under Valgrind and collect Valgrind log
-  - sudo -u postgres valgrind --trace-children=yes --leak-check=full /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
+#  - sudo -u postgres valgrind --trace-children=yes --leak-check=full /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
   - psql --version
   - if test "$GDAL_VERSION" = "1"; then sudo apt-get install libgdal-dev; fi
   - if test "$GDAL_VERSION" = "2"; then wget http://download.osgeo.org/gdal/2.0.2/gdal-2.0.2.tar.xz; tar xJf gdal-2.0.2.tar.xz; cd gdal-2.0.2; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
@@ -40,6 +41,6 @@ script:
   - sudo make install
   - PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
 # Small delay so that things get flushed
-  - sleep 5
+#  - sleep 5
 # Check that ogr_fdw doesn't appear in Valgrind log
-  - if sudo -u postgres grep ogr_fdw /tmp/postgres.log > /dev/null; then sudo -u postgres cat /tmp/postgres.log && /bin/false; fi
+#  - if sudo -u postgres grep ogr_fdw /tmp/postgres.log > /dev/null; then sudo -u postgres cat /tmp/postgres.log && /bin/false; fi
