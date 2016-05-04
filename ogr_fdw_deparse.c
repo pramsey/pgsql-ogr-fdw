@@ -293,9 +293,12 @@ ogrOperatorIsSupported(const char *opname)
 {
 	/* IMPORTANT */
 	/* This array MUST be in sorted order or the bsearch will fail */
-	static const char * ogrOperators[8] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=" };
+	const int num_ops = 10;
+	static const char * ogrOperators[num_ops] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=", "~~", "~~*" };
 
-	if ( bsearch(&opname, ogrOperators, 8, sizeof(char*), ogrOperatorCmpFunc) )
+	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
+	
+	if ( bsearch(&opname, ogrOperators, num_ops, sizeof(char*), ogrOperatorCmpFunc) )
 		return true;
 	else
 		return false;
@@ -341,7 +344,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 
 		elog(DEBUG1, "whoa, dude, found a && operator");
 
-		/* Specifically, we need a Const on one side and a Var */
+		/* Specifically, we need a Geometry Const on one side and a Var */
 		/* column on the other side that is from the FDW relation */
 		/* Both of those implies and OGR spatial filter can be reasonably */
 		/* set. */
@@ -377,6 +380,13 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 		appendStringInfoChar(buf, ' ');
 	}
 
+	/* Special case, the 'LIKE' operator is converted to ~~ */
+	/* by PgSQL, so we have to convert it back here */
+	/* All OGR string comparisons are case insensitive, so we just */
+	/* use 'ILIKE' all the time. */
+	if ( streq(opname, "~~") || streq(opname, "~~*") )
+		opname = "ILIKE";
+	
 	/* Operator symbol */
 	appendStringInfoString(buf, opname);
 	
@@ -469,6 +479,20 @@ ogrDeparseRelabelType(RelabelType *node, OgrDeparseCtx *context)
 	return ogrDeparseExpr(node->arg, context);
 }
 
+static bool
+ogrDeparseNullTest(NullTest *node, OgrDeparseCtx *context)
+{
+	StringInfo buf = context->buf;
+
+    appendStringInfoChar(buf, '(');
+    ogrDeparseExpr(node->arg, context);
+    if (node->nulltesttype == IS_NULL)
+        appendStringInfoString(buf, " IS NULL)");
+    else
+        appendStringInfoString(buf, " IS NOT NULL)");
+
+	return true;
+}
 
 static bool
 ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
@@ -490,12 +514,12 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 			/* Handle "OR" and "NOT" queries */
 			return ogrDeparseBoolExpr((BoolExpr *) node, context);
 		case T_NullTest:
-			/* We cannot handle "IS NULL" queries in OGR */
-			return false;
+			/* Handle "IS NULL" queries */
+			return ogrDeparseNullTest((NullTest *) node, context);
 		case T_RelabelType:
 			return ogrDeparseRelabelType((RelabelType *) node, context);
-			return false;
 		case T_ScalarArrayOpExpr:
+			/* TODO: Handle this to support the "IN" operator */
 			elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
 			return false;
 		case T_ArrayRef:
