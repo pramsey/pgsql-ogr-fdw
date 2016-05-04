@@ -293,12 +293,11 @@ ogrOperatorIsSupported(const char *opname)
 {
 	/* IMPORTANT */
 	/* This array MUST be in sorted order or the bsearch will fail */
-	const int num_ops = 10;
-	static const char * ogrOperators[num_ops] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=", "~~", "~~*" };
+	static const char * ogrOperators[10] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=", "~~", "~~*" };
 
 	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
 	
-	if ( bsearch(&opname, ogrOperators, num_ops, sizeof(char*), ogrOperatorCmpFunc) )
+	if ( bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc) )
 		return true;
 	else
 		return false;
