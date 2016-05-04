@@ -874,6 +874,9 @@ pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char *colname, const
 #if GDAL_VERSION_MAJOR >= 2
 		if ( ogr_type == OFTInteger64 ) 
 			return;
+#else
+		if ( ogr_type == OFTInteger )
+			return;
 #endif
 	} 
 	else if ( pg_type == NUMERICOID && ogr_type == OFTReal )
