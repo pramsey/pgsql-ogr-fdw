@@ -14,15 +14,16 @@ CREATE TABLE bytea_local (
   dt date,
   tm time,
   dttm timestamp,
-  yes boolean
+  varch char(8),
+  yn char
 );
 
 ----------------------------------------------------------------------
 
-INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, yes) 
-  VALUES ('Jim', '14232'::bytea, 23, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, true );
-INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, yes) 
-  VALUES ('Marvin', '55555'::bytea, 34, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, false );
+INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
+  VALUES ('Jim', '14232'::bytea, 23, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
+INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
+  VALUES ('Marvin', '55555'::bytea, 34, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, 'that', 'n' );
 
 ----------------------------------------------------------------------
 
@@ -36,10 +37,11 @@ CREATE FOREIGN TABLE bytea_fdw (
   dt date,
   tm time,
   dttm timestamp,
-  yes boolean
+  varch char(8),
+  yn char
 ) SERVER pgserver OPTIONS (layer 'bytea_local');
 
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes FROM bytea_fdw;
+SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn FROM bytea_fdw;
 
 SELECT a.name, b.name 
   FROM bytea_local a 
@@ -47,24 +49,24 @@ SELECT a.name, b.name
   USING (fid);
 
 EXPLAIN VERBOSE 
-  SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+  SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn 
   FROM bytea_fdw;
 
 ----------------------------------------------------------------------
 
-INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, yes) 
-VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, true ) 
-RETURNING fid, name, geom, age, value, num, dt, tm, dttm, yes;
+INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
+VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' ) 
+RETURNING fid, name, geom, age, value, num, dt, tm, dttm, varch, yn;
 
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, yes 
+SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn 
   FROM bytea_fdw
   WHERE fid = 3;
 
 UPDATE bytea_fdw 
-  SET name = 'Maggie', num = 45.34 
+  SET name = 'Maggie', num = 45.34, yn = 'n'
   WHERE age = 12;
 
-SELECT fid, name, num
+SELECT fid, name, num, yn
   FROM bytea_fdw
   WHERE fid = 3;
 

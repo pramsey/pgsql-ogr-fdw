@@ -891,6 +891,8 @@ pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char *colname, const
 		return;
 	else if ( pg_type == CHAROID && ogr_type == OFTString )
 		return;
+	else if ( pg_type == BPCHAROID && ogr_type == OFTString )
+		return;
 	else if ( pg_type == NAMEOID && ogr_type == OFTString )
 		return;
 	else if ( pg_type == BYTEAOID && ogr_type == OFTBinary )
@@ -933,7 +935,7 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const
 			break;
 
 		case OFTString:
-			if ( pg_type == TEXTOID || pg_type == VARCHAROID )
+			if ( pg_type == TEXTOID || pg_type == VARCHAROID || pg_type == CHAROID || pg_type == BPCHAROID )
 				return;
 			break;
 
