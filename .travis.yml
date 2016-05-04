@@ -28,8 +28,9 @@ before_script:
   - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.5/main/pg_hba.conf'
   - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.5/main/pg_hba.conf'
   - sudo /etc/init.d/postgresql stop
-  - sudo /etc/init.d/postgresql start
+#  - sudo /etc/init.d/postgresql start
 #  - sudo apt-get install valgrind
+  - sudo -u postgres /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
 # Run the Postgres instance under Valgrind and collect Valgrind log
 #  - sudo -u postgres valgrind --trace-children=yes --leak-check=full /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
   - psql --version
