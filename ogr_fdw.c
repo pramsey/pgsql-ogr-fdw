@@ -1665,6 +1665,38 @@ static void ogrStaticText(char *text, const char *str)
 	return;
 }
 
+/*
+ * EWKB includes a flag that indicates an SRID embedded in the
+ * binary. The EWKB has an endian byte, four bytes of type information
+ * and then 4 bytes of optional SRID information. If that info is
+ * there, we want to over-write it, and remove the SRID flag, to
+ * generate more "standard" WKB for OGR to consume.
+ */
+static size_t
+ogrEwkbStripSrid(unsigned char *wkb, size_t wkbsize)
+{
+	unsigned int type;
+	int has_z, has_m, has_srid;
+	size_t newwkbsize = wkbsize;
+	memcpy(&type, wkb+1, 4);
+	has_z = type & 0x80000000;
+	has_m = type & 0x40000000;
+	has_srid = type & 0x20000000;
+	
+	/* Flatten SRID flag away */
+	type &= 0xDFFFFFFF;
+	memcpy(wkb+1, &type, 4);
+	
+	/* If there was an SRID number embedded, overwrite it */
+	if ( has_srid )
+	{
+		newwkbsize -= 4; /* no space for SRID number needed */
+		memmove(wkb+5, wkb+9, newwkbsize - 5);
+	}
+	
+	return newwkbsize;
+}
+
 static OGRErr
 ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable *tbl)
 {
@@ -1756,10 +1788,14 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 			else
 			{
 				OGRGeometryH geom;
-				bytea *wkb = DatumGetByteaP(OidFunctionCall1(col.pgsendfunc, values[i]));
-				int wkbsize = VARSIZE(wkb) - VARHDRSZ;
+				bytea *wkb_bytea = DatumGetByteaP(OidFunctionCall1(col.pgsendfunc, values[i]));
+				unsigned char *wkb = (unsigned char *)VARDATA(wkb_bytea);
+				int wkbsize = VARSIZE(wkb_bytea) - VARHDRSZ;
+				wkbsize = ogrEwkbStripSrid(wkb, wkbsize);
+				
 				/* TODO, create geometry with SRS of table? */
-				err = OGR_G_CreateFromWkb((unsigned char *)VARDATA(wkb), NULL, &geom, wkbsize);
+				err = OGR_G_CreateFromWkb(wkb, NULL, &geom, wkbsize);
+				if ( wkb_bytea ) pfree(wkb_bytea);
 				if ( err != OGRERR_NONE ) 
 					return err;
 				
