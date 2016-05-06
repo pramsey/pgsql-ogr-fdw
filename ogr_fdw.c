@@ -1675,12 +1675,12 @@ static void ogrStaticText(char *text, const char *str)
 static size_t
 ogrEwkbStripSrid(unsigned char *wkb, size_t wkbsize)
 {
-	unsigned int type;
-	int has_z, has_m, has_srid;
+	unsigned int type = 0;
+	int has_srid = 0;
 	size_t newwkbsize = wkbsize;
 	memcpy(&type, wkb+1, 4);
-	has_z = type & 0x80000000;
-	has_m = type & 0x40000000;
+	/* has_z = type & 0x80000000; */
+	/* has_m = type & 0x40000000; */
 	has_srid = type & 0x20000000;
 	
 	/* Flatten SRID flag away */
