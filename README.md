@@ -259,7 +259,7 @@ If you want to import all tables in the OGR data source use the special schema c
 		FROM SERVER fgdbtest 
         INTO fgdball;
 
-### Import a Subset of Tables
+#### Import a Subset of Tables
 
 Not all OGR data sources have a concept of schema, so we use the remote schema string as a prefix to match OGR layers. The matching is case sensitive, so make sure casing matches your layer names.
 
