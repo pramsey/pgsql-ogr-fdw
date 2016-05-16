@@ -19,4 +19,4 @@ As an added bonus, using a direct access shouldn't need to read ODBC registry ke
  
 If your MS Access database is on a network share, your PostgreSQL service account needs to be able to access it by the path you use. For MS Access databases it also has to have write permissions. The reason is MS Access databases use a locking file to manage access, so all users that have read permission also need to have write permission into the folder to create the lock file and delete the lock file (if they are the last ones in) if it doesn't exist.
  
-Also note: even if the PostgreSQL service account can access the folder `\\\\S\\Files`, if you map it to say `S:\\` the connection will not work if the mapped drive is not set under the user account that PostgreSQL runs under. (That said – it's safer to use UNCs (`\\\\S\\Files`) instead of mapped drives.
+Also note: even if the PostgreSQL service account can access the folder `\\S\Files`, if you map it to say `S:\` the connection will not work if the mapped drive is not set under the user account that PostgreSQL runs under. (That said – it's safer to use UNCs (`\\S\Files`) instead of mapped drives.
