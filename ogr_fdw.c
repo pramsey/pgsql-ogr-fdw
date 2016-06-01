@@ -903,8 +903,6 @@ pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char *colname, const
 		return;
 	else if ( pg_type == TIMESTAMPOID && ogr_type == OFTDateTime )
 		return;
-	else if ( pg_type == TIMESTAMPOID && ogr_type == OFTDateTime )
-		return;
 	
 	ereport(ERROR, (
 			errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
