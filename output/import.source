@@ -53,7 +53,7 @@ SELECT "natural" FROM imp2."natural";
 CREATE SERVER svr_test_apost
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
-    datasource 'C:/projects/sources/pgsql_ogr_fdw_robe/data/no_geom_apost.csv',
+    datasource '@abs_srcdir@/data/no_geom_apost.csv',
     format 'CSV' );
 CREATE SCHEMA imp3;
 IMPORT FOREIGN SCHEMA ogr_all 
