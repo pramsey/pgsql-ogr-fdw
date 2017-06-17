@@ -1,3 +1,4 @@
+set client_min_messages=NOTICE;
 ------------------------------------------------
 CREATE SCHEMA imp1;
 IMPORT FOREIGN SCHEMA ogr_all 
