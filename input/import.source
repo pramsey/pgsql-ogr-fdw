@@ -1,3 +1,4 @@
+set client_min_messages=NOTICE;
 ------------------------------------------------
 
 CREATE SCHEMA imp1;
