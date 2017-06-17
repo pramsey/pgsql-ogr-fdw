@@ -50,3 +50,35 @@ SELECT "natural" FROM imp2."natural";
 (2 rows)
 
 ------------------------------------------------
+CREATE SERVER svr_test_apost
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'C:/projects/sources/pgsql_ogr_fdw_robe/data/no_geom_apost.csv',
+    format 'CSV' );
+CREATE SCHEMA imp3;
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (no_geom_apost) 
+  FROM SERVER svr_test_apost
+  INTO imp3;
+NOTICE:  Number of tables to be created 1
+\d imp3.no_geom_apost
+                        Foreign table "imp3.no_geom_apost"
+     Column     |       Type        | Modifiers |           FDW Options           
+----------------+-------------------+-----------+---------------------------------
+ fid            | bigint            |           | 
+ name           | character varying |           | 
+ age            | character varying |           | 
+ person_s_value | character varying |           | (column_name 'person''s value')
+Server: svr_test_apost
+FDW Options: (layer 'no_geom_apost')
+
+SELECT * FROM imp3.no_geom_apost;
+ fid |  name   | age | person_s_value 
+-----+---------+-----+----------------
+   1 | Peter   | 34  | 10.2
+   2 | John    | 77  | 3.4
+   3 | Paul    | 45  | 19.2
+   4 | Matthew | 35  | 18.2
+(4 rows)
+
+------------------------------------------------

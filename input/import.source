@@ -25,3 +25,21 @@ IMPORT FOREIGN SCHEMA ogr_all
 SELECT "natural" FROM imp2."natural";
 
 ------------------------------------------------
+CREATE SERVER svr_test_apost
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data/no_geom_apost.csv',
+    format 'CSV' );
+
+CREATE SCHEMA imp3;
+
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (no_geom_apost) 
+  FROM SERVER svr_test_apost
+  INTO imp3;
+
+\d imp3.no_geom_apost
+
+SELECT * FROM imp3.no_geom_apost;
+
+------------------------------------------------
