@@ -207,8 +207,9 @@ ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_colu
 	if ( launder_column_names )
 	{
 		stringbuffer_aprintf(buf, ",\n  %s %s", quote_identifier(pgcolname), pgtype);
+		/* named dollar-quote the the OGR column name with $col$..$col$ to handle ' in ogr column names */
 		if ( ! strcaseeq(pgcolname, ogrcolname) )
-			stringbuffer_aprintf(buf, " OPTIONS (column_name '%s')", ogrcolname);
+			stringbuffer_aprintf(buf, " OPTIONS (column_name $col$%s$col$)", ogrcolname);
 	}
 	else
 	{

@@ -1,3 +1,4 @@
+set client_min_messages=NOTICE;
 ------------------------------------------------
 
 CREATE SCHEMA imp1;
@@ -7,8 +8,15 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp1;
 
-\d imp1.n2launder
-  
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp1' and fc.relname = 'n2launder'
+ORDER BY c.ordinal_position;
+
+
 SELECT * FROM imp1.n2launder WHERE fid = 0;
 
 ------------------------------------------------
@@ -20,8 +28,38 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp2;
 
-\d imp2."natural"
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp2' and fc.relname = 'natural'
+ORDER BY c.ordinal_position;
 
 SELECT "natural" FROM imp2."natural";
+
+------------------------------------------------
+CREATE SERVER svr_test_apost
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data/no_geom_apost.csv',
+    format 'CSV' );
+
+CREATE SCHEMA imp3;
+
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (no_geom_apost) 
+  FROM SERVER svr_test_apost
+  INTO imp3;
+
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp3' and fc.relname = 'no_geom_apost'
+ORDER BY c.ordinal_position;
+
+SELECT * FROM imp3.no_geom_apost;
 
 ------------------------------------------------

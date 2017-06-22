@@ -1,3 +1,4 @@
+set client_min_messages=NOTICE;
 ------------------------------------------------
 CREATE SCHEMA imp1;
 IMPORT FOREIGN SCHEMA ogr_all 
@@ -5,20 +6,23 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp1;
 NOTICE:  Number of tables to be created 1
-\d imp1.n2launder
-                    Foreign table "imp1.n2launder"
-  Column   |       Type        | Modifiers |        FDW Options        
------------+-------------------+-----------+---------------------------
- fid       | bigint            |           | 
- geom      | bytea             |           | 
- n2ame     | character varying |           | (column_name '2ame')
- age       | integer           |           | 
- height    | real              |           | 
- b_rthdate | date              |           | (column_name 'b-rthdate')
-Server: myserver
-FDW Options: (layer '2launder')
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp1' and fc.relname = 'n2launder'
+ORDER BY c.ordinal_position;
+ column_name |     data_type     |      attfdwoptions      
+-------------+-------------------+-------------------------
+ fid         | bigint            | 
+ geom        | bytea             | 
+ n2ame       | character varying | {column_name=2ame}
+ age         | integer           | 
+ height      | real              | 
+ b_rthdate   | date              | {column_name=b-rthdate}
+(6 rows)
 
-  
 SELECT * FROM imp1.n2launder WHERE fid = 0;
  fid |                     geom                     | n2ame | age | height | b_rthdate  
 -----+----------------------------------------------+-------+-----+--------+------------
@@ -32,15 +36,19 @@ IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER myserver 
   INTO imp2;
 NOTICE:  Number of tables to be created 1
-\d imp2."natural"
-             Foreign table "imp2.natural"
- Column  |       Type        | Modifiers | FDW Options 
----------+-------------------+-----------+-------------
- fid     | bigint            |           | 
- id      | real              |           | 
- natural | character varying |           | 
-Server: myserver
-FDW Options: (layer 'natural')
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp2' and fc.relname = 'natural'
+ORDER BY c.ordinal_position;
+ column_name |     data_type     | attfdwoptions 
+-------------+-------------------+---------------
+ fid         | bigint            | 
+ id          | real              | 
+ natural     | character varying | 
+(3 rows)
 
 SELECT "natural" FROM imp2."natural";
  natural 
@@ -48,5 +56,41 @@ SELECT "natural" FROM imp2."natural";
  wood
  land
 (2 rows)
+
+------------------------------------------------
+CREATE SERVER svr_test_apost
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data/no_geom_apost.csv',
+    format 'CSV' );
+CREATE SCHEMA imp3;
+IMPORT FOREIGN SCHEMA ogr_all 
+  LIMIT TO (no_geom_apost) 
+  FROM SERVER svr_test_apost
+  INTO imp3;
+NOTICE:  Number of tables to be created 1
+SELECT  c.column_name, c.data_type, attfdwoptions 
+FROM information_schema._pg_foreign_table_columns  AS fc  
+    INNER JOIN information_schema.columns AS c ON 
+        fc.nspname = c.table_schema AND fc.relname = c.table_name 
+        AND fc.attname = c.column_name
+WHERE fc.nspname = 'imp3' and fc.relname = 'no_geom_apost'
+ORDER BY c.ordinal_position;
+  column_name   |     data_type     |         attfdwoptions          
+----------------+-------------------+--------------------------------
+ fid            | bigint            | 
+ name           | character varying | 
+ age            | character varying | 
+ person_s_value | character varying | {"column_name=person's value"}
+(4 rows)
+
+SELECT * FROM imp3.no_geom_apost;
+ fid |  name   | age | person_s_value 
+-----+---------+-----+----------------
+   1 | Peter   | 34  | 10.2
+   2 | John    | 77  | 3.4
+   3 | Paul    | 45  | 19.2
+   4 | Matthew | 35  | 18.2
+(4 rows)
 
 ------------------------------------------------
