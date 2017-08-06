@@ -23,6 +23,13 @@
 #error "OGR FDW requires PostgreSQL version 9.3 or higher"
 #else
 
+/* 
+ * Definition of stringToQualifiedNameList
+ */
+#if PG_VERSION_NUM >= 100000
+#include "utils/regproc.h"
+#endif
+
 /*
  * Local structures
  */
