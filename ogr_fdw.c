@@ -1579,7 +1579,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 						 * For now, we go via text.
 						 */
 						const char *cstr = OGR_F_GetFieldAsString(feat, ogrfldnum);
-						if ( cstr )
+						if ( cstr && strlen(cstr) )
 						{
 							nulls[i] = false;
 							values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
