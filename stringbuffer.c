@@ -141,7 +141,7 @@ stringbuffer_append(stringbuffer_t *s, const char *a)
 void 
 stringbuffer_append_char(stringbuffer_t *s, char c)
 {
-	stringbuffer_makeroom(s, 1);
+	stringbuffer_makeroom(s, 2); /* space for char + null terminator */
 	*(s->str_end) = c; /* add char */
 	s->str_end += 1;
 	*(s->str_end) = 0; /* null terminate */
