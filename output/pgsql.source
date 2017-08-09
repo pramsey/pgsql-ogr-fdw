@@ -9,6 +9,7 @@ CREATE TABLE bytea_local (
   geom bytea,
   name varchar,
   age bigint,
+  size integer,
   value float8,
   num numeric(6,2),
   dt date,
@@ -18,16 +19,19 @@ CREATE TABLE bytea_local (
   yn char
 );
 ----------------------------------------------------------------------
-INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
-  VALUES ('Jim', '14232'::bytea, 23, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
-INSERT INTO bytea_local (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
-  VALUES ('Marvin', '55555'::bytea, 34, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, 'that', 'n' );
+INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES ('Jim', '14232'::bytea, 23, 1, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
+INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES ('Marvin', '55555'::bytea, 34, 2, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, 'that', 'n' );
+INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 ----------------------------------------------------------------------
 CREATE FOREIGN TABLE bytea_fdw (
   fid integer,
   geom bytea,
   name varchar,
   age bigint,
+  size integer,
   value float8,
   num numeric(6,2),
   dt date,
@@ -36,12 +40,13 @@ CREATE FOREIGN TABLE bytea_fdw (
   varch char(8),
   yn char
 ) SERVER pgserver OPTIONS (layer 'bytea_local');
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn FROM bytea_fdw;
- fid |  name  |     geom     | age | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
------+--------+--------------+-----+-------+-------+------------+----------+--------------------------+----------+----
-   1 | Jim    | \x3134323332 |  23 |   4.3 |  5.50 | 10-10-2010 | 13:23:21 | Sun Oct 10 13:23:21 2010 | this     | y
-   2 | Marvin | \x3535353535 |  34 |   5.4 | 10.13 | 11-11-2011 | 15:21:45 | Fri Nov 11 15:21:45 2011 | that     | n
-(2 rows)
+SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn FROM bytea_fdw;
+ fid |  name  |     geom     | age | size | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
+-----+--------+--------------+-----+------+-------+-------+------------+----------+--------------------------+----------+----
+   1 | Jim    | \x3134323332 |  23 |    1 |   4.3 |  5.50 | 10-10-2010 | 13:23:21 | Sun Oct 10 13:23:21 2010 | this     | y
+   2 | Marvin | \x3535353535 |  34 |    2 |   5.4 | 10.13 | 11-11-2011 | 15:21:45 | Fri Nov 11 15:21:45 2011 | that     | n
+   3 |        |              |     |      |       |       |            |          |                          |          | 
+(3 rows)
 
 SELECT a.name, b.name 
   FROM bytea_local a 
@@ -51,32 +56,33 @@ SELECT a.name, b.name
 --------+--------
  Jim    | Jim
  Marvin | Marvin
-(2 rows)
+        | 
+(3 rows)
 
 EXPLAIN VERBOSE 
-  SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn 
+  SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
   FROM bytea_fdw;
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Foreign Scan on public.bytea_fdw  (cost=25.00..1025.00 rows=1000 width=162)
-   Output: fid, name, geom, age, value, num, dt, tm, dttm, varch, yn
+ Foreign Scan on public.bytea_fdw  (cost=25.00..1025.00 rows=1000 width=166)
+   Output: fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
 (2 rows)
 
 ----------------------------------------------------------------------
-INSERT INTO bytea_fdw (name, geom, age, value, num, dt, tm, dttm, varch, yn) 
-VALUES ('Margaret', '2222'::bytea, 12, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' ) 
-RETURNING fid, name, geom, age, value, num, dt, tm, dttm, varch, yn;
- fid |   name   |    geom    | age | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
------+----------+------------+-----+-------+-------+------------+----------+--------------------------+----------+----
-   3 | Margaret | \x32323232 |  12 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
+INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+VALUES ('Margaret', '2222'::bytea, 12, 5, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' )
+RETURNING fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn;
+ fid |   name   |    geom    | age | size | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
+-----+----------+------------+-----+------+-------+-------+------------+----------+--------------------------+----------+----
+   4 | Margaret | \x32323232 |  12 |    5 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
 (1 row)
 
-SELECT fid, name, geom, age, value, num, dt, tm, dttm, varch, yn 
+SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
   FROM bytea_fdw
-  WHERE fid = 3;
- fid |   name   |    geom    | age | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
------+----------+------------+-----+-------+-------+------------+----------+--------------------------+----------+----
-   3 | Margaret | \x32323232 |  12 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
+  WHERE fid = 4;
+ fid |   name   |    geom    | age | size | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
+-----+----------+------------+-----+------+-------+-------+------------+----------+--------------------------+----------+----
+   4 | Margaret | \x32323232 |  12 |    5 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
 (1 row)
 
 UPDATE bytea_fdw 
@@ -84,10 +90,10 @@ UPDATE bytea_fdw
   WHERE age = 12;
 SELECT fid, name, num, yn
   FROM bytea_fdw
-  WHERE fid = 3;
+  WHERE fid = 4;
  fid |  name  |  num  | yn 
 -----+--------+-------+----
-   3 | Maggie | 45.34 | n
+   4 | Maggie | 45.34 | n
 (1 row)
 
 UPDATE bytea_fdw 
@@ -95,14 +101,14 @@ UPDATE bytea_fdw
   WHERE num = 45.34;
 SELECT fid, dt, tm
   FROM bytea_fdw
-  WHERE fid = 3;
+  WHERE fid = 4;
  fid |     dt     |    tm    
 -----+------------+----------
-   3 | 12-13-2089 | 01:23:45
+   4 | 12-13-2089 | 01:23:45
 (1 row)
 
 DELETE FROM bytea_fdw 
-  WHERE fid = 3;
+  WHERE fid = 4;
   
 SELECT a.fid, a.name, b.name 
   FROM bytea_local a 
@@ -112,6 +118,7 @@ SELECT a.fid, a.name, b.name
 -----+--------+--------
    1 | Jim    | Jim
    2 | Marvin | Marvin
-(2 rows)
+   3 |        | 
+(3 rows)
 
   
