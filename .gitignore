@@ -2,7 +2,9 @@
 *.a
 *.so
 *.dll
+*.dylib
 *.pc
+ogr_fdw_info.dSYM/
 ogr_fdw_info*
 sql/ogr_fdw.sql
 expected/ogr_fdw.out
