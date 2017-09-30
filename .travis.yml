@@ -45,6 +45,7 @@ before_script:
 script:
   - make
   - sudo make install
+  - sudo chmod 755 $HOME
   - env
   - PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
 # Small delay so that things get flushed
