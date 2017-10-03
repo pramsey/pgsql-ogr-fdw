@@ -1417,7 +1417,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 
 		if ( ogrvariant == OGR_FID )
 		{
-			GIntBig fid = OGR_F_GetFID(feat);
+			GInt64 fid = OGR_F_GetFID(feat);
 
 			if ( fid == OGRNullFID )
 			{
@@ -2353,7 +2353,7 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	TupleDesc td = slot->tts_tupleDescriptor;
 	int fid_column;
 	OGRErr err;
-	GIntBig fid;
+	GInt64 fid;
 
 	elog(DEBUG2, "ogrExecForeignInsert");
 
