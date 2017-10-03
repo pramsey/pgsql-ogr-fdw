@@ -20,12 +20,17 @@ PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
 SHLIB_LINK := $(LIBS)
 
-# order matters, file first, import last
-REGRESS = file pgsql import
-
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
+PG_VERSION_NUM = $(shell awk '/PG_VERSION_NUM/ { print $$3 }' $(shell $(PG_CONFIG) --includedir-server)/pg_config.h)
+HAS_IMPORT_SCHEMA = $(shell [ $(PG_VERSION_NUM) -ge 90500 ] && echo yes)
+
+# order matters, file first, import last
+REGRESS = file pgsql
+ifeq ($(HAS_IMPORT_SCHEMA),yes)
+REGRESS += import
+endif
 
 ###############################################################
 # Build the utility program after PGXS to override the
