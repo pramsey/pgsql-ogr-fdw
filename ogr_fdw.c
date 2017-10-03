@@ -1417,7 +1417,11 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 
 		if ( ogrvariant == OGR_FID )
 		{
+#if GDAL_VERSION_NUM >= 2020000
+			GInt64 fid = OGR_F_GetFID(feat);
+#else
 			GIntBig fid = OGR_F_GetFID(feat);
+#endif
 
 			if ( fid == OGRNullFID )
 			{
@@ -2353,7 +2357,11 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	TupleDesc td = slot->tts_tupleDescriptor;
 	int fid_column;
 	OGRErr err;
+#if GDAL_VERSION_NUM >= 2020000
+	GInt64 fid;
+#else
 	GIntBig fid;
+#endif
 
 	elog(DEBUG2, "ogrExecForeignInsert");
 
