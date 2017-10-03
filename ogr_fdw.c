@@ -1544,7 +1544,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 		}
 		else if ( ogrvariant == OGR_FIELD )
 		{
-#if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 2
+#if (GDAL_VERSION_MAJOR > 2 || (GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 2))
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum) && ! OGR_F_IsFieldNull(feat, ogrfldnum);
 #else
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum);
