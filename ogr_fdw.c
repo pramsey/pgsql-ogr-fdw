@@ -1578,7 +1578,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 						 */
 						const char *cstr_in = OGR_F_GetFieldAsString(feat, ogrfldnum);
 						size_t cstr_len = cstr_in ? strlen(cstr_in) : 0;
-						if ( cstr && cstr_len > 0 )
+						if ( cstr_in && cstr_len > 0 )
 						{
 							char *cstr_decoded;
 							if(execstate->ogr.lyr_utf8)
