@@ -1535,11 +1535,17 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 		}
 		else if ( ogrvariant == OGR_FIELD )
 		{
+#if (GDAL_VERSION_MAJOR > 2 || (GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 2))
+			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum) && ! OGR_F_IsFieldNull(feat, ogrfldnum);
+#else
+			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum);
+#endif
+
 			/* Ensure that the OGR data type fits the destination Pg column */
 			ogrCanConvertToPg(ogrfldtype, pgtype, pgname, tbl->tblname);
 
 			/* Only convert non-null fields */
-			if ( OGR_F_IsFieldSet(feat, ogrfldnum) )
+			if ( field_not_null )
 			{
 				switch(ogrfldtype)
 				{
@@ -1570,15 +1576,15 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 						 * Handling numbers directly would be faster, but require a lot of extra code.
 						 * For now, we go via text.
 						 */
-						const char *cstr = OGR_F_GetFieldAsString(feat, ogrfldnum);
-						size_t cstr_len = strlen(cstr);
+						const char *cstr_in = OGR_F_GetFieldAsString(feat, ogrfldnum);
+						size_t cstr_len = cstr_in ? strlen(cstr_in) : 0;
 						if ( cstr && cstr_len > 0 )
 						{
 							char *cstr_decoded;
 							if(execstate->ogr.lyr_utf8)
-								cstr_decoded = pg_any_to_server(cstr, cstr_len, PG_UTF8);
+								cstr_decoded = pg_any_to_server(cstr_in, cstr_len, PG_UTF8);
 							else
-								cstr_decoded = pstrdup(cstr);
+								cstr_decoded = pstrdup(cstr_in);
 							nulls[i] = false;
 							values[i] = pgDatumFromCString(cstr_decoded, pgtype, pgtypmod, pginputfunc);
 						}
@@ -1616,7 +1622,6 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 						{
 							snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
 						}
-
 						nulls[i] = false;
 						values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
 						break;

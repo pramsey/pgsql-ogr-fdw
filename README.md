@@ -1,6 +1,4 @@
-Travis:
- [![Build Status](https://secure.travis-ci.org/pramsey/pgsql-ogr-fdw.png)]
- (http://travis-ci.org/pramsey/pgsql-ogr-fdw)
+Travis: [![Build Status](https://secure.travis-ci.org/pramsey/pgsql-ogr-fdw.png)](http://travis-ci.org/pramsey/pgsql-ogr-fdw)
 
 # PostgreSQL OGR Foreign Data Wrapper
 
