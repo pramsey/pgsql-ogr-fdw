@@ -67,7 +67,7 @@
 /* hexwkb is not. */
 #define OGR_FDW_HEXWKB TRUE
 
-typedef enum 
+typedef enum
 {
 	OGR_UNMATCHED,
 	OGR_GEOMETRY,
@@ -89,19 +89,19 @@ typedef struct OgrFdwColumn
 	char *pgname;            /* PostgreSQL column name */
 	Oid pgtype;              /* PostgreSQL data type */
 	int pgtypmod;            /* PostgreSQL type modifier */
-	
+
 	/* For reading */
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
 	Oid pginputioparam;
 	Oid pgrecvfunc;          /* PostgreSQL function to convert binary to type */
 	Oid pgrecvioparam;
-	
+
 	/* For writing */
 	Oid pgoutputfunc;        /* PostgreSQL function to convert type to cstring */
 	bool pgoutputvarlena;
 	Oid pgsendfunc;        /* PostgreSQL function to convert type to binary */
 	bool pgsendvarlena;
-	
+
 	/* OGR metadata */
 	OgrColumnVariant ogrvariant;
 	int ogrfldnum;
@@ -124,11 +124,12 @@ typedef struct OgrConnection
 	char *open_options;   /* GDAL open options */
 	bool ds_updateable;
 	bool lyr_updateable;
+	bool lyr_utf8;        /* OGR layer will return UTF8 strings */
 	GDALDatasetH ds;      /* GDAL datasource handle */
 	OGRLayerH lyr;        /* OGR layer handle */
 } OgrConnection;
 
-typedef enum 
+typedef enum
 {
 	OGR_PLAN_STATE,
 	OGR_EXEC_STATE,
@@ -138,7 +139,7 @@ typedef enum
 typedef struct OgrFdwState
 {
 	OgrFdwStateType type;
-	Oid foreigntableid; 
+	Oid foreigntableid;
 	OgrConnection ogr;  /* connection object */
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
@@ -147,12 +148,12 @@ typedef struct OgrFdwState
 typedef struct OgrFdwPlanState
 {
 	OgrFdwStateType type;
-	Oid foreigntableid; 
-	OgrConnection ogr; 
+	Oid foreigntableid;
+	OgrConnection ogr;
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
 	int nrows;           /* estimate of number of rows in file */
-	Cost startup_cost; 
+	Cost startup_cost;
 	Cost total_cost;
 	bool *pushdown_clauses;
 } OgrFdwPlanState;
@@ -160,8 +161,8 @@ typedef struct OgrFdwPlanState
 typedef struct OgrFdwExecState
 {
 	OgrFdwStateType type;
-	Oid foreigntableid; 
-	OgrConnection ogr;   
+	Oid foreigntableid;
+	OgrConnection ogr;
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
 	char *sql;             /* OGR SQL for attribute filter */
@@ -173,7 +174,7 @@ typedef struct OgrFdwExecState
 typedef struct OgrFdwModifyState
 {
 	OgrFdwStateType type;
-	Oid foreigntableid; 
+	Oid foreigntableid;
 	OgrConnection ogr;     /* connection object */
 	OgrFdwTable *table;
 	TupleDesc tupdesc;

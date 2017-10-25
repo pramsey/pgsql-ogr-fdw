@@ -522,6 +522,7 @@ ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
 				: errhint("Does the layer exist?")
 				));
 	}
+	ogr.lyr_utf8 = OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8);
 
 	return ogr;
 }
@@ -1339,19 +1340,9 @@ pgDatumFromCString(const char *cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
 	Datum value;
 	Datum cdata = CStringGetDatum(cstr);
 
-	/* pgtypmod will be -1 for types w/o typmod  */
-	// if ( pgtypmod >= 0 )
-	// {
-		/* These functions require a type modifier */
-		value = OidFunctionCall3(pginputfunc, cdata,
-			ObjectIdGetDatum(InvalidOid),
-			Int32GetDatum(pgtypmod));
-	// }
-	// else
-	// {
-	// 	/* These functions don't */
-	// 	value = OidFunctionCall1(pginputfunc, cdata);
-	// }
+	value = OidFunctionCall3(pginputfunc, cdata,
+		ObjectIdGetDatum(InvalidOid),
+		Int32GetDatum(pgtypmod));
 
 	return value;
 }
@@ -1583,7 +1574,11 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 						size_t cstr_len = strlen(cstr);
 						if ( cstr && cstr_len > 0 )
 						{
-							char *cstr_decoded = pg_any_to_server(cstr, cstr_len, PG_UTF8);
+							char *cstr_decoded;
+							if(execstate->ogr.lyr_utf8)
+								cstr_decoded = pg_any_to_server(cstr, cstr_len, PG_UTF8);
+							else
+								cstr_decoded = pstrdup(cstr);
 							nulls[i] = false;
 							values[i] = pgDatumFromCString(cstr_decoded, pgtype, pgtypmod, pginputfunc);
 						}
