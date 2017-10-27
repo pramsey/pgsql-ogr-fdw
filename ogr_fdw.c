@@ -165,6 +165,29 @@ static void ogrReadColumnData(OgrFdwState *state);
 Oid GEOMETRYOID = InvalidOid;
 
 
+static void
+ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
+{
+	switch (eErrClass)
+	{
+		case CE_None:
+			elog(NOTICE, "[%d] %s", err_no, msg);
+			return;
+		case CE_Debug:
+			elog(DEBUG1, "[%d] %s", err_no, msg);
+			return;
+		case CE_Warning:
+			elog(WARNING, "[%d] %s", err_no, msg);
+			return;
+		case CE_Failure:
+		case CE_Fatal:
+		default:
+			elog(ERROR, "[%d] %s", err_no, msg);
+			return;
+	}
+	return;
+}
+
 
 void
 _PG_init(void)
@@ -183,15 +206,7 @@ _PG_init(void)
 	// 						NULL,
 	// 						NULL);
 
-	/*
-	 * We assume PostGIS is installed in 'public' and if we cannot
-	 * find it, we'll treat all geometry from OGR as bytea.
-	 */
-	// const char *typname = "geometry";
-	// Oid namesp = LookupExplicitNamespace("public", false);
-	// Oid typoid = GetSysCacheOid2(TYPENAMENSP, CStringGetDatum(typname), ObjectIdGetDatum(namesp));
 	Oid typoid = TypenameGetTypid("geometry");
-
 	if (OidIsValid(typoid) && get_typisdefined(typoid))
 	{
 		GEOMETRYOID = typoid;
@@ -202,6 +217,10 @@ _PG_init(void)
 	}
 
 	on_proc_exit(&ogr_fdw_exit, PointerGetDatum(NULL));
+
+	/* Hook up the GDAL error handlers to PgSQL elog() */
+	CPLSetErrorHandler(ogrErrorHandler);
+	CPLSetCurrentErrorHandlerCatchDebug(true);
 }
 
 /*
