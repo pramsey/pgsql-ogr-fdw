@@ -1092,7 +1092,7 @@ ogrReadColumnData(OgrFdwState *state)
 	/* Get OGR metadata ready */
 	dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
 	ogr_ncols = OGR_FD_GetFieldCount(dfn);
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
 #else
 	ogr_geom_count = ( OGR_FD_GetGeomType(dfn) != wkbNone ) ? 1 : 0;
@@ -1126,7 +1126,11 @@ ogrReadColumnData(OgrFdwState *state)
 		OgrFieldEntry *found_entry;
 		OgrFieldEntry entry;
 
+#if PG_VERSION_NUM >= 110000
+		Form_pg_attribute att_tuple = &tupdesc->attrs[i];
+#else
 		Form_pg_attribute att_tuple = tupdesc->attrs[i];
+#endif
 		OgrFdwColumn col = tbl->cols[i];
 		col.pgattnum = att_tuple->attnum;
 		col.pgtype = att_tuple->atttypid;
@@ -1431,7 +1435,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			unsigned char *wkb;
 			OGRErr err;
 
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
 			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, ogrfldnum);
 #else
 			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
@@ -1535,7 +1539,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 		}
 		else if ( ogrvariant == OGR_FIELD )
 		{
-#if (GDAL_VERSION_MAJOR > 2 || (GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 2))
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,2,0)
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum) && ! OGR_F_IsFieldNull(feat, ogrfldnum);
 #else
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum);
@@ -1786,7 +1790,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 			OGRErr err;
 			if ( nulls[i] )
 			{
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
 				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, NULL);
 #else
 				err = OGR_F_SetGeometryDirectly(feat, NULL);
@@ -1807,7 +1811,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				if ( err != OGRERR_NONE )
 					return err;
 
-#if GDAL_VERSION_MAJOR >= 2 || GDAL_VERSION_MINOR >= 11
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
 				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, geom);
 #else
 				err = OGR_F_SetGeometryDirectly(feat, geom);
@@ -2092,8 +2096,13 @@ static int ogrGetFidColumn(const TupleDesc td)
 	int i;
 	for ( i = 0; i < td->natts; i++ )
 	{
+#if PG_VERSION_NUM >= 110000
+		NameData attname = td->attrs[i].attname;
+		Oid atttypeid = td->attrs[i].atttypid;
+#else
 		NameData attname = td->attrs[i]->attname;
 		Oid atttypeid = td->attrs[i]->atttypid;
+#endif
 		if ( (atttypeid == INT4OID || atttypeid == INT8OID) &&
 		     strcaseeq("fid", attname.data) )
 		{
@@ -2128,8 +2137,11 @@ static void ogrAddForeignUpdateTargets (Query *parsetree,
 	if ( fid_column < 0 )
 		elog(ERROR,"table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
 
+#if PG_VERSION_NUM >= 110000
+	att = &tupdesc->attrs[fid_column];
+#else
 	att = tupdesc->attrs[fid_column];
-
+#endif
 	/* Make a Var representing the desired value */
 	var = makeVar(parsetree->resultRelation,
 			att->attnum,
@@ -2211,8 +2223,11 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 
 	/* What is the value of the FID for this record? */
 	fid_datum = slot->tts_values[fid_column];
+#if PG_VERSION_NUM >= 110000
+	fid_type = td->attrs[fid_column].atttypid;
+#else
 	fid_type = td->attrs[fid_column]->atttypid;
-
+#endif
 	if ( fid_type == INT8OID )
 		fid = DatumGetInt64(fid_datum);
 	else
@@ -2410,7 +2425,11 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 
 	/* What is the value of the FID for this record? */
 	fid_datum = planSlot->tts_values[fid_column];
+#if PG_VERSION_NUM >= 110000
+	fid_type = td->attrs[fid_column].atttypid;
+#else
 	fid_type = td->attrs[fid_column]->atttypid;
+#endif
 
 	if ( fid_type == INT8OID )
 		fid = DatumGetInt64(fid_datum);
