@@ -164,7 +164,7 @@ static void ogrReadColumnData(OgrFdwState *state);
 /* Global to hold GEOMETRYOID */
 Oid GEOMETRYOID = InvalidOid;
 
-
+#if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MAJOR >= 1
 static void
 ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 {
@@ -187,7 +187,7 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 	}
 	return;
 }
-
+#endif
 
 void
 _PG_init(void)
@@ -218,9 +218,11 @@ _PG_init(void)
 
 	on_proc_exit(&ogr_fdw_exit, PointerGetDatum(NULL));
 
+#if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MAJOR >= 1
 	/* Hook up the GDAL error handlers to PgSQL elog() */
 	CPLSetErrorHandler(ogrErrorHandler);
 	CPLSetCurrentErrorHandlerCatchDebug(true);
+#endif
 }
 
 /*
