@@ -4,7 +4,7 @@ Travis: [![Build Status](https://secure.travis-ci.org/pramsey/pgsql-ogr-fdw.png)
 
 ## Motivation
 
-OGR is the vector half of the [GDAL](http://www.gdal.org/) spatial data access library. It allows access to a [large number of GIS data formats](http://www.gdal.org/ogr_formats.html) using a [simple C API](http://www.gdal.org/ogr__api_8h.html) for data reading and writing. Since OGR exposes a simple table structure and PostgreSQL [foreign data wrappers](https://wiki.postgresql.org/wiki/Foreign_data_wrappers) allow access to table structures, the fit seems pretty perfect. 
+OGR is the vector half of the [GDAL](http://www.gdal.org/) spatial data access library. It allows access to a [large number of GIS data formats](http://www.gdal.org/ogr_formats.html) using a [simple C API](http://www.gdal.org/ogr__api_8h.html) for data reading and writing. Since OGR exposes a simple table structure and PostgreSQL [foreign data wrappers](https://wiki.postgresql.org/wiki/Foreign_data_wrappers) allow access to table structures, the fit seems pretty perfect.
 
 ## Limitations
 
@@ -30,7 +30,7 @@ First install the `postgis` and `ogr_fdw` extensions in your database.
     CREATE EXTENSION postgis;
     CREATE EXTENSION ogr_fdw;
 
-For a test data set, copy the `pt_two` example shape file from the `data` directory to a location where the PostgreSQL server can read it (like `/tmp/test/` for example). 
+For a test data set, copy the `pt_two` example shape file from the `data` directory to a location where the PostgreSQL server can read it (like `/tmp/test/` for example).
 
 Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility makes it a little more foolproof.)
 
@@ -44,13 +44,13 @@ Use the `ogr_fdw_info` tool to read an OGR data source and output a server and t
 
 
     > ogr_fdw_info -s /tmp/test
-    
+
     Layers:
       pt_two
 
-    
+
     > ogr_fdw_info -s /tmp/test -l pt_two
-    
+
     CREATE SERVER myserver
       FOREIGN DATA WRAPPER ogr_fdw
       OPTIONS (
@@ -66,18 +66,18 @@ Use the `ogr_fdw_info` tool to read an OGR data source and output a server and t
       birthdate date )
       SERVER myserver
       OPTIONS (layer 'pt_two');
-    
+
 Copy the `CREATE SERVER` and `CREATE FOREIGN SERVER` SQL commands into the database and you'll have your foreign table definition.
 
                  Foreign table "public.pt_two"
-      Column  |       Type        | Modifiers | FDW Options 
+      Column  |       Type        | Modifiers | FDW Options
     ----------+-------------------+-----------+-------------
-     fid      | integer           |           | 
-     geom     | geometry          |           | 
-     name     | character varying |           | 
-     age      | integer           |           | 
-     height   | real              |           | 
-     birthday | date              |           | 
+     fid      | integer           |           |
+     geom     | geometry          |           |
+     name     | character varying |           |
+     age      | integer           |           |
+     height   | real              |           |
+     birthday | date              |           |
     Server: tmp_shape
     FDW Options: (layer 'pt_two')
 
@@ -85,7 +85,7 @@ And you can query the table directly, even though it's really just a shape file.
 
     > SELECT * FROM pt_two;
 
-     fid |                    geom                    | name  | age | height |  birthday  
+     fid |                    geom                    | name  | age | height |  birthday
     -----+--------------------------------------------+-------+-----+--------+------------
        0 | 0101000000C00497D1162CB93F8CBAEF08A080E63F | Peter |  45 |    5.6 | 1965-04-12
        1 | 010100000054E943ACD697E2BFC0895EE54A46CF3F | Paul  |  33 |   5.84 | 1971-03-25
@@ -167,19 +167,19 @@ Query away!
 
 Wraparound action! Handy for testing. Connect your database back to your database and watch the fur fly.
 
-    CREATE TABLE typetest ( 
+    CREATE TABLE typetest (
       fid serial primary key,
       geom geometry(Point, 4326),
-      num real, 
-      name varchar, 
-      clock time, 
-      calendar date, 
-      tstmp timestamp 
+      num real,
+      name varchar,
+      clock time,
+      calendar date,
+      tstmp timestamp
     );
 
-    INSERT INTO typetest 
+    INSERT INTO typetest
       VALUES (1, 'SRID=4326;POINT(-126 46)', 4.5, 'Paul', '09:34:23', 'June 1, 2013', '12:34:56 December 14, 1823');
-    INSERT INTO typetest 
+    INSERT INTO typetest
       VALUES (2, 'SRID=4326;POINT(-126 46)', 4.8, 'Peter', '14:34:53', 'July 12, 2011', '1:34:12 December 24, 1923');
 
     CREATE SERVER wraparound
@@ -200,21 +200,21 @@ Wraparound action! Handy for testing. Connect your database back to your databas
       OPTIONS (layer 'typetest');
 
     SELECT * FROM typetest_fdw;
-    
+
 ## Advanced Features
 
 ### Writeable FDW Tables
 
-If the OGR driver you are using supports it, you can insert/update/delete records from your FDW tables. 
+If the OGR driver you are using supports it, you can insert/update/delete records from your FDW tables.
 
 For file-backed drivers, the user under which `postgres` runs will need read/write access to the file being altered. For database-backed drivers, your connection needs a user with read/write permissions to the database.
 
 By default, servers and tables are updateable if the OGR driver supports it, but you can turn off updateability at a server or table level using the `updateable` option:
 
-    ALTER SERVER myserver 
+    ALTER SERVER myserver
       OPTIONS (ADD updatable 'false');
 
-    ALTER FOREIGN TABLE mytable 
+    ALTER FOREIGN TABLE mytable
       OPTIONS (ADD updatable 'false');
 
 Writeable tables only work if you have included a `fid` column in your table definition. By default, tables imported by `IMPORT FOREIGN SCHEMA` or using the example SQL code from `ogr_fdw_info` include a `fid` column.
@@ -225,21 +225,21 @@ You can create an FDW table with any subset of columns from the OGR source you l
 
     CREATE FOREIGN TABLE typetest_fdw_partial (
       clock time,
-      name varchar 
+      name varchar
       )
       SERVER wraparound
       OPTIONS (layer 'typetest');
-      
+
 You can also explicitly map remote column names to different local names using the `column_name` option:
 
     CREATE FOREIGN TABLE typetest_fdw_mapped (
       fid bigint,
       supertime time OPTIONS (column_name 'clock'),
-      thebestnamething varchar OPTIONS (column_name 'name') 
+      thebestnamething varchar OPTIONS (column_name 'name')
       )
       SERVER wraparound
       OPTIONS (layer 'typetest');
-      
+
 
 ### Automatic Foreign Table Creation
 
@@ -252,9 +252,9 @@ You can use the PostgreSQL `IMPORT FOREIGN SCHEMA` command to [import table defi
 If you want to import all tables in the OGR data source use the special schema called "ogr_all".
 
 	CREATE SCHEMA fgdball;
-    
-	IMPORT FOREIGN SCHEMA ogr_all 
-		FROM SERVER fgdbtest 
+
+	IMPORT FOREIGN SCHEMA ogr_all
+		FROM SERVER fgdbtest
         INTO fgdball;
 
 #### Import a Subset of Tables
@@ -264,9 +264,9 @@ Not all OGR data sources have a concept of schema, so we use the remote schema s
 For example, the following will only import tables that start with *CitiesIn*. As long as you quote, you can handle true schemaed databases such as SQL Server or PostgreSQL by using something like *"dbo."*
 
 	CREATE SCHEMA fgdbcityinf;
-    
+
 	IMPORT FOREIGN SCHEMA "CitiesIn"
-		FROM SERVER fgdbtest 
+		FROM SERVER fgdbtest
         INTO fgdbcityinf;
 
 You can also use PostgreSQL clauses `LIMIT TO` and `EXCEPT` to restrict the tables you are importing.
@@ -274,31 +274,31 @@ You can also use PostgreSQL clauses `LIMIT TO` and `EXCEPT` to restrict the tabl
 	CREATE SCHEMA fgdbcitysub;
 
 	-- import only layer called Cities
-	IMPORT FOREIGN SCHEMA ogr_all 
-        LIMIT TO(cities) 
-		FROM server fgdbtest 
+	IMPORT FOREIGN SCHEMA ogr_all
+        LIMIT TO(cities)
+		FROM server fgdbtest
         INTO fgdbcitysub ;
-		
+
 	-- import only layers not called Cities or Countries
-	IMPORT FOREIGN SCHEMA ogr_all 
+	IMPORT FOREIGN SCHEMA ogr_all
         EXCEPT (cities, countries)
-		FROM server fgdbtest 
+		FROM server fgdbtest
         INTO fgdbcitysub;
-		
+
 	-- With table laundering turned off, need to use exact layer names
 	DROP SCHEMA IF EXISTS fgdbcitysub CASCADE;
-	
+
     -- import with un-laundered table name
-	IMPORT FOREIGN SCHEMA ogr_all 
-    	LIMIT TO("Cities") 
-		FROM server fgdbtest 
-        INTO fgdbcitysub 
+	IMPORT FOREIGN SCHEMA ogr_all
+    	LIMIT TO("Cities")
+		FROM server fgdbtest
+        INTO fgdbcitysub
         OPTIONS (launder_table_names 'false') ;
 
 
 #### Mixed Case and Special Characters
 
-In general, PostgreSQL prefers table names with [simple numbers and letters](http://www.postgresql.org/docs/9.5/static/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS), no punctuation or special characters. 
+In general, PostgreSQL prefers table names with [simple numbers and letters](http://www.postgresql.org/docs/9.5/static/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS), no punctuation or special characters.
 
 By default, when `IMPORT FOREIGN SCHEMA` is run on an OGR foreign data server, the table names and column names are "laundered" -- all upper case is converted to lowercase and special characters such as spaces and punctuation are replaced with "_".
 
@@ -307,15 +307,15 @@ Laundering is not desirable in all cases. You can override this behavior with tw
 To preserve casing and other funky characters in both column names and table names, do the following:
 
 	CREATE SCHEMA fgdbcitypreserve;
-    
+
 	IMPORT FOREIGN SCHEMA ogr_all
-		FROM SERVER fgdbtest 
-        INTO fgdbpreserve 
+		FROM SERVER fgdbtest
+        INTO fgdbpreserve
 		OPTIONS (
-            launder_table_names 'false', 
+            launder_table_names 'false',
             launder_column_names 'false'
             ) ;
-		
+
 
 ###  GDAL Options
 
@@ -328,7 +328,9 @@ Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases ar
       OPTIONS (
         datasource '/tmp/test',
         format 'ESRI Shapefile',
-        config_options 'SHAPE_ENCODING=LATIN1' );
+        config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON' );
+
+Multiple config options can be passed at one time by supplying a **space-separated** list of options.
 
 If you are using GDAL 2.0 or higher, you can also pass "open options" to your OGR foreign data wrapper, using the `open_options` parameter. In GDAL 2.0, the global `SHAPE_ENCODING` option has been superceded by a driver-specific `ENCODING` option, which can be called like this:
 
