@@ -171,19 +171,19 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 	switch (eErrClass)
 	{
 		case CE_None:
-			elog(NOTICE, "[%d] %s", err_no, msg);
-			return;
+			elog(NOTICE, "> %s", err_no, msg);
+			break;
 		case CE_Debug:
-			elog(DEBUG2, "[%d] %s", err_no, msg);
-			return;
+			elog(DEBUG2, "> %s", err_no, msg);
+			break;
 		case CE_Warning:
-			elog(WARNING, "[%d] %s", err_no, msg);
-			return;
+			elog(WARNING, "> %s", err_no, msg);
+			break;
 		case CE_Failure:
 		case CE_Fatal:
 		default:
-			elog(ERROR, "[%d] %s", err_no, msg);
-			return;
+			elog(ERROR, "> %s", err_no, msg);
+			break;
 	}
 	return;
 }
