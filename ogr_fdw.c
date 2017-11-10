@@ -174,7 +174,7 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 			elog(NOTICE, "[%d] %s", err_no, msg);
 			return;
 		case CE_Debug:
-			elog(DEBUG1, "[%d] %s", err_no, msg);
+			elog(DEBUG2, "[%d] %s", err_no, msg);
 			return;
 		case CE_Warning:
 			elog(WARNING, "[%d] %s", err_no, msg);
@@ -192,20 +192,6 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 void
 _PG_init(void)
 {
-	// DefineCustomIntVariable("mysql_fdw.wait_timeout",
-	// 						"Server-side wait_timeout",
-	// 						"Set the maximum wait_timeout"
-	// 						"use to set the MySQL session timeout",
-	// 						&wait_timeout,
-	// 						WAIT_TIMEOUT,
-	// 						0,
-	// 						INT_MAX,
-	// 						PGC_USERSET,
-	// 						0,
-	// 						NULL,
-	// 						NULL,
-	// 						NULL);
-
 	Oid typoid = TypenameGetTypid("geometry");
 	if (OidIsValid(typoid) && get_typisdefined(typoid))
 	{

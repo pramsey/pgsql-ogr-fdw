@@ -328,7 +328,7 @@ Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases ar
       OPTIONS (
         datasource '/tmp/test',
         format 'ESRI Shapefile',
-        config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON' );
+        config_options 'SHAPE_ENCODING=LATIN1' );
 
 Multiple config options can be passed at one time by supplying a **space-separated** list of options.
 
@@ -341,4 +341,23 @@ If you are using GDAL 2.0 or higher, you can also pass "open options" to your OG
         format 'ESRI Shapefile',
         open_options 'ENCODING=LATIN1' );
 
+### GDAL Debugging
+
+If you are getting odd behavior and you want to see what GDAL is doing behind the scenes, enable debug logging in your server:
+
+    CREATE SERVER myserver_latin1
+      FOREIGN DATA WRAPPER ogr_fdw
+      OPTIONS (
+        datasource '/tmp/test',
+        format 'ESRI Shapefile',
+        config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON'
+        );
+
+GDAL-level messages will be logged at the PostgreSQL **DEBUG2** level, so to see them when running a query, alter your `client_min_messages` setting.
+
+    SET client_min_messages = debug2;
+
+Once you've figured out your issue, don't forget to remove the `CPL_DEBUG` option from your server definition, and set your messages back to **NOTICE** level.
+
+    SET client_min_messages = notice;
 
