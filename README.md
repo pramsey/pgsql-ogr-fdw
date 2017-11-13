@@ -360,4 +360,6 @@ GDAL-level messages will be logged at the PostgreSQL **DEBUG2** level, so to see
 Once you've figured out your issue, don't forget to remove the `CPL_DEBUG` option from your server definition, and set your messages back to **NOTICE** level.
 
     SET client_min_messages = notice;
+    ALTER SERVER myserver_latin1 OPTIONS (SET config_options 'SHAPE_ENCODING=LATIN1');
+    
 
