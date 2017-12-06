@@ -171,18 +171,18 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 	switch (eErrClass)
 	{
 		case CE_None:
-			elog(NOTICE, "> %s", err_no, msg);
+			elog(NOTICE, "[%d] %s", err_no, msg);
 			break;
 		case CE_Debug:
-			elog(DEBUG2, "> %s", err_no, msg);
+			elog(DEBUG2, "[%d] %s", err_no, msg);
 			break;
 		case CE_Warning:
-			elog(WARNING, "> %s", err_no, msg);
+			elog(WARNING, "[%d] %s", err_no, msg);
 			break;
 		case CE_Failure:
 		case CE_Fatal:
 		default:
-			elog(ERROR, "> %s", err_no, msg);
+			elog(ERROR, "[%d] %s", err_no, msg);
 			break;
 	}
 	return;
@@ -2021,7 +2021,8 @@ ogrIterateForeignScan(ForeignScanState *node)
 	}
 
 	/* If we rectreive a feature from OGR, copy it over into the slot */
-	if ( (feat = OGR_L_GetNextFeature(execstate->ogr.lyr)) )
+	feat = OGR_L_GetNextFeature(execstate->ogr.lyr);
+	if ( feat )
 	{
 		/* convert result to arrays of values and null indicators */
 		if ( OGRERR_NONE != ogrFeatureToSlot(feat, slot, execstate) )
