@@ -23,7 +23,8 @@ matrix:
         - GDAL_VERSION=22
 
 before_script:
-  - sudo echo "nameserver 8.8.8.8" > /etc/resolv.conf
+  - echo "nameserver 8.8.8.8" > /tmp/resolv.conf
+  - sudo mv /tmp/resolv.conf /etc/resolv.conf
   - sudo /etc/init.d/postgresql stop
   - sudo apt-get -y remove --purge postgresql-9.1
   - sudo apt-get -y remove --purge postgresql-9.2
