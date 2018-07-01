@@ -1099,7 +1099,7 @@ ogrReadColumnData(OgrFdwState *state)
 	/* Get OGR metadata ready */
 	dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
 	ogr_ncols = OGR_FD_GetFieldCount(dfn);
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
 #else
 	ogr_geom_count = ( OGR_FD_GetGeomType(dfn) != wkbNone ) ? 1 : 0;
@@ -1442,7 +1442,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			unsigned char *wkb;
 			OGRErr err;
 
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 			OGRGeometryH geom = OGR_F_GetGeomFieldRef(feat, ogrfldnum);
 #else
 			OGRGeometryH geom = OGR_F_GetGeometryRef(feat);
@@ -1546,7 +1546,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 		}
 		else if ( ogrvariant == OGR_FIELD )
 		{
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,2,0)
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,2,0))
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum) && ! OGR_F_IsFieldNull(feat, ogrfldnum);
 #else
 			int field_not_null = OGR_F_IsFieldSet(feat, ogrfldnum);
@@ -1797,7 +1797,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 			OGRErr err;
 			if ( nulls[i] )
 			{
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, NULL);
 #else
 				err = OGR_F_SetGeometryDirectly(feat, NULL);
@@ -1818,7 +1818,7 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				if ( err != OGRERR_NONE )
 					return err;
 
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0)
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 				err = OGR_F_SetGeomFieldDirectly(feat, ogrfldnum, geom);
 #else
 				err = OGR_F_SetGeometryDirectly(feat, geom);
