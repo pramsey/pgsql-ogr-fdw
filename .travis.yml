@@ -21,6 +21,10 @@ matrix:
       language: cpp
       env:
         - GDAL_VERSION=22
+    - os: linux
+      language: cpp
+      env:
+        - GDAL_VERSION=23
 
 before_script:
   - echo "nameserver 8.8.8.8" > /tmp/resolv.conf
@@ -47,7 +51,8 @@ before_script:
   - if test "$GDAL_VERSION" = "11"; then sudo apt-get install libgdal1h libgdal-dev; fi
   - if test "$GDAL_VERSION" = "20"; then wget http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz; tar xJf gdal-2.0.3.tar.xz; cd gdal-2.0.3; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
   - if test "$GDAL_VERSION" = "21"; then wget http://download.osgeo.org/gdal/2.1.4/gdal-2.1.4.tar.xz; tar xJf gdal-2.1.4.tar.xz; cd gdal-2.1.4; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
-  - if test "$GDAL_VERSION" = "22"; then wget http://download.osgeo.org/gdal/2.2.2/gdal-2.2.2.tar.xz; tar xJf gdal-2.2.2.tar.xz; cd gdal-2.2.2; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
+  - if test "$GDAL_VERSION" = "22"; then wget http://download.osgeo.org/gdal/2.2.4/gdal-2.2.4.tar.xz; tar xJf gdal-2.2.4.tar.xz; cd gdal-2.2.4; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
+  - if test "$GDAL_VERSION" = "23"; then wget http://download.osgeo.org/gdal/2.3.0/gdal-2.3.0.tar.xz; tar xJf gdal-2.3.0.tar.xz; cd gdal-2.3.0; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
 
 script:
   - make
