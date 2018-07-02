@@ -1155,7 +1155,11 @@ ogrReadColumnData(OgrFdwState *state)
 		getTypeBinaryOutputInfo(col.pgtype, &col.pgsendfunc, &col.pgsendvarlena);
 
 		/* Get the PgSQL column name */
-		col.pgname = get_relid_attribute_name(rel->rd_id, att_tuple->attnum);
+#if PG_VERSION_NUM >= 110000
+		col.pgname = get_attname(rel->rd_id, att_tuple->attnum, false);
+#else
+		col.pgname = get_attname(rel->rd_id, att_tuple->attnum);
+#endif
 
 		/* Handle FID first */
 		if ( strcaseeq(col.pgname, "fid") && (col.pgtype == INT4OID || col.pgtype == INT8OID) )
