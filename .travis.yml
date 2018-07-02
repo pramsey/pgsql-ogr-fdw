@@ -16,8 +16,8 @@ addons:
 env:
   - PG_VERSION=9.6 GDAL_VERSION=1.1
   - PG_VERSION=9.6 GDAL_VERSION=2.2.4
-  - PG_VERSION=9.6 GDAL_VERSION=2.3.0
-  - PG_VERSION=10 GDAL_VERSION=2.3.0
+  - PG_VERSION=9.6 GDAL_VERSION=2.3.1
+  - PG_VERSION=10 GDAL_VERSION=2.3.1
 
 before_script:
   - sudo /etc/init.d/postgresql stop
