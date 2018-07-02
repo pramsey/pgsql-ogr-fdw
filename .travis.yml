@@ -2,51 +2,59 @@ sudo: required
 
 compiler: gcc
 
+dist: trusty
+sudo: required
 
-matrix:
-  include:
-    - os: linux
-      language: c
-      env:
-        - GDAL_VERSION=11
-    - os: linux
-      language: cpp
-      env:
-        - GDAL_VERSION=20
-    - os: linux
-      language: cpp
-      env:
-        - GDAL_VERSION=21
-    - os: linux
-      language: cpp
-      env:
-        - GDAL_VERSION=22
-    - os: linux
-      language: cpp
-      env:
-        - GDAL_VERSION=23
+env:
+  - GDAL_VERSION=11
+  - GDAL_VERSION=23
+
+language:
+  - cpp
+  
+
+# matrix:
+#   include:
+#     - language: c
+#       env:
+#         - GDAL_VERSION=11
+#     - os: linux
+#       language: cpp
+#       env:
+#         - GDAL_VERSION=23
+    # - os: linux
+    #   language: cpp
+    #   env:
+    #     - GDAL_VERSION=20
+    # - os: linux
+    #   language: cpp
+    #   env:
+    #     - GDAL_VERSION=21
+    # - os: linux
+    #   language: cpp
+    #   env:
+    #     - GDAL_VERSION=22
 
 before_script:
-  - echo "nameserver 8.8.8.8" > /tmp/resolv.conf
-  - sudo mv /tmp/resolv.conf /etc/resolv.conf
   - sudo /etc/init.d/postgresql stop
   - sudo apt-get -y remove --purge postgresql-9.1
   - sudo apt-get -y remove --purge postgresql-9.2
   - sudo apt-get -y remove --purge postgresql-9.3
   - sudo apt-get -y remove --purge postgresql-9.4
+  - sudo apt-get -y remove --purge postgresql-9.5
   - sudo apt-get -y autoremove
   - sudo apt-key adv --keyserver pool.sks-keyservers.net --recv-keys 7FCC7D46ACCC4CF8
-  - sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main 9.5" >> /etc/apt/sources.list.d/postgresql.list'
+  - sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main 9.6" >> /etc/apt/sources.list.d/postgresql.list'
   - sudo apt-get update
-  - sudo apt-get -y install postgresql-9.5 postgresql-server-dev-9.5
-  - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.5/main/pg_hba.conf'
-  - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.5/main/pg_hba.conf'
+  - sudo apt-get -y install postgresql-9.6 postgresql-server-dev-9.6
+  - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.6/main/pg_hba.conf'
+  - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.6/main/pg_hba.conf'
   - sudo /etc/init.d/postgresql stop
 #  - sudo /etc/init.d/postgresql start
 #  - sudo apt-get install valgrind
-  - sudo -u postgres /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
+  - sudo -u postgres /usr/lib/postgresql/9.6/bin/postgres -D /var/lib/postgresql/9.6/main -c config_file=/etc/postgresql/9.6/main/postgresql.conf 2>/tmp/postgres.log &
 # Run the Postgres instance under Valgrind and collect Valgrind log
-#  - sudo -u postgres valgrind --trace-children=yes --leak-check=full /usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf 2>/tmp/postgres.log &
+#  - sudo -u postgres valgrind --trace-children=yes --leak-check=full /usr/lib/postgresql/9.6/bin/postgres -D /var/lib/postgresql/9.6/main -c config_file=/etc/postgresql/9.6/main/postgresql.conf 2>/tmp/postgres.log &
   - psql --version
   - if test "$GDAL_VERSION" = "11"; then sudo apt-get install libgdal1h libgdal-dev; fi
   - if test "$GDAL_VERSION" = "20"; then wget http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz; tar xJf gdal-2.0.3.tar.xz; cd gdal-2.0.3; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
