@@ -11,18 +11,6 @@
 
 #include "stringbuffer.h"
 
-#ifdef USE_PG_MEM
-
-void * palloc(size_t sz);
-void pfree(void *ptr);
-void * repalloc(void *ptr, size_t sz);
-
-#define malloc(sz) palloc(sz)
-#define free(ptr) pfree(ptr)
-#define realloc(ptr,sz) repalloc(ptr,sz)
-
-#endif
-
 /**
 * Allocate a new stringbuffer_t. Use stringbuffer_destroy to free.
 */
