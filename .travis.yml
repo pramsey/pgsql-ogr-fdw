@@ -20,6 +20,7 @@ env:
   - PG_VERSION=10 GDAL_VERSION=2.3.0
 
 before_script:
+  - sudo /etc/init.d/postgresql stop
   - sudo apt-get -y --purge remove postgresql-9.1
   - sudo apt-get -y --purge remove postgresql-9.2
   - sudo apt-get -y --purge remove postgresql-9.3
