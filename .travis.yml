@@ -1,44 +1,46 @@
-sudo: required
-
-compiler: gcc
-
 dist: trusty
 sudo: required
-language:
-  - cpp
+language: cpp
+compiler: gcc
+
+addons:
+  apt:
+    packages:
+    - curl
+    - libcurl4-gnutls-dev
+    - ca-certificates
+    - software-properties-common 
+    - python-software-properties
+    - gnupg-curl
 
 env:
-  - GDAL_VERSION=11
-  - GDAL_VERSION=22
-  - GDAL_VERSION=23
+  - PG_VERSION=9.6 GDAL_VERSION=1.1
+  - PG_VERSION=9.6 GDAL_VERSION=2.2.4
+  - PG_VERSION=9.6 GDAL_VERSION=2.3.0
+  - PG_VERSION=10 GDAL_VERSION=2.3.0
 
 before_script:
-  - sudo /etc/init.d/postgresql stop
-  - sudo apt-get -y remove --purge postgresql-9.1
-  - sudo apt-get -y remove --purge postgresql-9.2
-  - sudo apt-get -y remove --purge postgresql-9.3
-  - sudo apt-get -y remove --purge postgresql-9.4
-  - sudo apt-get -y remove --purge postgresql-9.5
+  - sudo apt-get -y --purge remove postgresql-9.1
+  - sudo apt-get -y --purge remove postgresql-9.2
+  - sudo apt-get -y --purge remove postgresql-9.3
+  - sudo apt-get -y --purge remove postgresql-9.4
+  - sudo apt-get -y --purge remove postgresql-9.5
+  - sudo apt-get -y --purge remove postgresql-9.6
   - sudo apt-get -y autoremove
-  - sudo apt-key adv --keyserver pool.sks-keyservers.net --recv-keys 7FCC7D46ACCC4CF8
-  - sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main 9.6" >> /etc/apt/sources.list.d/postgresql.list'
-  - sudo apt-get update
-  - sudo apt-get -y install postgresql-9.6 postgresql-server-dev-9.6
-  - sudo sh -c 'echo "local all all trust" > /etc/postgresql/9.6/main/pg_hba.conf'
-  - sudo sh -c 'echo -n "host all all 127.0.0.1/32 trust" >> /etc/postgresql/9.6/main/pg_hba.conf'
-  - sudo /etc/init.d/postgresql stop
-  - sudo -u postgres /usr/lib/postgresql/9.6/bin/postgres -D /var/lib/postgresql/9.6/main -c config_file=/etc/postgresql/9.6/main/postgresql.conf 2>/tmp/postgres.log &
-  - psql --version
-  - if test "$GDAL_VERSION" = "11"; then sudo apt-get install libgdal1h libgdal-dev; fi
-  - if test "$GDAL_VERSION" = "20"; then wget http://download.osgeo.org/gdal/2.0.3/gdal-2.0.3.tar.xz; tar xJf gdal-2.0.3.tar.xz; cd gdal-2.0.3; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
-  - if test "$GDAL_VERSION" = "21"; then wget http://download.osgeo.org/gdal/2.1.4/gdal-2.1.4.tar.xz; tar xJf gdal-2.1.4.tar.xz; cd gdal-2.1.4; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
-  - if test "$GDAL_VERSION" = "22"; then wget http://download.osgeo.org/gdal/2.2.4/gdal-2.2.4.tar.xz; tar xJf gdal-2.2.4.tar.xz; cd gdal-2.2.4; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
-  - if test "$GDAL_VERSION" = "23"; then wget http://download.osgeo.org/gdal/2.3.0/gdal-2.3.0.tar.xz; tar xJf gdal-2.3.0.tar.xz; cd gdal-2.3.0; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
-
+  - sudo rm -rf /var/lib/postgresql
+  - apt-key adv --fetch-keys https://www.postgresql.org/media/keys/ACCC4CF8.asc
+  - sudo add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main $PG_VERSION"    
+  - sudo apt-get update -qq
+  - sudo apt-get -y install postgresql-$PG_VERSION postgresql-server-dev-$PG_VERSION
+  - sudo cp ci/pg_hba.conf /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+  - sudo /etc/init.d/postgresql reload
+  
+  - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1h libgdal-dev; fi
+  - if [[ $GDAL_VERSION == 2* ]]; then wget http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.xz; tar xJf gdal-$GDAL_VERSION.tar.xz; cd gdal-$GDAL_VERSION; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
+  
 script:
   - make
   - sudo make install
   - sudo chmod 755 $HOME
-  - env
   - PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
 
