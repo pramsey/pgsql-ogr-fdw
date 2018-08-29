@@ -192,15 +192,6 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 void
 _PG_init(void)
 {
-	Oid typoid = TypenameGetTypid("geometry");
-	if (OidIsValid(typoid) && get_typisdefined(typoid))
-	{
-		GEOMETRYOID = typoid;
-	}
-	else
-	{
-		GEOMETRYOID = BYTEAOID;
-	}
 
 	on_proc_exit(&ogr_fdw_exit, PointerGetDatum(NULL));
 
@@ -220,6 +211,25 @@ ogr_fdw_exit(int code, Datum arg)
 	OGRCleanupAll();
 }
 
+/*
+ * Function to get the geometry OID if required
+ */
+Oid ogrGetGeometryOid(void)
+{
+	if (GEOMETRYOID == InvalidOid) {
+		Oid typoid = TypenameGetTypid("geometry");
+		if (OidIsValid(typoid) && get_typisdefined(typoid))
+		{
+			GEOMETRYOID = typoid;
+		}
+		else
+		{
+			GEOMETRYOID = BYTEAOID;
+		}
+	}
+
+	return GEOMETRYOID;
+}
 
 /*
  * Foreign-data wrapper handler function: return a struct with pointers

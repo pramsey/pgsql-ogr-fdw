@@ -183,8 +183,6 @@ typedef struct OgrFdwModifyState
 /* Shared function signatures */
 bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, OgrFdwState *state, List **param);
 
-
-/* Shared global value of the Geometry OId */
-extern Oid GEOMETRYOID;
+Oid ogrGetGeometryOid(void);
 
 #endif /* _OGR_FDW_H */
