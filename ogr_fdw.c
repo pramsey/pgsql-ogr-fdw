@@ -1181,7 +1181,7 @@ ogrReadColumnData(OgrFdwState *state)
 
 		/* If the OGR source has geometries, can we match them to Pg columns? */
 		/* We'll match to the first ones we find, irrespective of name */
-		if ( geom_count < ogr_geom_count && col.pgtype == GEOMETRYOID )
+		if ( geom_count < ogr_geom_count && col.pgtype == ogrGetGeometryOid() )
 		{
 			col.ogrvariant = OGR_GEOMETRY;
 			col.ogrfldtype = OFTBinary;
@@ -1262,7 +1262,7 @@ ogrLookupGeometryFunctionOid(const char *proname)
 	FuncCandidateList clist;
 
 	/* This only works if PostGIS is installed */
-	if ( GEOMETRYOID == InvalidOid || GEOMETRYOID == BYTEAOID )
+	if ( ogrGetGeometryOid() == InvalidOid || ogrGetGeometryOid() == BYTEAOID )
 		return InvalidOid;
 
 	names = stringToQualifiedNameList(proname);
@@ -1278,7 +1278,7 @@ ogrLookupGeometryFunctionOid(const char *proname)
 			int i;
 			for ( i = 0; i < clist->nargs; i++ )
 			{
-				if ( clist->args[i] == GEOMETRYOID )
+				if ( clist->args[i] == ogrGetGeometryOid() )
 					return clist->oid;
 			}
 		}
@@ -1491,7 +1491,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 				nulls[i] = false;
 				values[i] = PointerGetDatum(varlena);
 			}
-			else if ( pgtype == GEOMETRYOID )
+			else if ( pgtype == ogrGetGeometryOid() )
 			{
 				/*
 				 * For geometry we need to convert the varlena WKB data into a serialized
@@ -2625,7 +2625,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 			         quote_identifier(server->servername),
 			         launder_table_names,
 			         launder_column_names,
-			         GEOMETRYOID != BYTEAOID,
+			         ogrGetGeometryOid() != BYTEAOID,
 			         &buf
 			      );
 
