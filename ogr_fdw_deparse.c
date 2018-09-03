@@ -68,7 +68,7 @@ ogrStringFromDatum(Datum datum, Oid type)
 	initStringInfo(&result);
 
 	/* Special handling to convert a geometry to a bbox needed here */
-	if ( type == GEOMETRYOID )
+	if ( type == ogrGetGeometryOid() )
 	{
 		elog(ERROR, "got a GEOMETRY!");
 		return NULL;
@@ -128,7 +128,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 		appendStringInfoString(context->buf, "NULL");
 	}
 	/* Use geometry as a spatial filter? */
-	else if ( constant->consttype == GEOMETRYOID )
+	else if ( constant->consttype == ogrGetGeometryOid() )
 	{
 		/*
 		 * For geometry we need to convert the gserialized constant into 
@@ -355,7 +355,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 		// else
 		// 	return false;
 		
-		// if ( constant->consttype != GEOMETRYOID )
+		// if ( constant->consttype != ogrGetGeometryOid() )
 
 		ReleaseSysCache(tuple);
 
@@ -483,12 +483,12 @@ ogrDeparseNullTest(NullTest *node, OgrDeparseCtx *context)
 {
 	StringInfo buf = context->buf;
 
-    appendStringInfoChar(buf, '(');
-    ogrDeparseExpr(node->arg, context);
-    if (node->nulltesttype == IS_NULL)
-        appendStringInfoString(buf, " IS NULL)");
-    else
-        appendStringInfoString(buf, " IS NOT NULL)");
+	appendStringInfoChar(buf, '(');
+	ogrDeparseExpr(node->arg, context);
+	if (node->nulltesttype == IS_NULL)
+		appendStringInfoString(buf, " IS NULL)");
+	else
+		appendStringInfoString(buf, " IS NOT NULL)");
 
 	return true;
 }
