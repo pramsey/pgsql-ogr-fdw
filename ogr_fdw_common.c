@@ -54,7 +54,7 @@ ogrStringLaunder(char *str)
 	int i, j = 0;
 	char tmp[STR_MAX_LEN];
 	memset(tmp, 0, STR_MAX_LEN);
-	
+
 	for(i = 0; str[i]; i++)
 	{
 		char c = tolower(str[i]);
@@ -83,7 +83,7 @@ ogrStringLaunder(char *str)
 			j = STR_MAX_LEN - 1;
 	}
 	strncpy(str, tmp, STR_MAX_LEN);
-	
+
 }
 
 static char *
@@ -122,8 +122,8 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld)
 			return "bigint";
 #endif
 		default:
-			CPLError(CE_Failure, CPLE_AssertionFailed, 
-			         "unsupported GDAL type '%s'", 
+			CPLError(CE_Failure, CPLE_AssertionFailed,
+			         "unsupported GDAL type '%s'",
 			         OGR_GetFieldTypeName(ogr_type));
 			return NULL;
 	}
@@ -182,13 +182,13 @@ ogrGeomTypeToPgGeomType(stringbuffer_t *buf, OGRwkbGeometryType gtype)
 			CPLError(CE_Failure, CPLE_AssertionFailed, "Cannot handle OGR geometry type '%d'", gtype);
 	}
 
-#if GDAL_VERSION_MAJOR >= 2 
+#if GDAL_VERSION_MAJOR >= 2
 	if ( wkbHasZ(gtype) )
 #else
 	if ( gtype & wkb25DBit )
 #endif
 		stringbuffer_append(buf, "Z");
-	
+
 #if GDAL_VERSION_MAJOR >= 2 && GDAL_VERSION_MINOR >= 1
 	if ( wkbHasM(gtype) )
 		stringbuffer_append(buf, "M");
@@ -227,7 +227,7 @@ ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_colu
 }
 
 OGRErr
-ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server, 
+ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 			   int launder_table_names, int launder_column_names,
 			   int use_postgis_geometry, stringbuffer_t *buf)
 {
@@ -235,7 +235,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	char table_name[STR_MAX_LEN];
 	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
 	stringbuffer_t gbuf;
-	
+
 	stringbuffer_init(&gbuf);
 
 	if ( ! ogr_fd )
@@ -249,18 +249,18 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 #else
 	geom_field_count = (OGR_L_GetGeomType(ogr_lyr) != wkbNone);
 #endif
-	
+
 	/* Process table name */
 	strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 	if (launder_table_names)
 		ogrStringLaunder(table_name);
-	
+
 	/* Create table */
 	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE %s (\n", quote_identifier(table_name));
-	
+
 	/* For now, every table we auto-create will have a FID */
 	stringbuffer_append(buf, "  fid bigint");
-	
+
 	/* Handle all geometry columns in the OGR source */
 	for ( i = 0; i < geom_field_count; i++ )
 	{
@@ -284,11 +284,11 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 
 		/* PostGIS geometry type has lots of complex stuff */
 		if ( use_postgis_geometry )
-		{	
+		{
 			/* Add geometry type info */
 			stringbuffer_append(&gbuf, "Geometry(");
 			ogrGeomTypeToPgGeomType(&gbuf, gtype);
-			
+
 			/* See if we have an EPSG code to work with */
 			if ( gsrs )
 			{
@@ -303,7 +303,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 					srid = atoi(charSrsCode);
 				}
 			}
-		
+
 			/* Add EPSG number, if figured it out */
 			if ( srid )
 			{
@@ -319,7 +319,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 		{
 			stringbuffer_append(&gbuf, "bytea");
 		}
-	
+
 		/* Use geom field name if we have it */
 		if ( geomfldname && strlen(geomfldname) > 0 )
 		{
@@ -341,8 +341,8 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld), 
-		                   ogrTypeToPgType(ogr_fld), 
+		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld),
+		                   ogrTypeToPgType(ogr_fld),
 		                   launder_column_names, buf);
 	}
 
@@ -350,11 +350,11 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	 * Add server name and layer-level options.  We specify remote
 	 * layer name as option
 	 */
-	stringbuffer_aprintf(buf, "\n) SERVER %s\nOPTIONS (", quote_identifier(fdw_server));
+	stringbuffer_aprintf(buf, "\n) SERVER \"%s\"\nOPTIONS (", quote_identifier(fdw_server));
 	stringbuffer_append(buf, "layer ");
 	ogrDeparseStringLiteral(buf, OGR_L_GetName(ogr_lyr));
 	stringbuffer_append(buf, ");\n");
-	
+
 	return OGRERR_NONE;
 }
 
