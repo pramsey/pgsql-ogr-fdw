@@ -19,7 +19,7 @@ ORDER BY c.ordinal_position;
  geom        | bytea             | 
  n2ame       | character varying | {column_name=2ame}
  age         | integer           | 
- height      | real              | 
+ height      | double precision  | 
  b_rthdate   | date              | {column_name=b-rthdate}
 (6 rows)
 
@@ -46,7 +46,7 @@ ORDER BY c.ordinal_position;
  column_name |     data_type     | attfdwoptions 
 -------------+-------------------+---------------
  fid         | bigint            | 
- id          | real              | 
+ id          | double precision  | 
  natural     | character varying | 
 (3 rows)
 
