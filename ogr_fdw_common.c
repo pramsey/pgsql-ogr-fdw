@@ -100,7 +100,7 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld)
 #endif
 				return "integer";
 		case OFTReal:
-			return "real";
+			return "double precision";
 		case OFTString:
 			return "varchar";
 		case OFTBinary:
@@ -114,7 +114,7 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld)
 		case OFTIntegerList:
 			return "integer[]";
 		case OFTRealList:
-			return "real[]";
+			return "double precision[]";
 		case OFTStringList:
 			return "varchar[]";
 #if GDAL_VERSION_MAJOR >= 2
