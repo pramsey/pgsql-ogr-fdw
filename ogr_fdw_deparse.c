@@ -523,8 +523,8 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 			return false;
 
 #if PG_VERSION_NUM >= 120000
-		case T_ParamRef:
-			elog(NOTICE, "unsupported OGR FDW expression type, T_ParamRef");
+		case T_SubscriptingRef:
+			elog(NOTICE, "unsupported OGR FDW expression type, T_SubscriptingRef");
 			return false;
 #else
 		case T_ArrayRef:
