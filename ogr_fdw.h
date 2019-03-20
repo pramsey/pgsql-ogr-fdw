@@ -37,13 +37,22 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#if PG_VERSION_NUM >= 120000
+#include "nodes/pathnodes.h"
+#else
 #include "nodes/relation.h"
+#endif
 #include "optimizer/clauses.h"
-#include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
+#if PG_VERSION_NUM >= 120000
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/cost.h"
 #include "optimizer/var.h"
+#endif
+
 #include "parser/parsetree.h"
 #include "storage/ipc.h"
 #include "utils/builtins.h"
