@@ -1477,7 +1477,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			wkbsize = OGR_G_WkbSize(geom);
 			varsize = wkbsize + VARHDRSZ;
 			varlena = palloc(varsize);
-			wkb = (unsigned char *)VARDATA(varlena);
+			wkb = (unsigned char *)VARDATA_ANY(varlena);
 			err = OGR_G_ExportToWkb(geom, wkbNDR, wkb);
 			SET_VARSIZE(varlena, varsize);
 
@@ -1822,8 +1822,8 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 			{
 				OGRGeometryH geom;
 				bytea *wkb_bytea = DatumGetByteaP(OidFunctionCall1(col.pgsendfunc, values[i]));
-				unsigned char *wkb = (unsigned char *)VARDATA(wkb_bytea);
-				int wkbsize = VARSIZE(wkb_bytea) - VARHDRSZ;
+				unsigned char *wkb = (unsigned char *)VARDATA_ANY(wkb_bytea);
+				int wkbsize = VARSIZE_ANY_EXHDR(wkb_bytea);
 				wkbsize = ogrEwkbStripSrid(wkb, wkbsize);
 
 				/* TODO, create geometry with SRS of table? */
@@ -1915,10 +1915,10 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				case NAMEOID:
 				case BPCHAROID: /* char(n) */
 				{
-					char *varlena = (char *)DatumGetPointer(values[i]);
-					size_t varsize = VARSIZE(varlena)-VARHDRSZ;
+					bytea *varlena = (bytea *)DatumGetPointer(values[i]);
+					size_t varsize = VARSIZE_ANY_EXHDR(varlena);
 					char *str = palloc0(varsize+1);
-					memcpy(str, VARDATA(varlena), varsize);
+					memcpy(str, VARDATA_ANY(varlena), varsize);
 					OGR_F_SetFieldString(feat, ogrfldnum, str);
 					pfree(str);
 					break;
@@ -1936,8 +1936,8 @@ ogrSlotToFeature(const TupleTableSlot *slot, OGRFeatureH feat, const OgrFdwTable
 				case BYTEAOID:
 				{
 					bytea *varlena = PG_DETOAST_DATUM(values[i]);
-					size_t varsize = VARSIZE(varlena) - VARHDRSZ;
-					OGR_F_SetFieldBinary(feat, ogrfldnum, varsize, (GByte *)VARDATA(varlena));
+					size_t varsize = VARSIZE_ANY_EXHDR(varlena);
+					OGR_F_SetFieldBinary(feat, ogrfldnum, varsize, (GByte *)VARDATA_ANY(varlena));
 					break;
 				}
 
@@ -2389,12 +2389,21 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	OgrFdwModifyState *modstate = rinfo->ri_FdwState;
 	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(modstate->ogr.lyr);
 	OGRFeatureH feat = OGR_F_Create(ogr_fd);
-	TupleDesc td = slot->tts_tupleDescriptor;
 	int fid_column;
 	OGRErr err;
 	GIntBig fid;
 
 	elog(DEBUG2, "ogrExecForeignInsert");
+
+#if PG_VERSION_NUM >= 120000
+	/*
+	* PgSQL 12 passes an unpopulated slot to us, and for now
+	* we force it to populate itself and then read directly
+	* from it. For future, using the slot_getattr() infra
+	* would be cleaner, but version dependent.
+	*/
+	slot_getallattrs(slot);
+#endif
 
 	/* Copy the data from the slot onto the feature */
 	if ( ! feat )
@@ -2412,7 +2421,7 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 	OGR_F_Destroy(feat);
 
 	/* Update the FID for RETURNING slot */
-	fid_column = ogrGetFidColumn(td);
+	fid_column = ogrGetFidColumn(slot->tts_tupleDescriptor);
 	if ( fid_column >= 0 )
 	{
 		slot->tts_values[fid_column] = Int64GetDatum(fid);

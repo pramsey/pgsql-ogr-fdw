@@ -54,9 +54,13 @@
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 
+
+
 #if PG_VERSION_NUM < 120000
 #include "nodes/relation.h"
 #include "optimizer/var.h"
+else
+#include "executor/tuptable.h"
 #endif
 
 /* GDAL/OGR includes and compat */
