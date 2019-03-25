@@ -5,13 +5,11 @@
  *
  * Copyright (c) 2014-2015, Paul Ramsey <pramsey@cleverelephant.ca>
  *
- * Convert parse tree to a QueryExpression as described at 
+ * Convert parse tree to a QueryExpression as described at
  * http://gdal.org/ogr_sql.html
  *-------------------------------------------------------------------------
  */
 
-
-#include "postgres.h"
 
 /*
  * Local structures
@@ -131,7 +129,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 	else if ( constant->consttype == ogrGetGeometryOid() )
 	{
 		/*
-		 * For geometry we need to convert the gserialized constant into 
+		 * For geometry we need to convert the gserialized constant into
 		 * an OGRGeometry for the OGR spatial filter.
 		 * For that, we can use the type's "send" function
 		 * which takes in gserialized and spits out EWKB.
@@ -152,16 +150,16 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 		 */
 		getTypeBinaryOutputInfo(constant->consttype, &sendfunction, &typeIsVarlena);
 		wkbdatum = OidFunctionCall1(sendfunction, constant->constvalue);
-		
-		/* 
-		 * Convert the WKB into an OGR geometry 
+
+		/*
+		 * Convert the WKB into an OGR geometry
 		 */
 		gser = DatumGetPointer(wkbdatum);
 		wkb = VARDATA(gser);
 		wkb_size = VARSIZE(gser) - VARHDRSZ;
 		err = OGR_G_CreateFromWkb((unsigned char *)wkb, NULL, &ogrgeom, wkb_size);
-		
-		/* 
+
+		/*
 		 * Save the result
 		 */
 		if ( err != OGRERR_NONE )
@@ -171,8 +169,8 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx *context)
 			else
 				elog(WARNING, "got two geometries in OGR FDW query, only using the first");
 		}
-		/* 
-		 * geometry doesn't play a role in the deparsed SQL 
+		/*
+		 * geometry doesn't play a role in the deparsed SQL
 		 */
 		return false;
 	}
@@ -205,15 +203,15 @@ ogrIsLegalVarName(const char *varname)
 {
 	size_t len = strlen(varname);
 	int i;
-		
+
 	for ( i = 0; i < len; i++ )
 	{
 		char c = varname[i];
-			
+
 		/* First char must be a-zA-Z */
 		if ( i == 0 && ! ((c>=97&&c<=122)||(c>=65&&c<=90)) )
 			return false;
-		
+
 		/* All other chars must be 0-9a-zA-Z_ */
 		if ( ! ((c>=97&&c<=122)||(c>=65&&c<=90)||(c>=48&&c<=59)||(c==96)) )
 			return false;
@@ -226,7 +224,7 @@ static bool
 ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 {
 	StringInfoData *buf = context->buf;
-	
+
 	if (node->varno == context->foreignrel->relid && node->varlevelsup == 0)
 	{
 		/* Var belongs to foreign table */
@@ -246,7 +244,7 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 			if ( table->cols[i].pgattnum == node->varattno )
 			{
 				const char *fldname = NULL;
-				
+
 				if ( table->cols[i].ogrvariant == OGR_FID )
 				{
 					fldname = OGR_L_GetFIDColumn(lyr);
@@ -259,19 +257,19 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 					OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, table->cols[i].ogrfldnum);
 					fldname = OGR_Fld_GetNameRef(fld);
 				}
-				
+
 				if ( fldname )
 				{
 					if ( ogrIsLegalVarName(fldname) )
 						appendStringInfoString(buf, fldname);
 					else
 						appendStringInfo(buf, "\"%s\"", fldname);
-					
+
 					done = true;
 				}
 			}
 		}
-		
+
 		return done;
 	}
 	else
@@ -279,7 +277,7 @@ ogrDeparseVar(Var *node, OgrDeparseCtx *context)
 		elog(ERROR, "got to param handling section of ogrDeparseVar");
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -288,7 +286,7 @@ static int ogrOperatorCmpFunc(const void * a, const void * b)
 	return strcasecmp(*(const char**)a, *(const char**)b);
 }
 
-static bool 
+static bool
 ogrOperatorIsSupported(const char *opname)
 {
 	/* IMPORTANT */
@@ -296,7 +294,7 @@ ogrOperatorIsSupported(const char *opname)
 	static const char * ogrOperators[10] = { "!=", "&&", "<", "<=", "<>", "=", ">", ">=", "~~", "~~*" };
 
 	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
-	
+
 	if ( bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc) )
 		return true;
 	else
@@ -354,7 +352,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 		// 	constant = (Const*)l_arg;
 		// else
 		// 	return false;
-		
+
 		// if ( constant->consttype != ogrGetGeometryOid() )
 
 		ReleaseSysCache(tuple);
@@ -385,10 +383,10 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 	/* use 'ILIKE' all the time. */
 	if ( streq(opname, "~~") || streq(opname, "~~*") )
 		opname = "ILIKE";
-	
+
 	/* Operator symbol */
 	appendStringInfoString(buf, opname);
-	
+
 	/* Deparse right operand. */
 	if (oprkind == 'l' || oprkind == 'b')
 	{
@@ -402,7 +400,7 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx *context)
 
 	ReleaseSysCache(tuple);
 	return result;
-	
+
 }
 
 static bool
@@ -436,9 +434,9 @@ ogrDeparseBoolExpr(BoolExpr *node, OgrDeparseCtx *context)
 	appendStringInfoChar(buf, '(');
 	foreach(lc, node->args)
 	{
-		
+
 		len_save_part = buf->len;
-		
+
 		/* Connect expressions and parenthesize each condition */
 		if ( ! first )
 			appendStringInfo(buf, " %s ", op);
@@ -446,7 +444,7 @@ ogrDeparseBoolExpr(BoolExpr *node, OgrDeparseCtx *context)
 		/* Unparse the expression, if possible */
 		result = ogrDeparseExpr((Expr *) lfirst(lc), context);
 		result_total += result;
-		
+
 		/* We can backtrack just this term for AND expressions */
 		if ( boolop == AND_EXPR && ! result )
 			setStringInfoLength(buf, len_save_part);
@@ -454,17 +452,17 @@ ogrDeparseBoolExpr(BoolExpr *node, OgrDeparseCtx *context)
 		/* We have to drop the whole thing if we can't get every part of an OR expression */
 		if ( boolop == OR_EXPR && ! result )
 			break;
-		
+
 		/* Don't flip the "first" bit until we get a good expression */
 		if ( first && result )
 			first = false;
 	}
 	appendStringInfoChar(buf, ')');
-	
+
 	/* We have to drop the whole thing if we can't get every part of an OR expression */
 	if ( boolop == OR_EXPR && ! result )
 		setStringInfoLength(buf, len_save_all);
-	
+
 	return result_total > 0;
 }
 
@@ -521,8 +519,8 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 			/* TODO: Handle this to support the "IN" operator */
 			elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
 			return false;
-		case T_ArrayRef:
-			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayRef");
+		case T_SubscriptingRef:
+			elog(NOTICE, "unsupported OGR FDW expression type, T_SubscriptingRef");
 			return false;
 		case T_ArrayExpr:
 			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayExpr");
@@ -537,7 +535,7 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 			elog(NOTICE, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
 			return false;
 	}
-	
+
 }
 
 
@@ -584,13 +582,13 @@ ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *expr
 			/* Couldn't unparse some portion of the expression, so rewind the stringinfo */
 			setStringInfoLength(buf, len_save);
 		}
-		
+
 		/* Don't flip the "first" bit until we get a good expression */
 		if ( first && result )
 			first = false;
-	}	
-	
-	return true;	
+	}
+
+	return true;
 }
 
 

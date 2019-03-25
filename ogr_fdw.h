@@ -14,6 +14,7 @@
 /*
  * PostgreSQL
  */
+#include "postgres.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/reloptions.h"
@@ -37,13 +38,11 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "nodes/relation.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
-#include "optimizer/var.h"
 #include "parser/parsetree.h"
 #include "storage/ipc.h"
 #include "utils/builtins.h"
@@ -54,6 +53,11 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
+
+#if PG_VERSION_NUM < 120000
+#include "nodes/relation.h"
+#include "optimizer/var.h"
+#endif
 
 /* GDAL/OGR includes and compat */
 #include "ogr_fdw_gdal.h"
