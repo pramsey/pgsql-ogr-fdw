@@ -519,9 +519,15 @@ ogrDeparseExpr(Expr *node, OgrDeparseCtx *context)
 			/* TODO: Handle this to support the "IN" operator */
 			elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
 			return false;
+#if PG_VERSION_NUM < 120000
+		case T_ArrayRef:
+			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayRef");
+			return false;
+#else
 		case T_SubscriptingRef:
 			elog(NOTICE, "unsupported OGR FDW expression type, T_SubscriptingRef");
 			return false;
+#endif
 		case T_ArrayExpr:
 			elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayExpr");
 			return false;
