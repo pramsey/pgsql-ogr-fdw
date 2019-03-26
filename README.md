@@ -100,40 +100,41 @@ Since we can access any OGR data source as a table, how about a public WFS serve
     CREATE EXTENSION postgis;
     CREATE EXTENSION ogr_fdw;
 
-    CREATE SERVER opengeo
+    CREATE SERVER geoserver
       FOREIGN DATA WRAPPER ogr_fdw
       OPTIONS (
-        datasource 'WFS:http://demo.opengeo.org/geoserver/wfs',
-        format 'WFS' );
+	datasource 'WFS:https://demo.geo-solutions.it/geoserver/wfs',
+	format 'WFS' );
 
     CREATE FOREIGN TABLE topp_states (
-      fid integer,
-      geom geometry,
+      fid bigint,
+      the_geom Geometry(MultiSurface,4326),
       gml_id varchar,
       state_name varchar,
       state_fips varchar,
       sub_region varchar,
       state_abbr varchar,
-      land_km real,
-      water_km real,
-      persons real,
-      families real,
-      houshold real,
-      male real,
-      female real,
-      workers real,
-      drvalone real,
-      carpool real,
-      pubtrans real,
-      employed real,
-      unemploy real,
-      service real,
-      manual real,
-      p_male real,
-      p_female real,
-      samp_pop real )
-      SERVER opengeo
-      OPTIONS (layer 'topp:states');
+      land_km double precision,
+      water_km double precision,
+      persons double precision,
+      families double precision,
+      houshold double precision,
+      male double precision,
+      female double precision,
+      workers double precision,
+      drvalone double precision,
+      carpool double precision,
+      pubtrans double precision,
+      employed double precision,
+      unemploy double precision,
+      service double precision,
+      manual double precision,
+      p_male double precision,
+      p_female double precision,
+      samp_pop double precision
+    ) SERVER "geoserver"
+    OPTIONS (layer 'topp:states');
+
 
 ### FGDB FDW
 
