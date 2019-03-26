@@ -41,8 +41,6 @@ before_script:
   - if [[ $GDAL_VERSION == 2* ]]; then wget http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.xz; tar xJf gdal-$GDAL_VERSION.tar.xz; cd gdal-$GDAL_VERSION; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
 
 script:
-  - make
-  - sudo make install
-  - sudo chmod 755 $HOME
+  - make && sudo make install && sudo chmod 755 $HOME
   - PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
 
