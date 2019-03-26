@@ -1477,7 +1477,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot *slot, const OgrFdwExecS
 			wkbsize = OGR_G_WkbSize(geom);
 			varsize = wkbsize + VARHDRSZ;
 			varlena = palloc(varsize);
-			wkb = (unsigned char *)VARDATA_ANY(varlena);
+			wkb = (unsigned char *)VARDATA(varlena);
 			err = OGR_G_ExportToWkb(geom, wkbNDR, wkb);
 			SET_VARSIZE(varlena, varsize);
 
@@ -2243,6 +2243,10 @@ static TupleTableSlot *ogrExecForeignUpdate (EState *estate,
 	if ( fid_column < 0 )
 		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
 
+#if PG_VERSION_NUM >= 120000
+	slot_getallattrs(slot);
+#endif
+
 	/* What is the value of the FID for this record? */
 	fid_datum = slot->tts_values[fid_column];
 #if PG_VERSION_NUM >= 110000
@@ -2453,6 +2457,10 @@ static TupleTableSlot *ogrExecForeignDelete (EState *estate,
 	fid_column = ogrGetFidColumn(td);
 	if ( fid_column < 0 )
 		elog(ERROR, "cannot find 'fid' column in table '%s'", get_rel_name(foreigntableid));
+
+#if PG_VERSION_NUM >= 120000
+	slot_getallattrs(planSlot);
+#endif
 
 	/* What is the value of the FID for this record? */
 	fid_datum = planSlot->tts_values[fid_column];
