@@ -3,6 +3,34 @@
 #define _OGR_FDW_GDAL_H 1
 
 /*
+ * Quiet warnings due to double use of
+ * pkgconfig macros in GDAL and PgSQL
+ */
+#ifdef PACKAGE_VERSION
+#undef PACKAGE_VERSION
+#endif
+
+#ifdef PACKAGE_TARNAME
+#undef PACKAGE_TARNAME
+#endif
+
+#ifdef PACKAGE_STRING
+#undef PACKAGE_STRING
+#endif
+
+#ifdef PACKAGE_NAME
+#undef PACKAGE_NAME
+#endif
+
+#ifdef PACKAGE_BUGREPORT
+#undef PACKAGE_BUGREPORT
+#endif
+
+#ifdef PACKAGE_VERSION
+#undef PACKAGE_VERSION
+#endif
+
+/*
  * OGR library API
  */
 #include "gdal.h"
@@ -11,11 +39,11 @@
 #include "cpl_error.h"
 #include "cpl_string.h"
 
-/* 
+/*
  * As far as possible code is GDAL2 compliant, and these
  * mappings are used to convert to GDAL1-style function
  * names. For GDALDatasetH opening, there are specific
- * code blocks to handle version differences between 
+ * code blocks to handle version differences between
  * GDALOpenEx() and OGROpen()
  */
 #if GDAL_VERSION_MAJOR < 2
