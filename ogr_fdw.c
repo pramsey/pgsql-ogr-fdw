@@ -157,42 +157,65 @@ static List *ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid
 /*
  * Helper functions
  */
-static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, bool updateable);
+static OgrConnection ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable);
 static void ogr_fdw_exit(int code, Datum arg);
 static void ogrReadColumnData(OgrFdwState *state);
 
 /* Global to hold GEOMETRYOID */
 Oid GEOMETRYOID = InvalidOid;
 
+
 #if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,1,0)
+
+const char* const gdalErrorTypes[] = {
+	"None",
+	"AppDefined",
+	"OutOfMemory",
+	"FileIO",
+	"OpenFailed",
+	"IllegalArg",
+	"NotSupported",
+	"AssertionFailed",
+	"NoWriteAccess",
+	"UserInterrupt",
+	"ObjectNull",
+	"HttpResponse",
+	"AWSBucketNotFound",
+	"AWSObjectNotFound",
+	"AWSAccessDenied",
+	"AWSInvalidCredentials",
+	"AWSSignatureDoesNotMatch"
+	};
+
 static void
 ogrErrorHandler(CPLErr eErrClass, int err_no, const char *msg)
 {
+	const char * gdalErrType = gdalErrorTypes[err_no];
 	switch (eErrClass)
 	{
 		case CE_None:
-			elog(NOTICE, "[%d] %s", err_no, msg);
+			elog(NOTICE, "GDAL %s [%d] %s", gdalErrType, err_no, msg);
 			break;
 		case CE_Debug:
-			elog(DEBUG2, "[%d] %s", err_no, msg);
+			elog(DEBUG2, "GDAL %s [%d] %s", gdalErrType, err_no, msg);
 			break;
 		case CE_Warning:
-			elog(WARNING, "[%d] %s", err_no, msg);
+			elog(WARNING, "GDAL %s [%d] %s", gdalErrType, err_no, msg);
 			break;
 		case CE_Failure:
 		case CE_Fatal:
 		default:
-			elog(ERROR, "[%d] %s", err_no, msg);
+			elog(ERROR, "GDAL %s [%d] %s", gdalErrType, err_no, msg);
 			break;
 	}
 	return;
 }
-#endif
+
+#endif /* GDAL 2.1.0+ */
 
 void
 _PG_init(void)
 {
-
 	on_proc_exit(&ogr_fdw_exit, PointerGetDatum(NULL));
 
 #if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,1,0)
@@ -267,75 +290,45 @@ ogr_fdw_handler(PG_FUNCTION_ARGS)
 }
 
 /*
- * Given a connection string and (optional) driver string, try to connect
- * with appropriate error handling and reporting. Used in query startup,
- * and in FDW options validation.
- */
-static GDALDatasetH
-ogrGetDataSource(const char *source, const char *driver, bool updateable,
-                 const char *config_options, const char *open_options)
+* When attempting a soft open (allowing for failure and retry),
+* we might need to call the opening
+* routines twice, so all the opening machinery is placed here
+* for convenient re-calling.
+*/
+static OGRErr
+ogrGetDataSourceAttempt(OgrConnection *ogr, bool bUpdateable, char **open_option_list)
 {
-	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
-	char **open_option_list = NULL;
 #if GDAL_VERSION_MAJOR >= 2
 	unsigned int open_flags = GDAL_OF_VECTOR;
 
-	if ( updateable )
+	if (bUpdateable)
 		open_flags |= GDAL_OF_UPDATE;
 	else
 		open_flags |= GDAL_OF_READONLY;
 #endif
 
-	if ( config_options )
+	if (ogr->dr_str)
 	{
-		char **option_iter;
-		char **option_list = CSLTokenizeString(config_options);
-
-		for ( option_iter = option_list; option_iter && *option_iter; option_iter++ )
-		{
-			char *key;
-			const char *value;
-			value = CPLParseNameValue(*option_iter, &key);
-			if ( ! (key && value) )
-				elog(ERROR, "bad config option string '%s'", config_options);
-
-			elog(DEBUG1, "GDAL config option '%s' set to '%s'", key, value);
-			CPLSetConfigOption(key, value);
-			CPLFree(key);
-		}
-		CSLDestroy( option_list );
-	}
-
-	if ( open_options )
-		open_option_list = CSLTokenizeString(open_options);
-
-	/* Cannot search for drivers if they aren't registered */
-	/* But don't call for registration if we already have drivers */
-	if ( GDALGetDriverCount() <= 0 )
-		GDALAllRegister();
-
-	if ( driver )
-	{
-		ogr_dr = GDALGetDriverByName(driver);
-		if ( ! ogr_dr )
+		ogr_dr = GDALGetDriverByName(ogr->dr_str);
+		if (!ogr_dr)
 		{
 			ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-					errmsg("unable to find format \"%s\"", driver),
+				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+					errmsg("unable to find format \"%s\"", ogr->dr_str),
 					errhint("See the formats list at http://www.gdal.org/ogr_formats.html")));
 		}
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGR_Dr_Open(ogr_dr, source, updateable);
+		ogr->ds = OGR_Dr_Open(ogr_dr, ogr->ds_str, bUpdateable);
 #else
 		{
-			char** driver_list = CSLAddString(NULL, driver);
-			ogr_ds = GDALOpenEx(source,                                         /* file/data source */
-					    open_flags,                /* open flags */
-					    (const char* const*)driver_list, /* driver */
-					    (const char *const *)open_option_list,          /* open options */
-					    NULL);                                          /* sibling files */
-			CSLDestroy( driver_list );
+			char** driver_list = CSLAddString(NULL, ogr->dr_str);
+			ogr->ds = GDALOpenEx(ogr->ds_str,                  /* file/data source */
+					    open_flags,                            /* open flags */
+					    (const char* const *)driver_list,      /* driver */
+					    (const char* const *)open_option_list, /* open options */
+					    NULL);                                 /* sibling files */
+			CSLDestroy(driver_list);
 		}
 #endif
 	}
@@ -343,38 +336,96 @@ ogrGetDataSource(const char *source, const char *driver, bool updateable,
 	else
 	{
 #if GDAL_VERSION_MAJOR < 2
-		ogr_ds = OGROpen(source, updateable, &ogr_dr);
+		ogr->ds = OGROpen(ogr->ds_str, bUpdateable, &ogr_dr);
 #else
-		ogr_ds = GDALOpenEx(source,
+		ogr->ds = GDALOpenEx(ogr->ds_str,
 		                    open_flags,
 		                    NULL,
-		                    (const char *const *)open_option_list,
+		                    (const char* const *)open_option_list,
 		                    NULL);
 #endif
 	}
+	return ogr->ds ? OGRERR_NONE : OGRERR_FAILURE;
+}
 
-	/* Open failed, provide error hint if OGR gives us one. */
-	if ( ! ogr_ds )
+/*
+ * Given a connection string and (optional) driver string, try to connect
+ * with appropriate error handling and reporting. Used in query startup,
+ * and in FDW options validation.
+ */
+static OGRErr
+ogrGetDataSource(OgrConnection *ogr, OgrUpdateable updateable)
+{
+	char **open_option_list = NULL;
+	bool bUpdateable = (updateable == OGR_UPDATEABLE_TRUE || updateable == OGR_UPDATEABLE_TRY);
+	OGRErr err;
+
+	/* Set the GDAL config options into the environment */
+	if (ogr->config_options)
 	{
-		const char *ogrerr = CPLGetLastErrorMsg();
-		if ( ogrerr && ! streq(ogrerr, "") )
+		char **option_iter;
+		char **option_list = CSLTokenizeString(ogr->config_options);
+
+		for (option_iter = option_list; option_iter && *option_iter; option_iter++)
 		{
-			ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-				 errmsg("unable to connect to data source \"%s\"", source),
-				 errhint("%s", ogrerr)));
+			char *key;
+			const char *value;
+			value = CPLParseNameValue(*option_iter, &key);
+			if ( ! (key && value) )
+				elog(ERROR, "bad config option string '%s'", ogr->config_options);
+
+			elog(DEBUG1, "GDAL config option '%s' set to '%s'", key, value);
+			CPLSetConfigOption(key, value);
+			CPLFree(key);
 		}
-		else
+		CSLDestroy(option_list);
+	}
+
+	/* Parse the GDAL layer open options */
+	if (ogr->open_options)
+		open_option_list = CSLTokenizeString(ogr->open_options);
+
+	/* Cannot search for drivers if they aren't registered, */
+	/* but don't do registration if we already have drivers loaded */
+	if (GDALGetDriverCount() <= 0)
+		GDALAllRegister();
+
+	/* First attempt at connection */
+	err = ogrGetDataSourceAttempt(ogr, bUpdateable, open_option_list);
+
+	/* Failed on soft updateable attempt, try and fall back to readonly */
+	if ((!ogr->ds) && updateable == OGR_UPDATEABLE_TRY)
+	{
+		err = ogrGetDataSourceAttempt(ogr, false, open_option_list);
+		/* Succeeded with readonly connection */
+		if (ogr->ds)
 		{
- 			ereport(ERROR,
- 				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
- 				 errmsg("unable to connect to data source \"%s\"", source)));
+			ogr->ds_updateable = ogr->lyr_updateable = OGR_UPDATEABLE_FALSE;
 		}
 	}
 
-	CSLDestroy( open_option_list );
+	/* Open failed, provide error hint if OGR gives us one. */
+	if (!ogr->ds)
+	{
+		const char *ogrerrmsg = CPLGetLastErrorMsg();
+		if (ogrerrmsg && !streq(ogrerrmsg, ""))
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+				 errmsg("unable to connect to data source \"%s\"", ogr->ds_str),
+				 errhint("%s", ogrerrmsg)));
+		}
+		else
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+				 errmsg("unable to connect to data source \"%s\"", ogr->ds_str)));
+		}
+	}
 
-	return ogr_ds;
+	CSLDestroy(open_option_list);
+
+	return err;
 }
 
 static bool
@@ -383,9 +434,9 @@ ogrCanReallyCountFast(const OgrConnection *con)
 	GDALDriverH dr = GDALGetDatasetDriver(con->ds);
 	const char *dr_str = GDALGetDriverShortName(dr);
 
-	if ( streq(dr_str, "ESRI Shapefile" ) ||
-   	     streq(dr_str, "FileGDB" ) ||
-	     streq(dr_str, "OpenFileGDB" ) )
+	if (streq(dr_str, "ESRI Shapefile") ||
+	    streq(dr_str, "FileGDB") ||
+	    streq(dr_str, "OpenFileGDB") )
 	{
 		return true;
 	}
@@ -395,13 +446,13 @@ ogrCanReallyCountFast(const OgrConnection *con)
 static void
 ogrEreportError(const char *errstr)
 {
-	const char *ogrerr = CPLGetLastErrorMsg();
-	if ( ogrerr && ! streq(ogrerr,"") )
+	const char *ogrerrmsg = CPLGetLastErrorMsg();
+	if (ogrerrmsg && !streq(ogrerrmsg,""))
 	{
 		ereport(ERROR,
 			(errcode(ERRCODE_FDW_ERROR),
 			 errmsg("%s", errstr),
-			 errhint("%s", ogrerr)));
+			 errhint("%s", ogrerrmsg)));
 	}
 	else
 	{
@@ -418,21 +469,22 @@ ogrEreportError(const char *errstr)
 static void
 ogrFinishConnection(OgrConnection *ogr)
 {
-	if ( ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE )
+	if (ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE)
 		elog(NOTICE, "failed to flush writes to OGR data source");
 
-	if ( ogr->ds )
+	if (ogr->ds)
 		GDALClose(ogr->ds);
 
 	ogr->ds = NULL;
 }
 
 static OgrConnection
-ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
+ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 {
 	ForeignServer *server;
 	OgrConnection ogr;
 	ListCell *cell;
+	OGRErr err;
 
 	/* Null all values */
 	memset(&ogr, 0, sizeof(OgrConnection));
@@ -454,21 +506,21 @@ ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 			ogr.open_options = defGetString(def);
 		if (streq(def->defname, OPT_UPDATEABLE))
 		{
-			if ( defGetBoolean(def) )
+			if (defGetBoolean(def))
+			{
 				ogr.ds_updateable = OGR_UPDATEABLE_TRUE;
+			}
 			else
+			{
 				ogr.ds_updateable = OGR_UPDATEABLE_FALSE;
+				/* Over-ride the open mode to favour user-defined mode */
+				updateable = OGR_UPDATEABLE_FALSE;
+			}
 		}
 	}
 
-	if ( ! ogr.ds_str )
+	if (!ogr.ds_str)
 		elog(ERROR, "FDW table '%s' option is missing", OPT_SOURCE);
-
-	if ( updateable && ogr.ds_updateable == OGR_UPDATEABLE_FALSE )
-		ereport(ERROR,
-			(errcode(ERRCODE_FDW_ERROR),
-			 errmsg("updates are not allowed on foreign server '%s'", server->servername),
-			 errhint("ALTER FOREIGN SERVER %s OPTIONS (SET updatable 'true')", server->servername)));
 
 	/*
 	 * TODO: Connections happen twice for each query, having a
@@ -476,8 +528,7 @@ ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
 	 */
 
 	/*  Connect! */
-	ogr.ds = ogrGetDataSource(ogr.ds_str, ogr.dr_str, updateable, ogr.config_options, ogr.open_options);
-
+	err = ogrGetDataSource(&ogr, updateable);
 	return ogr;
 }
 
@@ -489,7 +540,7 @@ ogrGetConnectionFromServer(Oid foreignserverid, bool updateable)
  * has handles for both the datasource and layer.
  */
 static OgrConnection
-ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
+ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 {
 	ForeignTable *table;
 	/* UserMapping *mapping; */
@@ -510,29 +561,35 @@ ogrGetConnectionFromTable(Oid foreigntableid, bool updateable)
 			ogr.lyr_str = defGetString(def);
 		if (streq(def->defname, OPT_UPDATEABLE))
 		{
-			if ( defGetBoolean(def) )
+			if (defGetBoolean(def))
+			{
+				if (ogr.ds_updateable == OGR_UPDATEABLE_FALSE)
+				{
+					ereport(ERROR, (
+						errcode(ERRCODE_FDW_ERROR),
+						errmsg("data source \"%s\" is not updateable", ogr.ds_str),
+						errhint("cannot set table '%s' option to true", OPT_UPDATEABLE)
+						));
+				}
 				ogr.lyr_updateable = OGR_UPDATEABLE_TRUE;
+			}
 			else
+			{
 				ogr.lyr_updateable = OGR_UPDATEABLE_FALSE;
+			}
 		}
 	}
 
-	if ( ! ogr.lyr_str )
+	if (!ogr.lyr_str)
 		elog(ERROR, "FDW table '%s' option is missing", OPT_LAYER);
-
-	if ( updateable && ogr.lyr_updateable == OGR_UPDATEABLE_FALSE )
-		ereport(ERROR,
-			(errcode(ERRCODE_FDW_ERROR),
-			 errmsg("updates are not allowed on foreign table '%s'", get_rel_name(table->relid)),
-			 errhint("ALTER FOREIGN TABLE %s OPTIONS (SET updatable 'true')", get_rel_name(table->relid))));
 
 	/* Does the layer exist in the data source? */
 	ogr.lyr = GDALDatasetGetLayerByName(ogr.ds, ogr.lyr_str);
-	if ( ! ogr.lyr )
+	if (!ogr.lyr)
 	{
 		const char *ogrerr = CPLGetLastErrorMsg();
 		ereport(ERROR, (
-				errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
+				errcode(ERRCODE_FDW_TABLE_NOT_FOUND),
 				errmsg("unable to connect to %s to \"%s\"", OPT_LAYER, ogr.lyr_str),
 				(ogrerr && ! streq(ogrerr, ""))
 				? errhint("%s", ogrerr)
@@ -559,7 +616,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	struct OgrFdwOption *opt;
 	const char *source = NULL, *driver = NULL;
 	const char *config_options = NULL, *open_options = NULL;
-	bool updateable = false;
+	OgrUpdateable updateable = OGR_UPDATEABLE_FALSE;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
 	if ( GetDatabaseEncoding() != PG_UTF8 )
@@ -600,13 +657,18 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 				if ( streq(opt->optname, OPT_OPEN_OPTIONS) )
 					open_options = defGetString(def);
 				if ( streq(opt->optname, OPT_UPDATEABLE) )
-					updateable = defGetBoolean(def);
+				{
+					if(defGetBoolean(def))
+					{
+						updateable = OGR_UPDATEABLE_TRY;
+					}
+				}
 
 				break;
 			}
 		}
 
-		if ( ! optfound )
+		if (!optfound)
 		{
 			/*
 			 * Unknown option specified, complain about it. Provide a hint
@@ -633,7 +695,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	}
 
 	/* Check that all the mandatory options were found */
-	for ( opt = valid_options; opt->optname; opt++ )
+	for (opt = valid_options; opt->optname; opt++)
 	{
 		/* Required option for this catalog type is missing? */
 		if ( catalog == opt->optcontext && opt->optrequired && ! opt->optfound )
@@ -647,12 +709,17 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	/* Make sure server connection can actually be established */
 	if ( catalog == ForeignServerRelationId && source )
 	{
-		OGRDataSourceH ogr_ds;
-		ogr_ds = ogrGetDataSource(source, driver, updateable, config_options, open_options);
-		if ( ogr_ds )
-		{
-			GDALClose(ogr_ds);
-		}
+		OGRErr err;
+		OgrConnection ogr;
+
+		ogr.ds_str = source;
+		ogr.dr_str = driver;
+		ogr.config_options = config_options;
+		ogr.open_options = open_options;
+
+		err = ogrGetDataSource(&ogr, updateable);
+		if (ogr.ds)
+			GDALClose(ogr.ds);
 	}
 
 	PG_RETURN_VOID();
@@ -666,20 +733,20 @@ getOgrFdwState(Oid foreigntableid, OgrFdwStateType state_type)
 {
 	OgrFdwState *state;
 	size_t size;
-	bool updateable = false;
+	OgrUpdateable updateable = OGR_UPDATEABLE_FALSE;
 
 	switch (state_type)
 	{
 		case OGR_PLAN_STATE:
 			size = sizeof(OgrFdwPlanState);
-			updateable = false;
+			updateable = OGR_UPDATEABLE_FALSE;
 			break;
 		case OGR_EXEC_STATE:
 			size = sizeof(OgrFdwExecState);
-			updateable = false;
+			updateable = OGR_UPDATEABLE_FALSE;
 			break;
 		case OGR_MODIFY_STATE:
-			updateable = true;
+			updateable = OGR_UPDATEABLE_TRUE;
 			size = sizeof(OgrFdwModifyState);
 			break;
 		default:
@@ -1040,10 +1107,10 @@ ogrBytesToHex(unsigned char *bytes, size_t size)
 static void
 freeOgrFdwTable(OgrFdwTable *table)
 {
-	if ( table )
+	if (table)
 	{
-		if ( table->tblname ) pfree(table->tblname);
-		if ( table->cols ) pfree(table->cols);
+		if (table->tblname) pfree(table->tblname);
+		if (table->cols) pfree(table->cols);
 		pfree(table);
 	}
 }
@@ -1089,7 +1156,7 @@ ogrReadColumnData(OgrFdwState *state)
 	char *tblname = get_rel_name(state->foreigntableid);
 
 	/* Blow away any existing table in the state */
-	if ( state->table )
+	if (state->table)
 	{
 		freeOgrFdwTable(state->table);
 		state->table = NULL;
@@ -1121,7 +1188,7 @@ ogrReadColumnData(OgrFdwState *state)
 	/* We will search both the original and laundered OGR field names for matches */
 	ogr_fields_count = 2 * ogr_ncols;
 	ogr_fields = palloc0(ogr_fields_count * sizeof(OgrFieldEntry));
-	for ( i = 0; i < ogr_ncols; i++ )
+	for (i = 0; i < ogr_ncols; i++)
 	{
 		char *fldname = pstrdup(OGR_Fld_GetNameRef(OGR_FD_GetFieldDefn(dfn, i)));
 		char *fldname_laundered = palloc(STR_MAX_LEN);
@@ -1136,7 +1203,7 @@ ogrReadColumnData(OgrFdwState *state)
 
 
 	/* loop through foreign table columns */
-	for ( i = 0; i < tbl->ncols; i++ )
+	for (i = 0; i < tbl->ncols; i++)
 	{
 		List *options;
 		ListCell *lc;
@@ -1172,9 +1239,10 @@ ogrReadColumnData(OgrFdwState *state)
 #endif
 
 		/* Handle FID first */
-		if ( strcaseeq(col.pgname, "fid") && (col.pgtype == INT4OID || col.pgtype == INT8OID) )
+		if (strcaseeq(col.pgname, "fid") &&
+		    (col.pgtype == INT4OID || col.pgtype == INT8OID))
 		{
-			if ( fid_count >= 1 )
+			if (fid_count >= 1)
 				elog(ERROR, "FDW table '%s' includes more than one FID column", tblname);
 
 			col.ogrvariant = OGR_FID;
@@ -1185,7 +1253,7 @@ ogrReadColumnData(OgrFdwState *state)
 
 		/* If the OGR source has geometries, can we match them to Pg columns? */
 		/* We'll match to the first ones we find, irrespective of name */
-		if ( geom_count < ogr_geom_count && col.pgtype == ogrGetGeometryOid() )
+		if (geom_count < ogr_geom_count && col.pgtype == ogrGetGeometryOid())
 		{
 			col.ogrvariant = OGR_GEOMETRY;
 			col.ogrfldtype = OFTBinary;
@@ -1209,7 +1277,7 @@ ogrReadColumnData(OgrFdwState *state)
 		{
 			DefElem    *def = (DefElem *) lfirst(lc);
 
-			if ( streq(def->defname, OPT_COLUMN) )
+			if (streq(def->defname, OPT_COLUMN))
 			{
 				entry.fldname = defGetString(def);
 				break;
@@ -1220,7 +1288,7 @@ ogrReadColumnData(OgrFdwState *state)
 		found_entry = bsearch(&entry, ogr_fields, ogr_fields_count, sizeof(OgrFieldEntry), ogrFieldEntryCmpFunc);
 
 		/* Column name matched, so save this entry, if the types are consistent */
-		if ( found_entry )
+		if (found_entry)
 		{
 			OGRFieldDefnH fld = OGR_FD_GetFieldDefn(dfn, found_entry->fldnum);
 			OGRFieldType fldtype = OGR_Fld_GetType(fld);
@@ -1245,8 +1313,13 @@ ogrReadColumnData(OgrFdwState *state)
 	/* Clean up */
 
 	state->table = tbl;
-	for( i = 0; i < 2*ogr_ncols; i++ )
-		if ( ogr_fields[i].fldname ) pfree(ogr_fields[i].fldname);
+	for(i = 0; i < 2*ogr_ncols; i++)
+	{
+		if (ogr_fields[i].fldname)
+		{
+			pfree(ogr_fields[i].fldname);
+		}
+	}
 	pfree(ogr_fields);
 	heap_close(rel, NoLock);
 
@@ -1266,7 +1339,7 @@ ogrLookupGeometryFunctionOid(const char *proname)
 	FuncCandidateList clist;
 
 	/* This only works if PostGIS is installed */
-	if ( ogrGetGeometryOid() == InvalidOid || ogrGetGeometryOid() == BYTEAOID )
+	if (ogrGetGeometryOid() == InvalidOid || ogrGetGeometryOid() == BYTEAOID)
 		return InvalidOid;
 
 	names = stringToQualifiedNameList(proname);
@@ -1275,20 +1348,20 @@ ogrLookupGeometryFunctionOid(const char *proname)
 #else
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
 #endif
-	if ( streq(proname, "st_setsrid") )
+	if (streq(proname, "st_setsrid"))
 	{
 		do
 		{
 			int i;
-			for ( i = 0; i < clist->nargs; i++ )
+			for (i = 0; i < clist->nargs; i++)
 			{
-				if ( clist->args[i] == ogrGetGeometryOid() )
+				if (clist->args[i] == ogrGetGeometryOid())
 					return clist->oid;
 			}
 		}
-		while( (clist = clist->next) );
+		while((clist = clist->next));
 	}
-	else if ( streq(proname, "postgis_typmod_srid") )
+	else if (streq(proname, "postgis_typmod_srid"))
 	{
 		return clist->oid;
 	}
@@ -1320,14 +1393,14 @@ ogrBeginForeignScan(ForeignScanState *node, int eflags)
 	execstate->sql = strVal(list_nth(fsplan->fdw_private, 0));
 	// execstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private, 1);
 
-	if ( execstate->sql && strlen(execstate->sql) > 0 )
+	if (execstate->sql && strlen(execstate->sql) > 0)
 	{
 		OGRErr err = OGR_L_SetAttributeFilter(execstate->ogr.lyr, execstate->sql);
-		if ( err != OGRERR_NONE )
+		if (err != OGRERR_NONE)
 		{
 			const char *ogrerr = CPLGetLastErrorMsg();
 
-			if ( ogrerr && ! streq(ogrerr,"") )
+			if (ogrerr && ! streq(ogrerr,""))
 			{
 				ereport(NOTICE,
 					(errcode(ERRCODE_FDW_ERROR),
@@ -2410,15 +2483,15 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 #endif
 
 	/* Copy the data from the slot onto the feature */
-	if ( ! feat )
+	if (!feat)
 		ogrEreportError("failure creating OGR feature");
 
 	err = ogrSlotToFeature(slot, feat, modstate->table);
-	if ( err != OGRERR_NONE )
+	if (err != OGRERR_NONE)
 		ogrEreportError("failure populating OGR feature");
 
 	err = OGR_L_CreateFeature(modstate->ogr.lyr, feat);
-	if ( err != OGRERR_NONE )
+	if (err != OGRERR_NONE)
 		ogrEreportError("failure writing OGR feature");
 
 	fid = OGR_F_GetFID(feat);
@@ -2426,7 +2499,7 @@ static TupleTableSlot *ogrExecForeignInsert (EState *estate,
 
 	/* Update the FID for RETURNING slot */
 	fid_column = ogrGetFidColumn(slot->tts_tupleDescriptor);
-	if ( fid_column >= 0 )
+	if (fid_column >= 0)
 	{
 		slot->tts_values[fid_column] = Int64GetDatum(fid);
 		slot->tts_isnull[fid_column] = false;
@@ -2499,8 +2572,8 @@ static void ogrEndForeignModify (EState *estate, ResultRelInfo *rinfo)
 
 static int ogrIsForeignRelUpdatable (Relation rel)
 {
-	static int readonly = 0;
-	static int updateable = 0;
+	const int readonly = 0;
+	int foreign_rel_updateable = 0;
 	TupleDesc td = RelationGetDescr(rel);
 	OgrConnection ogr;
 	Oid foreigntableid = RelationGetRelid(rel);
@@ -2518,23 +2591,32 @@ static int ogrIsForeignRelUpdatable (Relation rel)
 
 	/*   Is it backed by a writable OGR driver? */
 	/*   Can we open the relation in read/write mode? */
-	ogr = ogrGetConnectionFromTable(foreigntableid, true);
-	if ( ! (ogr.ds && ogr.lyr) )
+	ogr = ogrGetConnectionFromTable(foreigntableid, OGR_UPDATEABLE_TRY);
+
+	/* Something in the open process set the readonly flags */
+	/* Perhaps user has manually set the foreign table option to readonly */
+	if (ogr.ds_updateable == OGR_UPDATEABLE_FALSE ||
+	    ogr.lyr_updateable == OGR_UPDATEABLE_FALSE)
+	{
+		return readonly;
+	}
+
+	/* No data source or layer objects? Readonly */
+	if (!(ogr.ds && ogr.lyr))
 		return readonly;
 
-	if ( OGR_L_TestCapability(ogr.lyr, OLCRandomWrite) )
-		updateable |= (1 << CMD_UPDATE);
+	if (OGR_L_TestCapability(ogr.lyr, OLCRandomWrite))
+		foreign_rel_updateable |= (1 << CMD_UPDATE);
 
-	if ( OGR_L_TestCapability(ogr.lyr, OLCSequentialWrite) )
-		updateable |= (1 << CMD_INSERT);
+	if (OGR_L_TestCapability(ogr.lyr, OLCSequentialWrite))
+		foreign_rel_updateable |= (1 << CMD_INSERT);
 
-	if ( OGR_L_TestCapability(ogr.lyr, OLCDeleteFeature) )
-		updateable |= (1 << CMD_DELETE);
+	if (OGR_L_TestCapability(ogr.lyr, OLCDeleteFeature))
+		foreign_rel_updateable |= (1 << CMD_DELETE);
 
 	ogrFinishConnection(&ogr);
 
-	return updateable;
-
+	return foreign_rel_updateable;
 }
 
 #if PG_VERSION_NUM >= 90500
@@ -2560,7 +2642,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 
 	/* Make connection to server */
 	server = GetForeignServer(serverOid);
-	ogr = ogrGetConnectionFromServer(serverOid, false);
+	ogr = ogrGetConnectionFromServer(serverOid, OGR_UPDATEABLE_FALSE);
 
 	/* Launder by default */
 	launder_column_names = launder_table_names = true;
