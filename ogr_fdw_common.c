@@ -86,8 +86,8 @@ ogrStringLaunder(char *str)
 
 }
 
-static char *
-ogrTypeToPgType(OGRFieldDefnH ogr_fld)
+static void
+ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 {
 	OGRFieldType ogr_type = OGR_Fld_GetType(ogr_fld);
 	switch(ogr_type)
@@ -95,39 +95,59 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld)
 		case OFTInteger:
 #if GDAL_VERSION_MAJOR >= 2
 			if( OGR_Fld_GetSubType(ogr_fld) == OFSTBoolean )
-				return "boolean";
+			{
+				snprintf(pgtype, width, "boolean");
+				break;
+			}
 			else
 #endif
-				return "integer";
+			snprintf(pgtype, width, "integer");
+			break;
 		case OFTReal:
-			return "double precision";
+			snprintf(pgtype, width, "double precision");
+			break;
 		case OFTString:
-			return "varchar";
+		{
+			int ogr_fld_width = OGR_Fld_GetWidth(ogr_fld);
+			if (ogr_fld_width > 0)
+				snprintf(pgtype, width, "varchar(%d)", ogr_fld_width);
+			else
+				snprintf(pgtype, width, "varchar");
+			break;
+		}
 		case OFTBinary:
-			return "bytea";
+			snprintf(pgtype, width, "bytea");
+			break;
 		case OFTDate:
-			return "date";
+			snprintf(pgtype, width, "date");
+			break;
 		case OFTTime:
-			return "time";
+			snprintf(pgtype, width, "time");
+			break;
 		case OFTDateTime:
-			return "timestamp";
+			snprintf(pgtype, width, "timestamp");
+			break;
 		case OFTIntegerList:
-			return "integer[]";
+			snprintf(pgtype, width, "integer[]");
+			break;
 		case OFTRealList:
-			return "double precision[]";
+			snprintf(pgtype, width, "double precision[]");
+			break;
 		case OFTStringList:
-			return "varchar[]";
+			snprintf(pgtype, width, "varchar[]");
+			break;
 #if GDAL_VERSION_MAJOR >= 2
 		case OFTInteger64:
-			return "bigint";
+			snprintf(pgtype, width, "bigint");
+			break;
 #endif
 		default:
 			CPLError(CE_Failure, CPLE_AssertionFailed,
 			         "unsupported GDAL type '%s'",
 			         OGR_GetFieldTypeName(ogr_type));
-			return NULL;
+			return;
 	}
-	return NULL;
+	return;
 }
 
 static void
@@ -225,6 +245,7 @@ ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_colu
 	}
 	return OGRERR_NONE;
 }
+
 
 OGRErr
 ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
@@ -340,10 +361,10 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	/* Write out attribute fields */
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
+		char pgtype[128];
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld),
-		                   ogrTypeToPgType(ogr_fld),
-		                   launder_column_names, buf);
+		ogrTypeToPgType(ogr_fld, pgtype, 128);
+		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld), pgtype, launder_column_names, buf);
 	}
 
 	/*
