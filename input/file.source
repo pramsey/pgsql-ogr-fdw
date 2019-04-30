@@ -14,7 +14,7 @@ CREATE FOREIGN TABLE pt_1 (
   geom bytea,
   name varchar,
   age integer,
-  height real,
+  height double precision,
   birthdate date )
   SERVER myserver
   OPTIONS ( layer 'pt_two' );
@@ -40,6 +40,19 @@ CREATE FOREIGN TABLE pt_3 (
   OPTIONS ( layer 'pt_two' );
 
 SELECT * FROM pt_3 ORDER BY name;
+
+
+------------------------------------------------
+
+CREATE FOREIGN TABLE poly_1 (
+  fid bigint,
+  geom bytea,
+  id double precision,
+  name varchar(5)
+) SERVER myserver
+OPTIONS (layer 'poly');
+
+SELECT length(geom) FROM poly_1 WHERE name = 'Three';
 
 ------------------------------------------------
 -- Laundering and explicit column naming test
@@ -77,9 +90,9 @@ CREATE FOREIGN TABLE e_1 (
   SERVER myserver_latin1
   OPTIONS ( layer 'enc' );
 
-SET client_min_messages = debug1;  
+SET client_min_messages = debug1;
 SELECT * FROM e_1 WHERE fid = 1;
-SET client_min_messages = notice;  
+SET client_min_messages = notice;
 
 ------------------------------------------------
 -- Geometryless test
@@ -98,9 +111,9 @@ CREATE FOREIGN TABLE no_geom (
 ) SERVER csvserver
 OPTIONS (layer 'no_geom');
 
-SELECT c.* 
-  FROM generate_series(1,4) g 
-  JOIN no_geom c 
+SELECT c.*
+  FROM generate_series(1,4) g
+  JOIN no_geom c
   ON (c.fid = g.g);
 
 ------------------------------------------------

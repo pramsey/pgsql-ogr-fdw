@@ -10,7 +10,7 @@ CREATE FOREIGN TABLE pt_1 (
   geom bytea,
   name varchar,
   age integer,
-  height real,
+  height double precision,
   birthdate date )
   SERVER myserver
   OPTIONS ( layer 'pt_two' );
@@ -45,6 +45,20 @@ SELECT * FROM pt_3 ORDER BY name;
  \x010100000054e943acd697e2bfc0895ee54a46cf3f | Paul
  \x0101000000c00497d1162cb93f8cbaef08a080e63f | Peter
 (2 rows)
+
+------------------------------------------------
+CREATE FOREIGN TABLE poly_1 (
+  fid bigint,
+  geom bytea,
+  id double precision,
+  name varchar(5)
+) SERVER myserver
+OPTIONS (layer 'poly');
+SELECT length(geom) FROM poly_1 WHERE name = 'Three';
+ length 
+--------
+    579
+(1 row)
 
 ------------------------------------------------
 -- Laundering and explicit column naming test
@@ -87,7 +101,7 @@ CREATE FOREIGN TABLE e_1 (
   name varchar )
   SERVER myserver_latin1
   OPTIONS ( layer 'enc' );
-SET client_min_messages = debug1;  
+SET client_min_messages = debug1;
 SELECT * FROM e_1 WHERE fid = 1;
 DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
 DEBUG:  OGR SQL: (fid = 1)
@@ -97,7 +111,7 @@ DEBUG:  GDAL config option 'SHAPE_ENCODING' set to 'LATIN1'
    1 | Pàul
 (1 row)
 
-SET client_min_messages = notice;  
+SET client_min_messages = notice;
 ------------------------------------------------
 -- Geometryless test
 CREATE SERVER csvserver
@@ -112,9 +126,9 @@ CREATE FOREIGN TABLE no_geom (
   value varchar
 ) SERVER csvserver
 OPTIONS (layer 'no_geom');
-SELECT c.* 
-  FROM generate_series(1,4) g 
-  JOIN no_geom c 
+SELECT c.*
+  FROM generate_series(1,4) g
+  JOIN no_geom c
   ON (c.fid = g.g);
  fid |  name   | age | value 
 -----+---------+-----+-------
