@@ -84,7 +84,8 @@ typedef enum
 typedef enum {
 	OGR_UPDATEABLE_FALSE,
 	OGR_UPDATEABLE_TRUE,
-	OGR_UPDATEABLE_UNSET
+	OGR_UPDATEABLE_UNSET,
+	OGR_UPDATEABLE_TRY
 } OgrUpdateable;
 
 typedef struct OgrFdwColumn
@@ -123,13 +124,13 @@ typedef struct OgrFdwTable
 
 typedef struct OgrConnection
 {
-	char *ds_str;         /* datasource connection string */
-	char *dr_str;         /* driver (format) name */
+	const char *ds_str;         /* datasource connection string */
+	const char *dr_str;         /* driver (format) name */
 	char *lyr_str;        /* layer name */
-	char *config_options; /* GDAL config options */
-	char *open_options;   /* GDAL open options */
-	bool ds_updateable;
-	bool lyr_updateable;
+	const char *config_options; /* GDAL config options */
+	const char *open_options;   /* GDAL open options */
+	OgrUpdateable ds_updateable;
+	OgrUpdateable lyr_updateable;
 	bool lyr_utf8;        /* OGR layer will return UTF8 strings */
 	GDALDatasetH ds;      /* GDAL datasource handle */
 	OGRLayerH lyr;        /* OGR layer handle */

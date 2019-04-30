@@ -13,4 +13,8 @@ insert_final_newline = true
 # C files want tab indentation
 [*.{c,h}]
 indent_style = tab
+indent_size = 4
 
+# Makefiles want tab indentation
+[Makefile]
+indent_style = tab
