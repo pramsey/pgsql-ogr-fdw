@@ -57,7 +57,7 @@ OPTIONS (layer 'poly');
 SELECT length(geom) FROM poly_1 WHERE name = 'Three';
  length 
 --------
-    579
+    307
 (1 row)
 
 ------------------------------------------------
