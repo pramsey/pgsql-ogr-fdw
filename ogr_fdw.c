@@ -189,10 +189,22 @@ const char* const gdalErrorTypes[] =
 	"AWSSignatureDoesNotMatch"
 };
 
+/* In theory this function should be declared "static void CPL_STDCALL" */
+/* since this is the official signature of error handler callbacks. */
+/* That would be needed if both GDAL and ogr_fdw were compiled with Visual */
+/* Studio, but with non-Visual Studio compilers, the macro expands to empty, */
+/* so if both GDAL and ogr_fdw are compiled with gcc things are fine. In case */
+/* of mixes, crashes may occur but there is no clean fix... So let this as a note */
+/* in case of future issue... */
 static void
 ogrErrorHandler(CPLErr eErrClass, int err_no, const char* msg)
 {
-	const char* gdalErrType = gdalErrorTypes[err_no];
+	const char* gdalErrType = "unknown type";
+	if (err_no >= 0 && err_no <
+	    (int)sizeof(gdalErrorTypes)/sizeof(gdalErrorTypes[0]))
+	{
+		gdalErrType = gdalErrorTypes[err_no];
+	}
 	switch (eErrClass)
 	{
 	case CE_None:
