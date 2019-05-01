@@ -502,7 +502,6 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 	ForeignServer* server;
 	OgrConnection ogr;
 	ListCell* cell;
-	OGRErr err;
 
 	/* Null all values */
 	memset(&ogr, 0, sizeof(OgrConnection));
@@ -749,7 +748,6 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	/* Make sure server connection can actually be established */
 	if (catalog == ForeignServerRelationId && source)
 	{
-		OGRErr err;
 		OgrConnection ogr;
 
 		ogr.ds_str = source;

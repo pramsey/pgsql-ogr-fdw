@@ -14,11 +14,10 @@ addons:
     - gnupg-curl
 
 env:
-  - PG_VERSION=9.6 GDAL_VERSION=1.1
   - PG_VERSION=9.6 GDAL_VERSION=2.2.4
   - PG_VERSION=10 GDAL_VERSION=2.3.3
   - PG_VERSION=10 GDAL_VERSION=2.4.1
-#  - PG_VERSION=11 GDAL_VERSION=2.4.1
+  - PG_VERSION=11 GDAL_VERSION=2.4.1
 
 before_script:
   - sudo /etc/init.d/postgresql stop
@@ -29,6 +28,7 @@ before_script:
   - sudo apt-get -y --purge remove postgresql-9.5
   - sudo apt-get -y --purge remove postgresql-9.6
   - sudo apt-get -y --purge remove postgresql-10
+  - sudo apt-get -y --purge remove postgresql-11
   - sudo apt-get -y autoremove
   - sudo rm -rf /var/lib/postgresql
   - apt-key adv --fetch-keys https://www.postgresql.org/media/keys/ACCC4CF8.asc
