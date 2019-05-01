@@ -502,6 +502,7 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 	ForeignServer* server;
 	OgrConnection ogr;
 	ListCell* cell;
+	OGRErr err;
 
 	/* Null all values */
 	memset(&ogr, 0, sizeof(OgrConnection));
@@ -749,6 +750,7 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	if (catalog == ForeignServerRelationId && source)
 	{
 		OgrConnection ogr;
+		OGRErr err;
 
 		ogr.ds_str = source;
 		ogr.dr_str = driver;
