@@ -569,6 +569,8 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 
 	/*  Connect! */
 	err = ogrGetDataSource(&ogr, updateable);
+	if (err == OGRERR_FAILURE)
+		elog(ERROR, "ogrGetDataSource failed");
 	return ogr;
 }
 
@@ -770,10 +772,10 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 		ogr.open_options = open_options;
 
 		err = ogrGetDataSource(&ogr, updateable);
+		if (err == OGRERR_FAILURE)
+			elog(ERROR, "ogrGetDataSource failed");
 		if (ogr.ds)
-		{
 			GDALClose(ogr.ds);
-		}
 	}
 
 	PG_RETURN_VOID();
