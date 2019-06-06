@@ -16,6 +16,15 @@ This implementation currently has the following limitations:
 * **OGR connections every time** Rather than pooling OGR connections, each query makes (and disposes of) two new ones, which seems to be the largest performance drag at the moment for restricted (small) queries.
 * **All columns are retrieved every time.** PostgreSQL foreign data wrappers don't require all columns all the time, and some efficiencies can be gained by only requesting the columns needed to fulfill a query. This would be a minimal efficiency improvement, but can be removed given some development time, since the OGR API supports returning a subset of columns.
 
+## Download
+* Windows
+  * Via [Stackbuilder](https://www.postgresql.org/download/windows/)
+* Linux
+  * [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
+  * [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
+  * [Red Hat](https://yum.postgresql.org/news-packagelist.php)
+* OSX
+
 ## Basic Operation
 
 In order to access geometry data from OGR, the PostGIS extension has to be installed: if it is not installed, geometry will be represented as bytea columns, with well-known binary (WKB) values.
