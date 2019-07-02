@@ -18,7 +18,7 @@ This implementation currently has the following limitations:
 
 ## Download
 * Windows
-  * Via [Stackbuilder](https://www.postgresql.org/download/windows/)
+  * Via [Stackbuilder](https://www.postgresql.org/download/windows/) (part of PostGIS Bundle)
 * Linux
   * [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
   * [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
