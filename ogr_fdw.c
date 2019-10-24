@@ -201,7 +201,7 @@ ogrErrorHandler(CPLErr eErrClass, int err_no, const char* msg)
 {
 	const char* gdalErrType = "unknown type";
 	if (err_no >= 0 && err_no <
-	    (int)sizeof(gdalErrorTypes)/sizeof(gdalErrorTypes[0]))
+	        (int)sizeof(gdalErrorTypes) / sizeof(gdalErrorTypes[0]))
 	{
 		gdalErrType = gdalErrorTypes[err_no];
 	}
@@ -570,7 +570,9 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 	/*  Connect! */
 	err = ogrGetDataSource(&ogr, updateable);
 	if (err == OGRERR_FAILURE)
+	{
 		elog(ERROR, "ogrGetDataSource failed");
+	}
 	return ogr;
 }
 
@@ -610,9 +612,9 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 				if (ogr.ds_updateable == OGR_UPDATEABLE_FALSE)
 				{
 					ereport(ERROR, (
-					        errcode(ERRCODE_FDW_ERROR),
-					        errmsg("data source \"%s\" is not updateable", ogr.ds_str),
-					        errhint("cannot set table '%s' option to true", OPT_UPDATEABLE)
+					            errcode(ERRCODE_FDW_ERROR),
+					            errmsg("data source \"%s\" is not updateable", ogr.ds_str),
+					            errhint("cannot set table '%s' option to true", OPT_UPDATEABLE)
 					        ));
 				}
 				ogr.lyr_updateable = OGR_UPDATEABLE_TRUE;
@@ -635,12 +637,12 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 	{
 		const char* ogrerr = CPLGetLastErrorMsg();
 		ereport(ERROR, (
-		        errcode(ERRCODE_FDW_TABLE_NOT_FOUND),
-		        errmsg("unable to connect to %s to \"%s\"", OPT_LAYER, ogr.lyr_str),
-		        (ogrerr && ! streq(ogrerr, ""))
-		            ? errhint("%s", ogrerr)
-		            : errhint("Does the layer exist?")
-		        ));
+		    errcode(ERRCODE_FDW_TABLE_NOT_FOUND),
+		    errmsg("unable to connect to %s to \"%s\"", OPT_LAYER, ogr.lyr_str),
+		    (ogrerr && ! streq(ogrerr, ""))
+		        ? errhint("%s", ogrerr)
+		        : errhint("Does the layer exist?")
+		    ));
 	}
 	ogr.lyr_utf8 = OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8);
 
@@ -740,11 +742,11 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 			}
 
 			ereport(ERROR, (
-			            errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-			            errmsg("invalid option \"%s\"", def->defname),
-			            buf.len > 0
-			            ? errhint("Valid options in this context are: %s", buf.data)
-			            : errhint("There are no valid options in this context.")));
+			    errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+			    errmsg("invalid option \"%s\"", def->defname),
+			    buf.len > 0
+			        ? errhint("Valid options in this context are: %s", buf.data)
+			        : errhint("There are no valid options in this context.")));
 		}
 	}
 
@@ -755,8 +757,8 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 		if (catalog == opt->optcontext && opt->optrequired && ! opt->optfound)
 		{
 			ereport(ERROR, (
-			            errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
-			            errmsg("required option \"%s\" is missing", opt->optname)));
+			    errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+			    errmsg("required option \"%s\" is missing", opt->optname)));
 		}
 	}
 
@@ -773,9 +775,13 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 
 		err = ogrGetDataSource(&ogr, updateable);
 		if (err == OGRERR_FAILURE)
+		{
 			elog(ERROR, "ogrGetDataSource failed");
+		}
 		if (ogr.ds)
+		{
 			GDALClose(ogr.ds);
+		}
 	}
 
 	PG_RETURN_VOID();
@@ -1176,18 +1182,18 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char* colname, const
 	case OFTWideStringList:
 	{
 		ereport(ERROR, (
-		        errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-		        errmsg("column \"%s\" of foreign table \"%s\" uses an OGR array, currently unsupported", colname, tblname)
-		        ));
+		    errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+		    errmsg("column \"%s\" of foreign table \"%s\" uses an OGR array, currently unsupported", colname, tblname)
+		    ));
 		break;
 	}
 	}
 	ereport(ERROR, (
-	        errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-	        errmsg("column \"%s\" of foreign table \"%s\" converts OGR \"%s\" to \"%s\"",
-	               colname, tblname,
-	               OGR_GetFieldTypeName(ogr_type), format_type_be(pg_type))
-	        ));
+	    errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+	    errmsg("column \"%s\" of foreign table \"%s\" converts OGR \"%s\" to \"%s\"",
+	           colname, tblname,
+	           OGR_GetFieldTypeName(ogr_type), format_type_be(pg_type))
+	    ));
 }
 
 #ifdef OGR_FDW_HEXWKB
@@ -1363,7 +1369,7 @@ ogrReadColumnData(OgrFdwState* state)
 
 		/* Handle FID first */
 		if (strcaseeq(col.pgname, "fid") &&
-		    (col.pgtype == INT4OID || col.pgtype == INT8OID))
+		        (col.pgtype == INT4OID || col.pgtype == INT8OID))
 		{
 			if (fid_count >= 1)
 			{
