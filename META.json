@@ -20,7 +20,7 @@
       }
    },
    "provides": {
-     "http": {
+     "ogr_fdw": {
        "file": "ogr_fdw--1.0.sql",
        "docfile": "README.md",
        "version": "1.0.9",
