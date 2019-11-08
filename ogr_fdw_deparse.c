@@ -238,62 +238,81 @@ ogrIsLegalVarName(const char* varname)
 }
 
 static bool
-ogrDeparseVar(Var* node, OgrDeparseCtx* context)
+ogrDeparseVarOgrColumn(const Var* node, const OgrDeparseCtx* context, OgrFdwColumn *col)
+{
+	/* Var belongs to foreign table */
+	int i;
+	OgrFdwTable* table = context->state->table;
+
+	for (i = 0; i < table->ncols; i++)
+	{
+		if (table->cols[i].pgattnum == node->varattno)
+		{
+			*col = table->cols[i];
+			return true;
+		}
+	}
+	return false;
+}
+
+static const char *
+ogrDeparseVarName(const Var* node, const OgrDeparseCtx* context)
+{
+	/* Var belongs to foreign table */
+	OGRLayerH lyr = context->state->ogr.lyr;
+	OgrFdwColumn col;
+
+	if (ogrDeparseVarOgrColumn(node, context, &col))
+	{
+		const char* fldname = NULL;
+		if (col.ogrvariant == OGR_FID)
+		{
+			fldname = OGR_L_GetFIDColumn(lyr);
+			if (! fldname || strlen(fldname) == 0)
+			{
+				fldname = "fid";
+			}
+		}
+		else if (col.ogrvariant == OGR_FIELD)
+		{
+			OGRFeatureDefnH fd = OGR_L_GetLayerDefn(lyr);
+			OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, col.ogrfldnum);
+			fldname = OGR_Fld_GetNameRef(fld);
+		}
+
+		if (fldname)
+			return fldname;
+	}
+	return NULL;
+}
+
+static bool
+ogrDeparseVar(const Var* node, OgrDeparseCtx* context)
 {
 	StringInfoData* buf = context->buf;
 
+	/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
+	Assert(!IS_SPECIAL_VARNO(node->varno));
+
 	if (node->varno == context->foreignrel->relid && node->varlevelsup == 0)
 	{
-		/* Var belongs to foreign table */
-		int i;
-		OgrFdwTable* table = context->state->table;
-		OGRLayerH lyr = context->state->ogr.lyr;
-		bool done = false;
+		const char* fldname = ogrDeparseVarName(node, context);
 
-		/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
-		Assert(!IS_SPECIAL_VARNO(node->varno));
-
-		/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
-		/* TODO: Lookup OGR column name by going from varattno -> OGR via a table/OGR map */
-
-		for (i = 0; i < table->ncols; i++)
+		if (fldname)
 		{
-			if (table->cols[i].pgattnum == node->varattno)
+			if (ogrIsLegalVarName(fldname))
 			{
-				const char* fldname = NULL;
-
-				if (table->cols[i].ogrvariant == OGR_FID)
-				{
-					fldname = OGR_L_GetFIDColumn(lyr);
-					if (! fldname || strlen(fldname) == 0)
-					{
-						fldname = "fid";
-					}
-				}
-				else if (table->cols[i].ogrvariant == OGR_FIELD)
-				{
-					OGRFeatureDefnH fd = OGR_L_GetLayerDefn(lyr);
-					OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, table->cols[i].ogrfldnum);
-					fldname = OGR_Fld_GetNameRef(fld);
-				}
-
-				if (fldname)
-				{
-					if (ogrIsLegalVarName(fldname))
-					{
-						appendStringInfoString(buf, fldname);
-					}
-					else
-					{
-						appendStringInfo(buf, "\"%s\"", fldname);
-					}
-
-					done = true;
-				}
+				appendStringInfoString(buf, fldname);
+			}
+			else
+			{
+				appendStringInfo(buf, "\"%s\"", fldname);
 			}
 		}
-
-		return done;
+		else
+		{
+			return false;
+		}
 	}
 	else
 	{
@@ -319,16 +338,71 @@ ogrOperatorIsSupported(const char* opname)
 
 	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
 
-	if (bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc))
+	return bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc);
+}
+
+
+static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
+{
+	Expr *r_arg = lfirst(list_head(node->args));
+	Expr *l_arg = lfirst(list_tail(node->args));
+	Const *constant;
+	Var *var;
+	bool can_filter = false;
+
+	elog(DEBUG1, "%s:%d whoa, dude, found a && operator", __FILE__, __LINE__);
+
+	/* TODO: When a && operator is found, we need to do special */
+	/*       handling to send the box back up to OGR for SetSpatialFilter */
+
+	// void   CPL_DLL OGR_L_SetSpatialFilter( OGRLayerH, OGRGeometryH );
+	// void   CPL_DLL OGR_L_SetSpatialFilterRect( OGRLayerH,
+	//                                            double, double, double, double );
+	// void   CPL_DLL OGR_L_SetSpatialFilterEx( OGRLayerH, int iGeomField,
+	//                                          OGRGeometryH hGeom );
+	// void   CPL_DLL OGR_L_SetSpatialFilterRectEx( OGRLayerH, int iGeomField,
+	//                                              double dfMinX, double dfMinY,
+	//                                              double dfMaxX, double dfMaxY );
+
+	/* Specifically, we need a Geometry Const on one side and a Var */
+	/* column on the other side that is from the FDW relation */
+	/* Both of those implies and OGR spatial filter can be reasonably */
+	/* set. */
+	if (nodeTag(r_arg) == T_Const && nodeTag(l_arg) == T_Var)
 	{
-		return true;
+		constant = (Const*)r_arg;
+		var = (Var*)l_arg;
+	}
+	else if (nodeTag(l_arg) == T_Const && nodeTag(r_arg) == T_Var)
+	{
+		constant = (Const*)l_arg;
+		var = (Var*)r_arg;
 	}
 	else
 	{
 		return false;
 	}
-}
 
+	elog(DEBUG1, "%s:%d constant->consttype == %d", __FILE__, __LINE__, constant->consttype);
+	if (constant->consttype == ogrGetGeometryOid())
+	{
+		OgrFdwColumn col;
+		if (ogrDeparseVarOgrColumn(var, context, &col))
+		{
+			if (col.ogrvariant == OGR_GEOMETRY)
+			{
+				can_filter = true;
+				OGRLayerH lyr = context->state->ogr.lyr;
+				OGRFeatureDefnH fdh = OGR_L_GetLayerDefn(lyr);
+				OGRGeomFieldDefnH gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
+				const char *fldname = OGR_GFld_GetNameRef(gfdh);
+				elog(DEBUG1, "%s:%d fldname == %s", __FILE__, __LINE__, fldname);
+			}
+		}
+	}
+
+	return false;
+}
 
 static bool
 ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx* context)
@@ -358,36 +432,12 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx* context)
 		return false;
 	}
 
-	/* TODO: When a && operator is found, we need to do special */
-	/*       handling to send the box back up to OGR for SetSpatialFilter */
-
 	/* Overlaps operator is special case: if one side is a constant, */
 	/* then we can pass it as a spatial filter to OGR */
 	if (strcmp("&&", opname) == 0)
 	{
-		// Expr *r_arg = lfirst(list_head(node->args));
-		// Expr *l_arg = lfirst(list_tail(node->args));
-		// Const *constant;
-
-		elog(DEBUG1, "whoa, dude, found a && operator");
-
-		/* Specifically, we need a Geometry Const on one side and a Var */
-		/* column on the other side that is from the FDW relation */
-		/* Both of those implies and OGR spatial filter can be reasonably */
-		/* set. */
-
-		// if ( nodeTag(r_arg) == T_Const )
-		// 	constant = (Const*)r_arg;
-		// else if ( nodeTag(l_arg) == T_Const)
-		// 	constant = (Const*)l_arg;
-		// else
-		// 	return false;
-
-		// if ( constant->consttype != ogrGetGeometryOid() )
-
 		ReleaseSysCache(tuple);
-
-		return false;
+		return ogrDeparseOpExprSpatial(node, context);
 	}
 
 	/* Sanity check. */
