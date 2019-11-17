@@ -151,7 +151,6 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		char* wkt;
 		int wkb_size;
 		OGRGeometryH ogrgeom;
-		OGRErr err;
 
 		/*
 		 * Given a type oid (geometry in this case),
@@ -167,8 +166,8 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		gser = DatumGetPointer(wkbdatum);
 		wkb = VARDATA(gser);
 		wkb_size = VARSIZE(gser) - VARHDRSZ;
-		err = OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
-		err = OGR_G_ExportToWkt(ogrgeom, &wkt);
+		OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
+		OGR_G_ExportToWkt(ogrgeom, &wkt);
 		elog(DEBUG1, "ogrDeparseConst got a geometry: %s", wkt);
 		free(wkt);
 		OGR_G_DestroyGeometry(ogrgeom);
@@ -340,22 +339,16 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	Const* constant;
 	Var* var;
 	OgrFdwColumn col;
+	OGRLayerH lyr;
+	OGRFeatureDefnH fdh;
+	OGRGeomFieldDefnH gfdh;
+	OGRGeometryH geom;
+	OGRErr err;
+	const char* fldname;
 
-	elog(DEBUG1, "%s:%d whoa, dude, found a && operator", __FILE__, __LINE__);
+	elog(DEBUG4, "%s:%d entered ogrDeparseOpExprSpatial", __FILE__, __LINE__);
 
-	/* TODO: When a && operator is found, we need to do special */
-	/*       handling to send the box back up to OGR for SetSpatialFilter */
-
-	// void   CPL_DLL OGR_L_SetSpatialFilter( OGRLayerH, OGRGeometryH );
-	// void   CPL_DLL OGR_L_SetSpatialFilterRect( OGRLayerH,
-	//                                            double, double, double, double );
-	// void   CPL_DLL OGR_L_SetSpatialFilterEx( OGRLayerH, int iGeomField,
-	//                                          OGRGeometryH hGeom );
-	// void   CPL_DLL OGR_L_SetSpatialFilterRectEx( OGRLayerH, int iGeomField,
-	//                                              double dfMinX, double dfMinY,
-	//                                              double dfMaxX, double dfMaxY );
-
-	/* Specifically, we need a Geometry T_Const on one side and a T_Var */
+	/* We need a Geometry T_Const on one side and a T_Var */
 	/* column on the other side that is from the FDW relation */
 	/* Both of those implies and OGR spatial filter can be reasonably */
 	/* set. */
@@ -374,8 +367,6 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 		return false;
 	}
 
-	elog(DEBUG1, "%s:%d constant->consttype == %d", __FILE__, __LINE__, constant->consttype);
-
 	/* Const isn't a geometry type? Done. */
 	if (constant->consttype != ogrGetGeometryOid() || constant->constisnull || constant->constbyval)
 		return false;
@@ -388,19 +379,17 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	if (col.ogrvariant != OGR_GEOMETRY)
 		return false;
 
-	OGRLayerH lyr = context->state->ogr.lyr;
-	OGRFeatureDefnH fdh = OGR_L_GetLayerDefn(lyr);
-	OGRGeomFieldDefnH gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
-	const char *fldname = OGR_GFld_GetNameRef(gfdh);
-	elog(DEBUG1, "%s:%d fldname == %s", __FILE__, __LINE__, fldname);
+	lyr = context->state->ogr.lyr;
+	fdh = OGR_L_GetLayerDefn(lyr);
+	gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
+	fldname = OGR_GFld_GetNameRef(gfdh);
+	elog(DEBUG4, "%s:%d geometry fieldname '%s'", __FILE__, __LINE__, fldname);
 
-	OGRErr err;
-	OGRGeometryH geom;
 	err = pgDatumToOgrGeometry (constant->constvalue, col.pgsendfunc, &geom);
 	if (err != OGRERR_NONE)
 		return false;
 
-	elog(DEBUG1, "%s:%d OGR_G_ExportToJson == %s", __FILE__, __LINE__, OGR_G_ExportToJson(geom));
+	elog(DEBUG4, "%s:%d geometry constant is %s", __FILE__, __LINE__, OGR_G_ExportToJson(geom));
 
 	OGREnvelope env;
 	OGR_G_GetEnvelope(geom, &env);
@@ -412,9 +401,9 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	context->spatial_filter->maxy = env.MaxY;
 	context->spatial_filter->ogrfldnum = col.ogrfldnum;
 
-	elog(DEBUG1, "%s:%d context->spatial_filter == %d (%f %f, %f %f)",
-		__FILE__, __LINE__,
-		col.ogrfldnum, env.MinX, env.MinY, env.MaxX, env.MaxY);
+	elog(DEBUG4, "%s:%d OGR spatial filter is (%f %f, %f %f)",
+	             __FILE__, __LINE__,
+	             env.MinX, env.MinY, env.MaxX, env.MaxY);
 
 	return false;
 }

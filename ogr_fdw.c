@@ -1502,6 +1502,8 @@ ogrLookupGeometryFunctionOid(const char* proname)
 static void
 ogrBeginForeignScan(ForeignScanState* node, int eflags)
 {
+	OgrFdwState* state;
+	OgrFdwExecState* execstate;
 	OgrFdwSpatialFilter* spatial_filter;
 	Oid foreigntableid = RelationGetRelid(node->ss.ss_currentRelation);
 	ForeignScan* fsplan = (ForeignScan*)node->ss.ps.plan;
@@ -1511,8 +1513,8 @@ ogrBeginForeignScan(ForeignScanState* node, int eflags)
 		return;
 
 	/* Initialize OGR connection */
-	OgrFdwState* state = getOgrFdwState(foreigntableid, OGR_EXEC_STATE);
-	OgrFdwExecState* execstate = (OgrFdwExecState*)state;
+	state = getOgrFdwState(foreigntableid, OGR_EXEC_STATE);
+	execstate = (OgrFdwExecState*)state;
 
 	/* Read the OGR layer definition and PgSQL foreign table definitions */
 	ogrReadColumnData(state);
