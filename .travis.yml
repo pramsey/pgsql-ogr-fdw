@@ -1,4 +1,4 @@
-dist: trusty
+dist: xenial
 sudo: required
 language: cpp
 compiler: gcc
@@ -17,8 +17,8 @@ env:
   - PG_VERSION=9.6 GDAL_VERSION=1.11
   - PG_VERSION=9.6 GDAL_VERSION=2.2.4
   - PG_VERSION=10 GDAL_VERSION=2.3.3
-  - PG_VERSION=10 GDAL_VERSION=2.4.1
-  - PG_VERSION=11 GDAL_VERSION=2.4.1
+  - PG_VERSION=11 GDAL_VERSION=2.4.3
+  # - PG_VERSION=12 GDAL_VERSION=3.0.2 # gdal 3 support in ogr_fdw is tbd
 
 before_script:
   - sudo /etc/init.d/postgresql stop
@@ -34,14 +34,15 @@ before_script:
   - sudo apt-get -y autoremove
   - sudo rm -rf /var/lib/postgresql
   - apt-key adv --fetch-keys https://www.postgresql.org/media/keys/ACCC4CF8.asc
-  - sudo add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main $PG_VERSION"
+  - sudo add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main $PG_VERSION"
   - sudo apt-get update -qq
   - sudo apt-get -y install postgresql-$PG_VERSION postgresql-server-dev-$PG_VERSION
   - sudo cp ci/pg_hba.conf /etc/postgresql/$PG_VERSION/main/pg_hba.conf
   - sudo /etc/init.d/postgresql reload
 
-  - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1h libgdal-dev; fi
-  - if [[ $GDAL_VERSION == 2* ]]; then wget http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.xz; tar xJf gdal-$GDAL_VERSION.tar.xz; cd gdal-$GDAL_VERSION; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4 >/dev/null; sudo make install >/dev/null; cd ..; gdalinfo --version; fi
+  - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1i libgdal-dev; fi
+  - if [[ $GDAL_VERSION == 2* ]]; then wget http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.xz; tar xJf gdal-$GDAL_VERSION.tar.xz; cd gdal-$GDAL_VERSION; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4; sudo make install; cd ..; gdalinfo --version; fi
+
 
 script:
   - make && sudo make install && sudo chmod 755 $HOME && (PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false))
