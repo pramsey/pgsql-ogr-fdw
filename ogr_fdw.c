@@ -396,7 +396,7 @@ ogrGetDataSource(OgrConnection* ogr, OgrUpdateable updateable)
 				elog(ERROR, "bad config option string '%s'", ogr->config_options);
 			}
 
-			elog(DEBUG1, "ogr_fdw: GDAL config option '%s' set to '%s'", key, value);
+			elog(DEBUG1, "GDAL config option '%s' set to '%s'", key, value);
 			CPLSetConfigOption(key, value);
 			CPLFree(key);
 		}
@@ -497,7 +497,7 @@ ogrFinishConnection(OgrConnection* ogr)
 {
 	if (ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE)
 	{
-		elog(NOTICE, "ogr_fdw: failed to flush writes to OGR data source");
+		elog(NOTICE, "failed to flush writes to OGR data source");
 	}
 
 	if (ogr->ds)
@@ -2319,10 +2319,11 @@ static void
 ogrEndForeignScan(ForeignScanState* node)
 {
 	OgrFdwExecState* execstate = (OgrFdwExecState*) node->fdw_state;
-
-	elog(DEBUG2, "OGR FDW processed %d rows from OGR", execstate->rownum);
-
-	ogrFinishConnection(&(execstate->ogr));
+	if (execstate)
+	{
+		elog(DEBUG2, "OGR FDW processed %d rows from OGR", execstate->rownum);
+		ogrFinishConnection(&(execstate->ogr));
+	}
 
 	return;
 }
