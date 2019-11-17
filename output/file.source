@@ -161,11 +161,11 @@ CREATE FOREIGN TABLE cities (
 ) SERVER "fgdbserver"
 OPTIONS (layer 'Cities');
 SET client_min_messages = DEBUG1;
-SELECT fid, city_name, pop1990 FROM cities WHERE fid = 3;
-DEBUG:  OGR SQL: (OBJECTID = 3)
- fid | city_name | pop1990 
------+-----------+---------
-   3 | Anacortes |   11451
+SELECT fid, city_name, pop1990 FROM cities WHERE pop1990 = 17710;
+DEBUG:  OGR SQL: (POP1990 = 17710)
+ fid |  city_name   | pop1990 
+-----+--------------+---------
+   9 | Port Angeles |   17710
 (1 row)
 
 SELECT fid, city_name, pop1990 FROM cities WHERE city_name = 'Williston';
