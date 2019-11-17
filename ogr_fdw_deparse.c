@@ -23,7 +23,7 @@ typedef struct OgrDeparseCtx
 	RelOptInfo* foreignrel;   /* the foreign relation we are planning for */
 	StringInfo buf;           /* output buffer to append to */
 	List** params_list;       /* exprs that will become remote Params */
-	OGRGeometryH geom;        /* if filter contains a geometry constant, it resides here */
+	OgrFdwSpatialFilter* spatial_filter;   /* spatial filter bounds and fieldnumber */
 	OgrFdwState* state;       /* to convert local column names to OGR names */
 } OgrDeparseCtx;
 
@@ -148,6 +148,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		Datum wkbdatum;
 		char* gser;
 		char* wkb;
+		char* wkt;
 		int wkb_size;
 		OGRGeometryH ogrgeom;
 		OGRErr err;
@@ -167,21 +168,11 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		wkb = VARDATA(gser);
 		wkb_size = VARSIZE(gser) - VARHDRSZ;
 		err = OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
+		err = OGR_G_ExportToWkt(ogrgeom, &wkt);
+		elog(DEBUG1, "ogrDeparseConst got a geometry: %s", wkt);
+		free(wkt);
+		OGR_G_DestroyGeometry(ogrgeom);
 
-		/*
-		 * Save the result
-		 */
-		if (err != OGRERR_NONE)
-		{
-			if (! context->geom)
-			{
-				context->geom = ogrgeom;
-			}
-			else
-			{
-				elog(WARNING, "got two geometries in OGR FDW query, only using the first");
-			}
-		}
 		/*
 		 * geometry doesn't play a role in the deparsed SQL
 		 */
@@ -344,11 +335,11 @@ ogrOperatorIsSupported(const char* opname)
 
 static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 {
-	Expr *r_arg = lfirst(list_head(node->args));
-	Expr *l_arg = lfirst(list_tail(node->args));
-	Const *constant;
-	Var *var;
-	bool can_filter = false;
+	Expr* r_arg = lfirst(list_head(node->args));
+	Expr* l_arg = lfirst(list_tail(node->args));
+	Const* constant;
+	Var* var;
+	OgrFdwColumn col;
 
 	elog(DEBUG1, "%s:%d whoa, dude, found a && operator", __FILE__, __LINE__);
 
@@ -364,7 +355,7 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	//                                              double dfMinX, double dfMinY,
 	//                                              double dfMaxX, double dfMaxY );
 
-	/* Specifically, we need a Geometry Const on one side and a Var */
+	/* Specifically, we need a Geometry T_Const on one side and a T_Var */
 	/* column on the other side that is from the FDW relation */
 	/* Both of those implies and OGR spatial filter can be reasonably */
 	/* set. */
@@ -384,22 +375,46 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	}
 
 	elog(DEBUG1, "%s:%d constant->consttype == %d", __FILE__, __LINE__, constant->consttype);
-	if (constant->consttype == ogrGetGeometryOid())
-	{
-		OgrFdwColumn col;
-		if (ogrDeparseVarOgrColumn(var, context, &col))
-		{
-			if (col.ogrvariant == OGR_GEOMETRY)
-			{
-				can_filter = true;
-				OGRLayerH lyr = context->state->ogr.lyr;
-				OGRFeatureDefnH fdh = OGR_L_GetLayerDefn(lyr);
-				OGRGeomFieldDefnH gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
-				const char *fldname = OGR_GFld_GetNameRef(gfdh);
-				elog(DEBUG1, "%s:%d fldname == %s", __FILE__, __LINE__, fldname);
-			}
-		}
-	}
+
+	/* Const isn't a geometry type? Done. */
+	if (constant->consttype != ogrGetGeometryOid() || constant->constisnull || constant->constbyval)
+		return false;
+
+	/* Var doesn't match an OGR field? Done. */
+	if (!ogrDeparseVarOgrColumn(var, context, &col))
+		return false;
+
+	/* Matched field isn't an OGR geometry? Done. */
+	if (col.ogrvariant != OGR_GEOMETRY)
+		return false;
+
+	OGRLayerH lyr = context->state->ogr.lyr;
+	OGRFeatureDefnH fdh = OGR_L_GetLayerDefn(lyr);
+	OGRGeomFieldDefnH gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
+	const char *fldname = OGR_GFld_GetNameRef(gfdh);
+	elog(DEBUG1, "%s:%d fldname == %s", __FILE__, __LINE__, fldname);
+
+	OGRErr err;
+	OGRGeometryH geom;
+	err = pgDatumToOgrGeometry (constant->constvalue, col.pgsendfunc, &geom);
+	if (err != OGRERR_NONE)
+		return false;
+
+	elog(DEBUG1, "%s:%d OGR_G_ExportToJson == %s", __FILE__, __LINE__, OGR_G_ExportToJson(geom));
+
+	OGREnvelope env;
+	OGR_G_GetEnvelope(geom, &env);
+	OGR_G_DestroyGeometry(geom);
+	context->spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
+	context->spatial_filter->minx = env.MinX;
+	context->spatial_filter->maxx = env.MaxX;
+	context->spatial_filter->miny = env.MinY;
+	context->spatial_filter->maxy = env.MaxY;
+	context->spatial_filter->ogrfldnum = col.ogrfldnum;
+
+	elog(DEBUG1, "%s:%d context->spatial_filter == %d (%f %f, %f %f)",
+		__FILE__, __LINE__,
+		col.ogrfldnum, env.MinX, env.MinY, env.MaxX, env.MaxY);
 
 	return false;
 }
@@ -432,7 +447,8 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx* context)
 		return false;
 	}
 
-	/* Overlaps operator is special case: if one side is a constant, */
+	/* Overlaps operator is special case: if one side is a */
+	/* constant (T_Const), and the other is a table column (T_Var), */
 	/* then we can pass it as a spatial filter to OGR */
 	if (strcmp("&&", opname) == 0)
 	{
@@ -646,27 +662,26 @@ ogrDeparseExpr(Expr* node, OgrDeparseCtx* context)
 
 
 bool
-ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* exprs, OgrFdwState* state, List** params)
+ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* exprs, OgrFdwState* state, List** params_list, OgrFdwSpatialFilter** sf)
 {
 	OgrDeparseCtx context;
 	ListCell* lc;
 	bool first = true;
 
 	/* initialize result list to empty */
-	if (params)
+	if (params_list)
 	{
-		*params = NIL;
+		*params_list = NIL;
 	}
 
 	/* Set up context struct for recursion */
+	memset(&context, 0, sizeof(OgrDeparseCtx));
 	context.buf = buf;
 	context.root = root;
 	context.foreignrel = foreignrel;
-	context.params_list = params;
-	context.geom = NULL;
+	context.params_list = params_list;
 	context.state = state;
-	// context.geom_op = NULL;
-	// context.geom_func = NULL;
+	context.spatial_filter = NULL;
 
 	foreach (lc, exprs)
 	{
@@ -681,9 +696,7 @@ ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* expr
 		}
 
 		/* Unparse the expression, if possible */
-		// appendStringInfoChar(buf, '(');
 		result = ogrDeparseExpr(ri->clause, &context);
-		// appendStringInfoChar(buf, ')');
 
 		if (! result)
 		{
@@ -697,6 +710,9 @@ ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* expr
 			first = false;
 		}
 	}
+
+	if (context.spatial_filter)
+		*sf = context.spatial_filter;
 
 	return true;
 }

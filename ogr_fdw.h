@@ -91,11 +91,11 @@ typedef enum {
 typedef struct OgrFdwColumn
 {
 	/* PgSQL metadata */
-	int pgattnum;            /* PostgreSQL attribute number */
-	int pgattisdropped;      /* PostgreSQL attribute dropped? */
-	char *pgname;            /* PostgreSQL column name */
-	Oid pgtype;              /* PostgreSQL data type */
-	int pgtypmod;            /* PostgreSQL type modifier */
+	int   pgattnum;          /* PostgreSQL attribute number */
+	int   pgattisdropped;    /* PostgreSQL attribute dropped? */
+	char* pgname;            /* PostgreSQL column name */
+	Oid   pgtype;            /* PostgreSQL data type */
+	int   pgtypmod;          /* PostgreSQL type modifier */
 
 	/* For reading */
 	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
@@ -104,9 +104,9 @@ typedef struct OgrFdwColumn
 	Oid pgrecvioparam;
 
 	/* For writing */
-	Oid pgoutputfunc;        /* PostgreSQL function to convert type to cstring */
+	Oid  pgoutputfunc;       /* PostgreSQL function to convert type to cstring */
 	bool pgoutputvarlena;
-	Oid pgsendfunc;        /* PostgreSQL function to convert type to binary */
+	Oid  pgsendfunc;         /* PostgreSQL function to convert type to binary */
 	bool pgsendvarlena;
 
 	/* OGR metadata */
@@ -118,17 +118,23 @@ typedef struct OgrFdwColumn
 typedef struct OgrFdwTable
 {
 	int ncols;
-	char *tblname;
-	OgrFdwColumn *cols;
+	char* tblname;
+	OgrFdwColumn* cols;
 } OgrFdwTable;
+
+typedef struct OgrFdwSpatialFilter
+{
+	int ogrfldnum;
+	double minx, miny, maxx, maxy;
+} OgrFdwSpatialFilter;
 
 typedef struct OgrConnection
 {
-	const char *ds_str;         /* datasource connection string */
-	const char *dr_str;         /* driver (format) name */
-	char *lyr_str;        /* layer name */
-	const char *config_options; /* GDAL config options */
-	const char *open_options;   /* GDAL open options */
+	const char* ds_str;         /* datasource connection string */
+	const char* dr_str;         /* driver (format) name */
+	char* lyr_str;              /* layer name */
+	const char* config_options; /* GDAL config options */
+	const char* open_options;   /* GDAL open options */
 	OgrUpdateable ds_updateable;
 	OgrUpdateable lyr_updateable;
 	bool lyr_utf8;        /* OGR layer will return UTF8 strings */
@@ -147,8 +153,8 @@ typedef struct OgrFdwState
 {
 	OgrFdwStateType type;
 	Oid foreigntableid;
-	OgrConnection ogr;  /* connection object */
-	OgrFdwTable *table;
+	OgrConnection ogr;   /* connection object */
+	OgrFdwTable* table;
 	TupleDesc tupdesc;
 } OgrFdwState;
 
@@ -157,12 +163,12 @@ typedef struct OgrFdwPlanState
 	OgrFdwStateType type;
 	Oid foreigntableid;
 	OgrConnection ogr;
-	OgrFdwTable *table;
+	OgrFdwTable* table;
 	TupleDesc tupdesc;
 	int nrows;           /* estimate of number of rows in file */
 	Cost startup_cost;
 	Cost total_cost;
-	bool *pushdown_clauses;
+	bool* pushdown_clauses;
 } OgrFdwPlanState;
 
 typedef struct OgrFdwExecState
@@ -172,10 +178,12 @@ typedef struct OgrFdwExecState
 	OgrConnection ogr;
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
-	char *sql;             /* OGR SQL for attribute filter */
-	int rownum;            /* how many rows have we read thus far? */
-	Oid setsridfunc;       /* ST_SetSRID() */
-	Oid typmodsridfunc;    /* postgis_typmod_srid() */
+	char* sql;              /* OGR SQL for attribute filter */
+	OGRGeometryH sf_geom;   /* Spatial filter geom */
+	int sf_ogrfldnum;       /* Spatial filter field */
+	int rownum;             /* how many rows have we read thus far? */
+	Oid setsridfunc;        /* ST_SetSRID() */
+	Oid typmodsridfunc;     /* postgis_typmod_srid() */
 } OgrFdwExecState;
 
 typedef struct OgrFdwModifyState
@@ -183,13 +191,13 @@ typedef struct OgrFdwModifyState
 	OgrFdwStateType type;
 	Oid foreigntableid;
 	OgrConnection ogr;     /* connection object */
-	OgrFdwTable *table;
+	OgrFdwTable* table;
 	TupleDesc tupdesc;
 } OgrFdwModifyState;
 
 /* Shared function signatures */
-bool ogrDeparse(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel, List *exprs, OgrFdwState *state, List **param);
-
+bool ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* exprs, OgrFdwState* state, List** params_list, OgrFdwSpatialFilter** sf);
 Oid ogrGetGeometryOid(void);
+OGRErr pgDatumToOgrGeometry (Datum pg_geometry, Oid pgsendfunc, OGRGeometryH* ogr_geometry);
 
 #endif /* _OGR_FDW_H */
