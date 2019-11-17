@@ -115,5 +115,3 @@ SELECT c.*
   FROM generate_series(1,4) g
   JOIN no_geom c
   ON (c.fid = g.g);
-
-------------------------------------------------

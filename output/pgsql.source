@@ -1,9 +1,5 @@
-CREATE SERVER pgserver
-  FOREIGN DATA WRAPPER ogr_fdw
-  OPTIONS (
-    datasource 'PG:dbname=contrib_regression host=localhost',
-    format 'PostgreSQL' );
-	
+----------------------------------------------------------------------
+-- Create local table
 CREATE TABLE bytea_local (
   fid serial primary key,
   geom bytea,
@@ -19,6 +15,7 @@ CREATE TABLE bytea_local (
   yn char
 );
 ----------------------------------------------------------------------
+-- Populate local table
 INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
   VALUES ('Jim', '14232'::bytea, 23, 1, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
 INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
@@ -26,6 +23,12 @@ INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch,
 INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
   VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 ----------------------------------------------------------------------
+-- Create remote table
+CREATE SERVER pgserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'PG:dbname=contrib_regression host=localhost',
+    format 'PostgreSQL' );
 CREATE FOREIGN TABLE bytea_fdw (
   fid integer,
   geom bytea,
@@ -69,6 +72,55 @@ EXPLAIN VERBOSE
 (2 rows)
 
 ----------------------------------------------------------------------
+-- Remote Query and OGR SQL pushdown
+SET client_min_messages = DEBUG1;
+SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
+  FROM bytea_fdw
+  WHERE fid = 4;
+DEBUG:  OGR SQL: (fid = 4)
+ fid | name | geom | age | size | value | num | dt | tm | dttm | varch | yn 
+-----+------+------+-----+------+-------+-----+----+----+------+-------+----
+(0 rows)
+
+SELECT fid, name, dt
+  FROM bytea_fdw
+  WHERE name IS NULL;
+DEBUG:  OGR SQL: (name IS NULL)
+ fid | name | dt 
+-----+------+----
+   3 |      | 
+(1 row)
+
+SELECT fid, name
+  FROM bytea_fdw
+  WHERE name = 'Jim' AND age <= 30;
+DEBUG:  OGR SQL: (age <= 30) AND (name = 'Jim')
+ fid | name 
+-----+------
+   1 | Jim
+(1 row)
+
+SELECT fid, name, dt
+  FROM bytea_fdw
+  WHERE name = 'Jim' AND age <= 30 AND dt > '2010-10-1'::date;
+DEBUG:  OGR SQL: (age <= 30) AND (dt > '10-01-2010') AND (name = 'Jim')
+ fid | name |     dt     
+-----+------+------------
+   1 | Jim  | 10-10-2010
+(1 row)
+
+SELECT fid, name
+  FROM bytea_fdw
+  WHERE name = 'Jim' OR name IS NULL;
+DEBUG:  OGR SQL: ((name = 'Jim') OR (name IS NULL))
+ fid | name 
+-----+------
+   1 | Jim
+   3 | 
+(2 rows)
+
+----------------------------------------------------------------------
+-- Remote Update
 INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
 VALUES ('Margaret', '2222'::bytea, 12, 5, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' )
 RETURNING fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn;
@@ -77,20 +129,14 @@ RETURNING fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn;
    4 | Margaret | \x32323232 |  12 |    5 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
 (1 row)
 
-SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
-  FROM bytea_fdw
-  WHERE fid = 4;
- fid |   name   |    geom    | age | size | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
------+----------+------------+-----+------+-------+-------+------------+----------+--------------------------+----------+----
-   4 | Margaret | \x32323232 |  12 |    5 |   1.4 | 19.13 | 11-23-2001 | 09:12:34 | Sun Feb 11 09:23:11 2001 | them     | y
-(1 row)
-
 UPDATE bytea_fdw 
   SET name = 'Maggie', num = 45.34, yn = 'n'
   WHERE age = 12;
+DEBUG:  OGR SQL: (age = 12)
 SELECT fid, name, num, yn
   FROM bytea_fdw
   WHERE fid = 4;
+DEBUG:  OGR SQL: (fid = 4)
  fid |  name  |  num  | yn 
 -----+--------+-------+----
    4 | Maggie | 45.34 | n
@@ -99,9 +145,11 @@ SELECT fid, name, num, yn
 UPDATE bytea_fdw 
   SET dt = '2089-12-13', tm = '01:23:45'
   WHERE num = 45.34;
+DEBUG:  OGR SQL: (num = 45.34)
 SELECT fid, dt, tm
   FROM bytea_fdw
   WHERE fid = 4;
+DEBUG:  OGR SQL: (fid = 4)
  fid |     dt     |    tm    
 -----+------------+----------
    4 | 12-13-2089 | 01:23:45
@@ -109,11 +157,13 @@ SELECT fid, dt, tm
 
 DELETE FROM bytea_fdw 
   WHERE fid = 4;
+DEBUG:  OGR SQL: (fid = 4)
   
 SELECT a.fid, a.name, b.name 
   FROM bytea_local a 
   JOIN bytea_fdw b 
   USING (fid);
+DEBUG:  OGR SQL: 
  fid |  name  |  name  
 -----+--------+--------
    1 | Jim    | Jim
