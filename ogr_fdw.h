@@ -179,8 +179,6 @@ typedef struct OgrFdwExecState
 	OgrFdwTable *table;
 	TupleDesc tupdesc;
 	char* sql;              /* OGR SQL for attribute filter */
-	OGRGeometryH sf_geom;   /* Spatial filter geom */
-	int sf_ogrfldnum;       /* Spatial filter field */
 	int rownum;             /* how many rows have we read thus far? */
 	Oid setsridfunc;        /* ST_SetSRID() */
 	Oid typmodsridfunc;     /* postgis_typmod_srid() */
