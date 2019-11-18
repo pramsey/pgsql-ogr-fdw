@@ -31,6 +31,7 @@ REGRESS = file pgsql
 ifeq ($(HAS_IMPORT_SCHEMA),yes)
 REGRESS += import
 endif
+REGRESS += postgis
 
 ###############################################################
 # Build the utility program after PGXS to override the

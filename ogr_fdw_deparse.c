@@ -622,28 +622,28 @@ ogrDeparseExpr(Expr* node, OgrDeparseCtx* context)
 		return ogrDeparseRelabelType((RelabelType*) node, context);
 	case T_ScalarArrayOpExpr:
 		/* TODO: Handle this to support the "IN" operator */
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
 		return false;
 #if PG_VERSION_NUM < 120000
 	case T_ArrayRef:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayRef");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ArrayRef");
 		return false;
 #else
 	case T_SubscriptingRef:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_SubscriptingRef");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_SubscriptingRef");
 		return false;
 #endif
 	case T_ArrayExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ArrayExpr");
 		return false;
 	case T_FuncExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_FuncExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_FuncExpr");
 		return false;
 	case T_DistinctExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_DistinctExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_DistinctExpr");
 		return false;
 	default:
-		elog(NOTICE, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
+		elog(DEBUG2, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
 		return false;
 	}
 

@@ -1,0 +1,126 @@
+CREATE EXTENSION postgis;
+CREATE TABLE geometry_local (
+  fid serial primary key,
+  geom geometry(Point, 4326),
+  name varchar,
+  age bigint,
+  size integer,
+  value float8,
+  num numeric(6,2),
+  dt date,
+  tm time,
+  dttm timestamp,
+  varch char(8),
+  yn char
+);
+----------------------------------------------------------------------
+-- Populate local table
+INSERT INTO geometry_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES ('Jim', 'SRID=4326;POINT(0 0)', 23, 1, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
+INSERT INTO geometry_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES ('Marvin', 'SRID=4326;POINT(100 0)', 34, 2, 5.4, 10.13, '2011-11-11'::date, '15:21:45'::time, '2011-11-11 15:21:45'::timestamp, 'that', 'n' );
+INSERT INTO geometry_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+  VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+----------------------------------------------------------------------
+-- Create remote table
+CREATE SERVER pgservergeom
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'PG:dbname=contrib_regression host=localhost',
+    format 'PostgreSQL' );
+CREATE FOREIGN TABLE geometry_fdw (
+  fid integer,
+  geom geometry(point, 4326),
+  name varchar,
+  age bigint,
+  size integer,
+  value float8,
+  num numeric(6,2),
+  dt date,
+  tm time,
+  dttm timestamp,
+  varch char(8),
+  yn char
+) SERVER pgservergeom OPTIONS (layer 'geometry_local');
+SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn FROM geometry_fdw;
+ fid |  name  |                        geom                        | age | size | value |  num  |     dt     |    tm    |           dttm           |  varch   | yn 
+-----+--------+----------------------------------------------------+-----+------+-------+-------+------------+----------+--------------------------+----------+----
+   1 | Jim    | 0101000020E610000000000000000000000000000000000000 |  23 |    1 |   4.3 |  5.50 | 10-10-2010 | 13:23:21 | Sun Oct 10 13:23:21 2010 | this     | y
+   2 | Marvin | 0101000020E610000000000000000059400000000000000000 |  34 |    2 |   5.4 | 10.13 | 11-11-2011 | 15:21:45 | Fri Nov 11 15:21:45 2011 | that     | n
+   3 |        |                                                    |     |      |       |       |            |          |                          |          | 
+(3 rows)
+
+SELECT a.name, b.name 
+  FROM geometry_local a 
+  JOIN geometry_fdw b 
+  USING (fid);
+  name  |  name  
+--------+--------
+ Jim    | Jim
+ Marvin | Marvin
+        | 
+(3 rows)
+
+EXPLAIN VERBOSE 
+  SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
+  FROM geometry_fdw;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Foreign Scan on public.geometry_fdw  (cost=25.00..1025.00 rows=1000 width=166)
+   Output: fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
+(2 rows)
+
+----------------------------------------------------------------------
+-- Remote Query and OGR SQL pushdown
+SET client_min_messages = DEBUG1;
+SELECT name, age, ST_AsText(geom)
+  FROM geometry_fdw
+  WHERE name = 'Jim' AND age <= 30
+  AND geom && ST_MakeEnvelope(-1, -1, 1, 1, 4326);
+DEBUG:  OGR SQL: (age <= 30) AND (name = 'Jim')
+DEBUG:  OGR spatial filter (-1 -1, 1 1)
+ name | age | st_astext  
+------+-----+------------
+ Jim  |  23 | POINT(0 0)
+(1 row)
+
+SELECT name, ST_AsText(geom)
+  FROM geometry_fdw
+  WHERE ST_Intersects(geom, ST_MakeEnvelope(-1, -1, 1, 1, 4326));
+DEBUG:  OGR spatial filter (-1 -1, 1 1)
+ name | st_astext  
+------+------------
+ Jim  | POINT(0 0)
+(1 row)
+
+SELECT name, ST_AsText(geom)
+  FROM geometry_fdw
+  WHERE geom && ST_MakeEnvelope(-180, -90, 180, 90, 4326);
+DEBUG:  OGR spatial filter (-180 -90, 180 90)
+  name  |  st_astext   
+--------+--------------
+ Jim    | POINT(0 0)
+ Marvin | POINT(100 0)
+(2 rows)
+
+SELECT name, ST_AsText(geom)
+  FROM geometry_fdw
+  WHERE ST_MakeEnvelope(-180, -90, 180, 90, 4326) && geom;
+DEBUG:  OGR spatial filter (-180 -90, 180 90)
+  name  |  st_astext   
+--------+--------------
+ Jim    | POINT(0 0)
+ Marvin | POINT(100 0)
+(2 rows)
+
+SELECT name, ST_AsText(geom)
+  FROM geometry_fdw
+  WHERE ST_MakeEnvelope(-180, -90, 180, 90, 4326) && 
+        ST_MakeEnvelope(-180, -90, 180, 90, 4326);
+  name  |  st_astext   
+--------+--------------
+ Jim    | POINT(0 0)
+ Marvin | POINT(100 0)
+        | 
+(3 rows)
+

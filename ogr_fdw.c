@@ -969,8 +969,18 @@ ogrGetForeignPlan(PlannerInfo* root,
 	 */
 	initStringInfo(&sql);
 	sql_generated = ogrDeparse(&sql, root, baserel, scan_clauses, state, &params_list, &spatial_filter);
-	elog(DEBUG1, "OGR SQL: %s", sql.data);
 
+	/* Extract the OGR SQL from the StringInfoData */
+	if (sql_generated && sql.len > 0)
+		attribute_filter = sql.data;
+
+	/* Log filters at debug level one as necessary */
+	if (attribute_filter)
+		elog(DEBUG1, "OGR SQL: %s", attribute_filter);
+	if (spatial_filter)
+		elog(DEBUG1, "OGR spatial filter (%.3g %.3g, %.3g %.3g)",
+		             spatial_filter->minx, spatial_filter->miny,
+		             spatial_filter->maxx, spatial_filter->maxy);
 	/*
 	 * Here we strip RestrictInfo
 	 * nodes from the clauses and ignore pseudoconstants (which will be
@@ -983,10 +993,6 @@ ogrGetForeignPlan(PlannerInfo* root,
 	 * pass them all to make_foreignscan, see no evil, etc.
 	 */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
-
-	/* Extract the OGR SQL from the StringInfoData */
-	if (sql_generated)
-		attribute_filter = sql.data;
 
 	/* Pack the data we want to pass to the execution stage into a List. */
 	fdw_private = list_make3(attribute_filter, params_list, spatial_filter);

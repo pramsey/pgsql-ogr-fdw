@@ -147,4 +147,3 @@ SET client_min_messages = DEBUG1;
 
 SELECT fid, city_name, pop1990 FROM cities WHERE pop1990 = 17710;
 SELECT fid, city_name, pop1990 FROM cities WHERE city_name = 'Williston';
-

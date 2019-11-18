@@ -163,7 +163,6 @@ SELECT a.fid, a.name, b.name
   FROM bytea_local a 
   JOIN bytea_fdw b 
   USING (fid);
-DEBUG:  OGR SQL: 
  fid |  name  |  name  
 -----+--------+--------
    1 | Jim    | Jim
