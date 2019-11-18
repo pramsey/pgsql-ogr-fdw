@@ -328,7 +328,7 @@ ogrOperatorIsSupported(const char* opname)
 
 	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
 
-	return bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc);
+	return NULL != bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc);
 }
 
 
@@ -343,6 +343,7 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	OGRFeatureDefnH fdh;
 	OGRGeomFieldDefnH gfdh;
 	OGRGeometryH geom;
+	OGREnvelope env;
 	OGRErr err;
 	const char* fldname;
 
@@ -391,7 +392,6 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 
 	elog(DEBUG4, "%s:%d geometry constant is %s", __FILE__, __LINE__, OGR_G_ExportToJson(geom));
 
-	OGREnvelope env;
 	OGR_G_GetEnvelope(geom, &env);
 	OGR_G_DestroyGeometry(geom);
 	context->spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
