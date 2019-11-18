@@ -1,9 +1,6 @@
-CREATE SERVER pgserver
-  FOREIGN DATA WRAPPER ogr_fdw
-  OPTIONS (
-    datasource 'PG:dbname=contrib_regression host=localhost',
-    format 'PostgreSQL' );
-	
+----------------------------------------------------------------------
+-- Create local table
+
 CREATE TABLE bytea_local (
   fid serial primary key,
   geom bytea,
@@ -20,6 +17,7 @@ CREATE TABLE bytea_local (
 );
 
 ----------------------------------------------------------------------
+-- Populate local table
 
 INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
   VALUES ('Jim', '14232'::bytea, 23, 1, 4.3, 5.5, '2010-10-10'::date, '13:23:21'::time, '2010-10-10 13:23:21'::timestamp, 'this', 'y' );
@@ -29,6 +27,13 @@ INSERT INTO bytea_local (name, geom, age, size, value, num, dt, tm, dttm, varch,
   VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 ----------------------------------------------------------------------
+-- Create remote table
+
+CREATE SERVER pgserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'PG:dbname=contrib_regression host=localhost',
+    format 'PostgreSQL' );
 
 CREATE FOREIGN TABLE bytea_fdw (
   fid integer,
@@ -57,14 +62,36 @@ EXPLAIN VERBOSE
   FROM bytea_fdw;
 
 ----------------------------------------------------------------------
+-- Remote Query and OGR SQL pushdown
 
-INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
-VALUES ('Margaret', '2222'::bytea, 12, 5, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' )
-RETURNING fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn;
+SET client_min_messages = DEBUG1;
 
 SELECT fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
   FROM bytea_fdw
   WHERE fid = 4;
+
+SELECT fid, name, dt
+  FROM bytea_fdw
+  WHERE name IS NULL;
+
+SELECT fid, name
+  FROM bytea_fdw
+  WHERE name = 'Jim' AND age <= 30;
+
+SELECT fid, name, dt
+  FROM bytea_fdw
+  WHERE name = 'Jim' AND age <= 30 AND dt > '2010-10-1'::date;
+
+SELECT fid, name
+  FROM bytea_fdw
+  WHERE name = 'Jim' OR name IS NULL;
+
+----------------------------------------------------------------------
+-- Remote Update
+
+INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
+VALUES ('Margaret', '2222'::bytea, 12, 5, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' )
+RETURNING fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn;
 
 UPDATE bytea_fdw 
   SET name = 'Maggie', num = 45.34, yn = 'n'

@@ -11,8 +11,8 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 
 # Test files need kid gloves
-[*.source]
-insert_final_newline = false
+[*.{source,out}]
+insert_final_newline = true
 trim_trailing_whitespace = false
 
 # C files want tab indentation

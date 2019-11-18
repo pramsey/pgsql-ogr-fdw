@@ -23,7 +23,7 @@ typedef struct OgrDeparseCtx
 	RelOptInfo* foreignrel;   /* the foreign relation we are planning for */
 	StringInfo buf;           /* output buffer to append to */
 	List** params_list;       /* exprs that will become remote Params */
-	OGRGeometryH geom;        /* if filter contains a geometry constant, it resides here */
+	OgrFdwSpatialFilter* spatial_filter;   /* spatial filter bounds and fieldnumber */
 	OgrFdwState* state;       /* to convert local column names to OGR names */
 } OgrDeparseCtx;
 
@@ -148,9 +148,9 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		Datum wkbdatum;
 		char* gser;
 		char* wkb;
+		char* wkt;
 		int wkb_size;
 		OGRGeometryH ogrgeom;
-		OGRErr err;
 
 		/*
 		 * Given a type oid (geometry in this case),
@@ -166,22 +166,12 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		gser = DatumGetPointer(wkbdatum);
 		wkb = VARDATA(gser);
 		wkb_size = VARSIZE(gser) - VARHDRSZ;
-		err = OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
+		OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
+		OGR_G_ExportToWkt(ogrgeom, &wkt);
+		elog(DEBUG1, "ogrDeparseConst got a geometry: %s", wkt);
+		free(wkt);
+		OGR_G_DestroyGeometry(ogrgeom);
 
-		/*
-		 * Save the result
-		 */
-		if (err != OGRERR_NONE)
-		{
-			if (! context->geom)
-			{
-				context->geom = ogrgeom;
-			}
-			else
-			{
-				elog(WARNING, "got two geometries in OGR FDW query, only using the first");
-			}
-		}
 		/*
 		 * geometry doesn't play a role in the deparsed SQL
 		 */
@@ -238,62 +228,81 @@ ogrIsLegalVarName(const char* varname)
 }
 
 static bool
-ogrDeparseVar(Var* node, OgrDeparseCtx* context)
+ogrDeparseVarOgrColumn(const Var* node, const OgrDeparseCtx* context, OgrFdwColumn *col)
+{
+	/* Var belongs to foreign table */
+	int i;
+	OgrFdwTable* table = context->state->table;
+
+	for (i = 0; i < table->ncols; i++)
+	{
+		if (table->cols[i].pgattnum == node->varattno)
+		{
+			*col = table->cols[i];
+			return true;
+		}
+	}
+	return false;
+}
+
+static const char *
+ogrDeparseVarName(const Var* node, const OgrDeparseCtx* context)
+{
+	/* Var belongs to foreign table */
+	OGRLayerH lyr = context->state->ogr.lyr;
+	OgrFdwColumn col;
+
+	if (ogrDeparseVarOgrColumn(node, context, &col))
+	{
+		const char* fldname = NULL;
+		if (col.ogrvariant == OGR_FID)
+		{
+			fldname = OGR_L_GetFIDColumn(lyr);
+			if (! fldname || strlen(fldname) == 0)
+			{
+				fldname = "fid";
+			}
+		}
+		else if (col.ogrvariant == OGR_FIELD)
+		{
+			OGRFeatureDefnH fd = OGR_L_GetLayerDefn(lyr);
+			OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, col.ogrfldnum);
+			fldname = OGR_Fld_GetNameRef(fld);
+		}
+
+		if (fldname)
+			return fldname;
+	}
+	return NULL;
+}
+
+static bool
+ogrDeparseVar(const Var* node, OgrDeparseCtx* context)
 {
 	StringInfoData* buf = context->buf;
 
+	/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
+	Assert(!IS_SPECIAL_VARNO(node->varno));
+
 	if (node->varno == context->foreignrel->relid && node->varlevelsup == 0)
 	{
-		/* Var belongs to foreign table */
-		int i;
-		OgrFdwTable* table = context->state->table;
-		OGRLayerH lyr = context->state->ogr.lyr;
-		bool done = false;
+		const char* fldname = ogrDeparseVarName(node, context);
 
-		/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
-		Assert(!IS_SPECIAL_VARNO(node->varno));
-
-		/* TODO: Handle case of mapping columns to OGR columns that don't share their name */
-		/* TODO: Lookup OGR column name by going from varattno -> OGR via a table/OGR map */
-
-		for (i = 0; i < table->ncols; i++)
+		if (fldname)
 		{
-			if (table->cols[i].pgattnum == node->varattno)
+			if (ogrIsLegalVarName(fldname))
 			{
-				const char* fldname = NULL;
-
-				if (table->cols[i].ogrvariant == OGR_FID)
-				{
-					fldname = OGR_L_GetFIDColumn(lyr);
-					if (! fldname || strlen(fldname) == 0)
-					{
-						fldname = "fid";
-					}
-				}
-				else if (table->cols[i].ogrvariant == OGR_FIELD)
-				{
-					OGRFeatureDefnH fd = OGR_L_GetLayerDefn(lyr);
-					OGRFieldDefnH fld = OGR_FD_GetFieldDefn(fd, table->cols[i].ogrfldnum);
-					fldname = OGR_Fld_GetNameRef(fld);
-				}
-
-				if (fldname)
-				{
-					if (ogrIsLegalVarName(fldname))
-					{
-						appendStringInfoString(buf, fldname);
-					}
-					else
-					{
-						appendStringInfo(buf, "\"%s\"", fldname);
-					}
-
-					done = true;
-				}
+				appendStringInfoString(buf, fldname);
+			}
+			else
+			{
+				appendStringInfo(buf, "\"%s\"", fldname);
 			}
 		}
-
-		return done;
+		else
+		{
+			return false;
+		}
 	}
 	else
 	{
@@ -319,16 +328,85 @@ ogrOperatorIsSupported(const char* opname)
 
 	elog(DEBUG3, "ogrOperatorIsSupported got operator '%s'", opname);
 
-	if (bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc))
+	return NULL != bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc);
+}
+
+
+static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
+{
+	Expr* r_arg = lfirst(list_head(node->args));
+	Expr* l_arg = lfirst(list_tail(node->args));
+	Const* constant;
+	Var* var;
+	OgrFdwColumn col;
+	OGRLayerH lyr;
+	OGRFeatureDefnH fdh;
+	OGRGeomFieldDefnH gfdh;
+	OGRGeometryH geom;
+	OGREnvelope env;
+	OGRErr err;
+	const char* fldname;
+
+	elog(DEBUG4, "%s:%d entered ogrDeparseOpExprSpatial", __FILE__, __LINE__);
+
+	/* We need a Geometry T_Const on one side and a T_Var */
+	/* column on the other side that is from the FDW relation */
+	/* Both of those implies and OGR spatial filter can be reasonably */
+	/* set. */
+	if (nodeTag(r_arg) == T_Const && nodeTag(l_arg) == T_Var)
 	{
-		return true;
+		constant = (Const*)r_arg;
+		var = (Var*)l_arg;
+	}
+	else if (nodeTag(l_arg) == T_Const && nodeTag(r_arg) == T_Var)
+	{
+		constant = (Const*)l_arg;
+		var = (Var*)r_arg;
 	}
 	else
 	{
 		return false;
 	}
-}
 
+	/* Const isn't a geometry type? Done. */
+	if (constant->consttype != ogrGetGeometryOid() || constant->constisnull || constant->constbyval)
+		return false;
+
+	/* Var doesn't match an OGR field? Done. */
+	if (!ogrDeparseVarOgrColumn(var, context, &col))
+		return false;
+
+	/* Matched field isn't an OGR geometry? Done. */
+	if (col.ogrvariant != OGR_GEOMETRY)
+		return false;
+
+	lyr = context->state->ogr.lyr;
+	fdh = OGR_L_GetLayerDefn(lyr);
+	gfdh = OGR_FD_GetGeomFieldDefn(fdh, col.ogrfldnum);
+	fldname = OGR_GFld_GetNameRef(gfdh);
+	elog(DEBUG4, "%s:%d geometry fieldname '%s'", __FILE__, __LINE__, fldname);
+
+	err = pgDatumToOgrGeometry (constant->constvalue, col.pgsendfunc, &geom);
+	if (err != OGRERR_NONE)
+		return false;
+
+	elog(DEBUG4, "%s:%d geometry constant is %s", __FILE__, __LINE__, OGR_G_ExportToJson(geom));
+
+	OGR_G_GetEnvelope(geom, &env);
+	OGR_G_DestroyGeometry(geom);
+	context->spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
+	context->spatial_filter->minx = env.MinX;
+	context->spatial_filter->maxx = env.MaxX;
+	context->spatial_filter->miny = env.MinY;
+	context->spatial_filter->maxy = env.MaxY;
+	context->spatial_filter->ogrfldnum = col.ogrfldnum;
+
+	elog(DEBUG4, "%s:%d OGR spatial filter is (%f %f, %f %f)",
+	             __FILE__, __LINE__,
+	             env.MinX, env.MinY, env.MaxX, env.MaxY);
+
+	return false;
+}
 
 static bool
 ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx* context)
@@ -358,36 +436,13 @@ ogrDeparseOpExpr(OpExpr* node, OgrDeparseCtx* context)
 		return false;
 	}
 
-	/* TODO: When a && operator is found, we need to do special */
-	/*       handling to send the box back up to OGR for SetSpatialFilter */
-
-	/* Overlaps operator is special case: if one side is a constant, */
+	/* Overlaps operator is special case: if one side is a */
+	/* constant (T_Const), and the other is a table column (T_Var), */
 	/* then we can pass it as a spatial filter to OGR */
 	if (strcmp("&&", opname) == 0)
 	{
-		// Expr *r_arg = lfirst(list_head(node->args));
-		// Expr *l_arg = lfirst(list_tail(node->args));
-		// Const *constant;
-
-		elog(DEBUG1, "whoa, dude, found a && operator");
-
-		/* Specifically, we need a Geometry Const on one side and a Var */
-		/* column on the other side that is from the FDW relation */
-		/* Both of those implies and OGR spatial filter can be reasonably */
-		/* set. */
-
-		// if ( nodeTag(r_arg) == T_Const )
-		// 	constant = (Const*)r_arg;
-		// else if ( nodeTag(l_arg) == T_Const)
-		// 	constant = (Const*)l_arg;
-		// else
-		// 	return false;
-
-		// if ( constant->consttype != ogrGetGeometryOid() )
-
 		ReleaseSysCache(tuple);
-
-		return false;
+		return ogrDeparseOpExprSpatial(node, context);
 	}
 
 	/* Sanity check. */
@@ -567,28 +622,28 @@ ogrDeparseExpr(Expr* node, OgrDeparseCtx* context)
 		return ogrDeparseRelabelType((RelabelType*) node, context);
 	case T_ScalarArrayOpExpr:
 		/* TODO: Handle this to support the "IN" operator */
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ScalarArrayOpExpr");
 		return false;
 #if PG_VERSION_NUM < 120000
 	case T_ArrayRef:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayRef");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ArrayRef");
 		return false;
 #else
 	case T_SubscriptingRef:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_SubscriptingRef");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_SubscriptingRef");
 		return false;
 #endif
 	case T_ArrayExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_ArrayExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_ArrayExpr");
 		return false;
 	case T_FuncExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_FuncExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_FuncExpr");
 		return false;
 	case T_DistinctExpr:
-		elog(NOTICE, "unsupported OGR FDW expression type, T_DistinctExpr");
+		elog(DEBUG2, "unsupported OGR FDW expression type, T_DistinctExpr");
 		return false;
 	default:
-		elog(NOTICE, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
+		elog(DEBUG2, "unsupported OGR FDW expression type for deparse: %d", (int) nodeTag(node));
 		return false;
 	}
 
@@ -596,27 +651,26 @@ ogrDeparseExpr(Expr* node, OgrDeparseCtx* context)
 
 
 bool
-ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* exprs, OgrFdwState* state, List** params)
+ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* exprs, OgrFdwState* state, List** params_list, OgrFdwSpatialFilter** sf)
 {
 	OgrDeparseCtx context;
 	ListCell* lc;
 	bool first = true;
 
 	/* initialize result list to empty */
-	if (params)
+	if (params_list)
 	{
-		*params = NIL;
+		*params_list = NIL;
 	}
 
 	/* Set up context struct for recursion */
+	memset(&context, 0, sizeof(OgrDeparseCtx));
 	context.buf = buf;
 	context.root = root;
 	context.foreignrel = foreignrel;
-	context.params_list = params;
-	context.geom = NULL;
+	context.params_list = params_list;
 	context.state = state;
-	// context.geom_op = NULL;
-	// context.geom_func = NULL;
+	context.spatial_filter = NULL;
 
 	foreach (lc, exprs)
 	{
@@ -631,9 +685,7 @@ ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* expr
 		}
 
 		/* Unparse the expression, if possible */
-		// appendStringInfoChar(buf, '(');
 		result = ogrDeparseExpr(ri->clause, &context);
-		// appendStringInfoChar(buf, ')');
 
 		if (! result)
 		{
@@ -647,6 +699,9 @@ ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List* expr
 			first = false;
 		}
 	}
+
+	if (context.spatial_filter)
+		*sf = context.spatial_filter;
 
 	return true;
 }

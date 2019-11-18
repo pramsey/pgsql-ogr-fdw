@@ -139,3 +139,39 @@ SELECT c.*
 (4 rows)
 
 ------------------------------------------------
+-- FGDB test
+CREATE SERVER fgdbserver
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '/vsizip/@abs_srcdir@/data/Querying.zip/Querying.gdb',
+    format 'OpenFileGDB' );
+CREATE FOREIGN TABLE cities (
+  fid bigint,
+  shape bytea,
+  city_fips varchar(5),
+  city_name varchar(40),
+  state_fips varchar(2),
+  state_name varchar(25),
+  state_city varchar(7),
+  type varchar(25),
+  capital varchar(1),
+  elevation integer,
+  pop1990 integer,
+  popcat integer
+) SERVER "fgdbserver"
+OPTIONS (layer 'Cities');
+SET client_min_messages = DEBUG1;
+SELECT fid, city_name, pop1990 FROM cities WHERE pop1990 = 17710;
+DEBUG:  OGR SQL: (POP1990 = 17710)
+ fid |  city_name   | pop1990 
+-----+--------------+---------
+   9 | Port Angeles |   17710
+(1 row)
+
+SELECT fid, city_name, pop1990 FROM cities WHERE city_name = 'Williston';
+DEBUG:  OGR SQL: ("CITY_NAME" = 'Williston')
+ fid | city_name | pop1990 
+-----+-----------+---------
+   8 | Williston |   13131
+(1 row)
+
