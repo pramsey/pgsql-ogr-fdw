@@ -4,16 +4,16 @@ Travis: [![Build Status](https://secure.travis-ci.org/pramsey/pgsql-ogr-fdw.png)
 
 ## Motivation
 
-OGR is the vector half of the [GDAL](http://www.gdal.org/) spatial data access library. It allows access to a [large number of GIS data formats](http://www.gdal.org/ogr_formats.html) using a [simple C API](http://www.gdal.org/ogr__api_8h.html) for data reading and writing. Since OGR exposes a simple table structure and PostgreSQL [foreign data wrappers](https://wiki.postgresql.org/wiki/Foreign_data_wrappers) allow access to table structures, the fit seems pretty perfect.
+OGR is the **vector** half of the [GDAL](http://www.gdal.org/) spatial data access library. It allows access to a [large number of GIS data formats](http://www.gdal.org/ogr_formats.html) using a [simple C API](http://www.gdal.org/ogr__api_8h.html) for data reading and writing. Since OGR exposes a simple table structure and PostgreSQL [foreign data wrappers](https://wiki.postgresql.org/wiki/Foreign_data_wrappers) allow access to table structures, the fit seems pretty perfect.
 
 ## Limitations
 
 This implementation currently has the following limitations:
 
-* **PostgreSQL 9.3+** This wrapper does not support the FDW implementations in older versions of PostgreSQL.
-* **Only non-spatial query restrictions are pushed down to the OGR driver.** PostgreSQL foreign data wrappers support delegating portions of the SQL query to the underlying data source, in this case OGR. This implementation currently pushes down only non-spatial query restrictions, and only for the small subset of comparison operators (>, <, <=, >=, =) supported by OGR.
-* **Spatial restrictions are not pushed down.** OGR can handle basic bounding box restrictions and even (for some drivers) more explicit intersection restrictions, but those are not passed to the OGR driver yet.
-* **OGR connections every time** Rather than pooling OGR connections, each query makes (and disposes of) two new ones, which seems to be the largest performance drag at the moment for restricted (small) queries.
+* **PostgreSQL 9.3 or higher.** This wrapper does not support the FDW implementations in older versions of PostgreSQL.
+* **Limited non-spatial query restrictions are pushed down to OGR.** OGR only supports a minimal set of SQL operators (>, <, <=, >=, =).
+* **Only bounding box filters (&&) are pushed down.** Spatial filtering is possible, but only bounding boxes, and only using the && operator.
+* **OGR connections every time** Rather than pooling OGR connections, each query makes (and disposes of) **two** new ones, which seems to be the largest performance drag at the moment for restricted (small) queries.
 * **All columns are retrieved every time.** PostgreSQL foreign data wrappers don't require all columns all the time, and some efficiencies can be gained by only requesting the columns needed to fulfill a query. This would be a minimal efficiency improvement, but can be removed given some development time, since the OGR API supports returning a subset of columns.
 
 ## Download
@@ -92,13 +92,34 @@ Copy the `CREATE SERVER` and `CREATE FOREIGN SERVER` SQL commands into the datab
 
 And you can query the table directly, even though it's really just a shape file.
 
-    > SELECT * FROM pt_two;
+```sql
+SELECT * FROM pt_two;
+```
+```
+  fid |                    geom                    | name  | age | height |  birthday
+-----+--------------------------------------------+-------+-----+--------+------------
+0 | 0101000000C00497D1162CB93F8CBAEF08A080E63F | Peter |  45 |    5.6 | 1965-04-12
+1 | 010100000054E943ACD697E2BFC0895EE54A46CF3F | Paul  |  33 |   5.84 | 1971-03-25
+```
 
-     fid |                    geom                    | name  | age | height |  birthday
-    -----+--------------------------------------------+-------+-----+--------+------------
-       0 | 0101000000C00497D1162CB93F8CBAEF08A080E63F | Peter |  45 |    5.6 | 1965-04-12
-       1 | 010100000054E943ACD697E2BFC0895EE54A46CF3F | Paul  |  33 |   5.84 | 1971-03-25
+You can also apply filters, and see the portions that will be pushed down to the OGR driver, by setting the debug level to `DEBUG1`.
 
+```sql
+SET client_min_messages = debug1;
+
+SELECT name, age, height
+FROM pt_two
+WHERE height < 5.7
+AND geom && ST_MakeEnvelope(0, 0, 1, 1);
+```
+```
+DEBUG:  OGR SQL: (height < 5.7)
+DEBUG:  OGR spatial filter (0 0, 1 1)
+ name  | age | height
+-------+-----+--------
+ Peter |  45 |    5.6
+(1 row)
+```
 
 ## Examples
 
@@ -371,5 +392,5 @@ Once you've figured out your issue, don't forget to remove the `CPL_DEBUG` optio
 
     SET client_min_messages = notice;
     ALTER SERVER myserver_latin1 OPTIONS (SET config_options 'SHAPE_ENCODING=LATIN1');
-    
+
 
