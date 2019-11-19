@@ -18,11 +18,11 @@ This implementation currently has the following limitations:
 
 ## Download
 * Windows
-  * Via [Stackbuilder](https://www.postgresql.org/download/windows/) (part of PostGIS Bundle)
+	* Via [Stackbuilder](https://www.postgresql.org/download/windows/) (part of PostGIS Bundle)
 * Linux
-  * [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
-  * [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
-  * [Red Hat](https://yum.postgresql.org/news-packagelist.php)
+	* [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
+	* [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
+	* [Red Hat](https://yum.postgresql.org/news-packagelist.php)
 * OSX
 
 ## Basic Operation
@@ -35,60 +35,60 @@ Build the wrapper with `make` and `make install`. Now you are ready to create a 
 
 First install the `postgis` and `ogr_fdw` extensions in your database.
 
-    -- Install the required extensions
-    CREATE EXTENSION postgis;
-    CREATE EXTENSION ogr_fdw;
+		-- Install the required extensions
+		CREATE EXTENSION postgis;
+		CREATE EXTENSION ogr_fdw;
 
 For a test data set, copy the `pt_two` example shape file from the `data` directory to a location where the PostgreSQL server can read it (like `/tmp/test/` for example).
 
 Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility makes it a little more foolproof.)
 
-    > ogr_fdw_info -f
+		> ogr_fdw_info -f
 
-    Supported Formats:
-      -> "PCIDSK" (read/write)
-      -> "netCDF" (read/write)
-      ...
-      -> "HTTP" (readonly)
-
-
-    > ogr_fdw_info -s /tmp/test
-
-    Layers:
-      pt_two
+		Supported Formats:
+			-> "PCIDSK" (read/write)
+			-> "netCDF" (read/write)
+			...
+			-> "HTTP" (readonly)
 
 
-    > ogr_fdw_info -s /tmp/test -l pt_two
+		> ogr_fdw_info -s /tmp/test
 
-    CREATE SERVER myserver
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource '/tmp/test',
-        format 'ESRI Shapefile' );
+		Layers:
+			pt_two
 
-    CREATE FOREIGN TABLE pt_two (
-      fid integer,
-      geom geometry(Point, 4326),
-      name varchar,
-      age integer,
-      height real,
-      birthdate date )
-      SERVER myserver
-      OPTIONS (layer 'pt_two');
+
+		> ogr_fdw_info -s /tmp/test -l pt_two
+
+		CREATE SERVER myserver
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource '/tmp/test',
+				format 'ESRI Shapefile' );
+
+		CREATE FOREIGN TABLE pt_two (
+			fid integer,
+			geom geometry(Point, 4326),
+			name varchar,
+			age integer,
+			height real,
+			birthdate date )
+			SERVER myserver
+			OPTIONS (layer 'pt_two');
 
 Copy the `CREATE SERVER` and `CREATE FOREIGN SERVER` SQL commands into the database and you'll have your foreign table definition.
 
-                 Foreign table "public.pt_two"
-      Column  |       Type        | Modifiers | FDW Options
-    ----------+-------------------+-----------+-------------
-     fid      | integer           |           |
-     geom     | geometry          |           |
-     name     | character varying |           |
-     age      | integer           |           |
-     height   | real              |           |
-     birthday | date              |           |
-    Server: tmp_shape
-    FDW Options: (layer 'pt_two')
+								 Foreign table "public.pt_two"
+			Column  |       Type        | Modifiers | FDW Options
+		----------+-------------------+-----------+-------------
+		 fid      | integer           |           |
+		 geom     | geometry          |           |
+		 name     | character varying |           |
+		 age      | integer           |           |
+		 height   | real              |           |
+		 birthday | date              |           |
+		Server: tmp_shape
+		FDW Options: (layer 'pt_two')
 
 And you can query the table directly, even though it's really just a shape file.
 
@@ -96,7 +96,7 @@ And you can query the table directly, even though it's really just a shape file.
 SELECT * FROM pt_two;
 ```
 ```
-  fid |                    geom                    | name  | age | height |  birthday
+	fid |                    geom                    | name  | age | height |  birthday
 -----+--------------------------------------------+-------+-----+--------+------------
 0 | 0101000000C00497D1162CB93F8CBAEF08A080E63F | Peter |  45 |    5.6 | 1965-04-12
 1 | 010100000054E943ACD697E2BFC0895EE54A46CF3F | Paul  |  33 |   5.84 | 1971-03-25
@@ -127,70 +127,70 @@ DEBUG:  OGR spatial filter (0 0, 1 1)
 
 Since we can access any OGR data source as a table, how about a public WFS server?
 
-    CREATE EXTENSION postgis;
-    CREATE EXTENSION ogr_fdw;
+		CREATE EXTENSION postgis;
+		CREATE EXTENSION ogr_fdw;
 
-    CREATE SERVER geoserver
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
+		CREATE SERVER geoserver
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
 	datasource 'WFS:https://demo.geo-solutions.it/geoserver/wfs',
 	format 'WFS' );
 
-    CREATE FOREIGN TABLE topp_states (
-      fid bigint,
-      the_geom Geometry(MultiSurface,4326),
-      gml_id varchar,
-      state_name varchar,
-      state_fips varchar,
-      sub_region varchar,
-      state_abbr varchar,
-      land_km double precision,
-      water_km double precision,
-      persons double precision,
-      families double precision,
-      houshold double precision,
-      male double precision,
-      female double precision,
-      workers double precision,
-      drvalone double precision,
-      carpool double precision,
-      pubtrans double precision,
-      employed double precision,
-      unemploy double precision,
-      service double precision,
-      manual double precision,
-      p_male double precision,
-      p_female double precision,
-      samp_pop double precision
-    ) SERVER "geoserver"
-    OPTIONS (layer 'topp:states');
+		CREATE FOREIGN TABLE topp_states (
+			fid bigint,
+			the_geom Geometry(MultiSurface,4326),
+			gml_id varchar,
+			state_name varchar,
+			state_fips varchar,
+			sub_region varchar,
+			state_abbr varchar,
+			land_km double precision,
+			water_km double precision,
+			persons double precision,
+			families double precision,
+			houshold double precision,
+			male double precision,
+			female double precision,
+			workers double precision,
+			drvalone double precision,
+			carpool double precision,
+			pubtrans double precision,
+			employed double precision,
+			unemploy double precision,
+			service double precision,
+			manual double precision,
+			p_male double precision,
+			p_female double precision,
+			samp_pop double precision
+		) SERVER "geoserver"
+		OPTIONS (layer 'topp:states');
 
 
 ### FGDB FDW
 
 Unzip the `Querying.zip` file from the `data` directory to get a `Querying.gdb` file, and put it somewhere public (like `/tmp`). Now run the `ogr_fdw_info` tool on it to get a table definition.
 
-    CREATE SERVER fgdbtest
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource '/tmp/Querying.gdb',
-        format 'OpenFileGDB' );
+		CREATE SERVER fgdbtest
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource '/tmp/Querying.gdb',
+				format 'OpenFileGDB' );
 
-    CREATE FOREIGN TABLE cities (
-      fid integer,
-      geom geometry(Point, 4326),
-      city_fips varchar,
-      city_name varchar,
-      state_fips varchar,
-      state_name varchar,
-      state_city varchar,
-      type varchar,
-      capital varchar,
-      elevation integer,
-      pop1990 integer,
-      popcat integer )
-      SERVER fgdbtest
-      OPTIONS (layer 'Cities');
+		CREATE FOREIGN TABLE cities (
+			fid integer,
+			geom geometry(Point, 4326),
+			city_fips varchar,
+			city_name varchar,
+			state_fips varchar,
+			state_name varchar,
+			state_city varchar,
+			type varchar,
+			capital varchar,
+			elevation integer,
+			pop1990 integer,
+			popcat integer )
+			SERVER fgdbtest
+			OPTIONS (layer 'Cities');
 
 Query away!
 
@@ -198,39 +198,52 @@ Query away!
 
 Wraparound action! Handy for testing. Connect your database back to your database and watch the fur fly.
 
-    CREATE TABLE typetest (
-      fid serial primary key,
-      geom geometry(Point, 4326),
-      num real,
-      name varchar,
-      clock time,
-      calendar date,
-      tstmp timestamp
-    );
+		CREATE TABLE apostles (
+			fid serial primary key,
+			geom geometry(Point, 4326),
+			joined integer,
+			name text,
+			height real,
+			born date,
+			clock time,
+			ts timestamp
+		);
 
-    INSERT INTO typetest
-      VALUES (1, 'SRID=4326;POINT(-126 46)', 4.5, 'Paul', '09:34:23', 'June 1, 2013', '12:34:56 December 14, 1823');
-    INSERT INTO typetest
-      VALUES (2, 'SRID=4326;POINT(-126 46)', 4.8, 'Peter', '14:34:53', 'July 12, 2011', '1:34:12 December 24, 1923');
+		INSERT INTO apostles (name, geom, joined, height, born, clock, ts) VALUES
+			('Peter', 'SRID=4326;POINT(30.31 59.93)', 1, 1.6, '1912-01-10', '10:10:01', '1912-01-10 10:10:10'),
+			('Andrew', 'SRID=4326;POINT(-2.8 56.34)', 2, 1.8, '1911-02-11', '10:10:02', '1911-02-11 10:10:10'),
+			('James', 'SRID=4326;POINT(-79.23 42.1)', 3, 1.72, '1910-03-12', '10:10:03', '1910-03-12 10:10:10'),
+			('John', 'SRID=4326;POINT(13.2 47.35)', 4, 1.45, '1909-04-01', '10:10:04', '1909-04-01 10:10:10'),
+			('Philip', 'SRID=4326;POINT(-75.19 40.69)', 5, 1.65, '1908-05-02', '10:10:05', '1908-05-02 10:10:10'),
+			('Bartholomew', 'SRID=4326;POINT(-62 18)', 6, 1.69, '1907-06-03', '10:10:06', '1907-06-03 10:10:10'),
+			('Thomas', 'SRID=4326;POINT(-80.08 35.88)', 7, 1.68, '1906-07-04', '10:10:07', '1906-07-04 10:10:10'),
+			('Matthew', 'SRID=4326;POINT(-73.67 20.94)', 8, 1.65, '1905-08-05', '10:10:08', '1905-08-05 10:10:10'),
+			('James Alpheus', 'SRID=4326;POINT(-84.29 34.07)', 9, 1.78, '1904-09-06', '10:10:09', '1904-09-06 10:10:10'),
+			('Thaddaeus', 'SRID=4326;POINT(79.13 10.78)', 10, 1.88, '1903-10-07', '10:10:10', '1903-10-07 10:10:10'),
+			('Simon', 'SRID=4326;POINT(-85.97 41.75)', 11, 1.61, '1902-11-08', '10:10:11', '1902-11-08 10:10:10'),
+			('Judas Iscariot', 'SRID=4326;POINT(35.7 32.4)', 12, 1.71, '1901-12-09', '10:10:12', '1901-12-09 10:10:10');
 
-    CREATE SERVER wraparound
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource 'Pg:dbname=fdw user=postgres',
-        format 'PostgreSQL' );
+		CREATE SERVER wraparound
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource 'Pg:dbname=fdw user=postgres',
+				format 'PostgreSQL' );
 
-    CREATE FOREIGN TABLE typetest_fdw (
-      fid integer,
-      geom geometry(Point, 4326),
-      num real,
-      name varchar,
-      clock time,
-      calendar date,
-      tstmp timestamp )
-      SERVER wraparound
-      OPTIONS (layer 'typetest');
+		CREATE FOREIGN TABLE apostles_fdw (
+			fid integer,
+			geom geometry(Point, 4326),
+			joined integer,
+			name text,
+			height real,
+			born date,
+			clock time,
+			ts timestamp
+		)
+		SERVER wraparound
+			OPTIONS (layer 'apostles');
 
-    SELECT * FROM typetest_fdw;
+		SELECT * FROM apostles_fdw;
+
 
 ## Advanced Features
 
@@ -242,11 +255,11 @@ For file-backed drivers, the user under which `postgres` runs will need read/wri
 
 By default, servers and tables are updateable if the OGR driver supports it, but you can turn off updateability at a server or table level using the `updateable` option:
 
-    ALTER SERVER myserver
-      OPTIONS (ADD updatable 'false');
+		ALTER SERVER myserver
+			OPTIONS (ADD updatable 'false');
 
-    ALTER FOREIGN TABLE mytable
-      OPTIONS (ADD updatable 'false');
+		ALTER FOREIGN TABLE mytable
+			OPTIONS (ADD updatable 'false');
 
 Writeable tables only work if you have included a `fid` column in your table definition. By default, tables imported by `IMPORT FOREIGN SCHEMA` or using the example SQL code from `ogr_fdw_info` include a `fid` column.
 
@@ -254,22 +267,22 @@ Writeable tables only work if you have included a `fid` column in your table def
 
 You can create an FDW table with any subset of columns from the OGR source you like, just by using the same column names as the source:
 
-    CREATE FOREIGN TABLE typetest_fdw_partial (
-      clock time,
-      name varchar
-      )
-      SERVER wraparound
-      OPTIONS (layer 'typetest');
+		CREATE FOREIGN TABLE typetest_fdw_partial (
+			clock time,
+			name varchar
+			)
+			SERVER wraparound
+			OPTIONS (layer 'typetest');
 
 You can also explicitly map remote column names to different local names using the `column_name` option:
 
-    CREATE FOREIGN TABLE typetest_fdw_mapped (
-      fid bigint,
-      supertime time OPTIONS (column_name 'clock'),
-      thebestnamething varchar OPTIONS (column_name 'name')
-      )
-      SERVER wraparound
-      OPTIONS (layer 'typetest');
+		CREATE FOREIGN TABLE typetest_fdw_mapped (
+			fid bigint,
+			supertime time OPTIONS (column_name 'clock'),
+			thebestnamething varchar OPTIONS (column_name 'name')
+			)
+			SERVER wraparound
+			OPTIONS (layer 'typetest');
 
 
 ### Automatic Foreign Table Creation
@@ -286,7 +299,7 @@ If you want to import all tables in the OGR data source use the special schema c
 
 	IMPORT FOREIGN SCHEMA ogr_all
 		FROM SERVER fgdbtest
-        INTO fgdball;
+				INTO fgdball;
 
 #### Import a Subset of Tables
 
@@ -298,7 +311,7 @@ For example, the following will only import tables that start with *CitiesIn*. A
 
 	IMPORT FOREIGN SCHEMA "CitiesIn"
 		FROM SERVER fgdbtest
-        INTO fgdbcityinf;
+				INTO fgdbcityinf;
 
 You can also use PostgreSQL clauses `LIMIT TO` and `EXCEPT` to restrict the tables you are importing.
 
@@ -306,25 +319,25 @@ You can also use PostgreSQL clauses `LIMIT TO` and `EXCEPT` to restrict the tabl
 
 	-- import only layer called Cities
 	IMPORT FOREIGN SCHEMA ogr_all
-        LIMIT TO(cities)
+				LIMIT TO(cities)
 		FROM server fgdbtest
-        INTO fgdbcitysub ;
+				INTO fgdbcitysub ;
 
 	-- import only layers not called Cities or Countries
 	IMPORT FOREIGN SCHEMA ogr_all
-        EXCEPT (cities, countries)
+				EXCEPT (cities, countries)
 		FROM server fgdbtest
-        INTO fgdbcitysub;
+				INTO fgdbcitysub;
 
 	-- With table laundering turned off, need to use exact layer names
 	DROP SCHEMA IF EXISTS fgdbcitysub CASCADE;
 
-    -- import with un-laundered table name
+		-- import with un-laundered table name
 	IMPORT FOREIGN SCHEMA ogr_all
-    	LIMIT TO("Cities")
+			LIMIT TO("Cities")
 		FROM server fgdbtest
-        INTO fgdbcitysub
-        OPTIONS (launder_table_names 'false') ;
+				INTO fgdbcitysub
+				OPTIONS (launder_table_names 'false') ;
 
 
 #### Mixed Case and Special Characters
@@ -341,11 +354,11 @@ To preserve casing and other funky characters in both column names and table nam
 
 	IMPORT FOREIGN SCHEMA ogr_all
 		FROM SERVER fgdbtest
-        INTO fgdbpreserve
+				INTO fgdbpreserve
 		OPTIONS (
-            launder_table_names 'false',
-            launder_column_names 'false'
-            ) ;
+						launder_table_names 'false',
+						launder_column_names 'false'
+						) ;
 
 
 ###  GDAL Options
@@ -354,43 +367,43 @@ The behavior of your GDAL/OGR connection can be altered by passing GDAL `config_
 
 Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases are encoded in UTF-8, it is useful to specify the encoding to get proper handling of special characters like accents.
 
-    CREATE SERVER myserver_latin1
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource '/tmp/test',
-        format 'ESRI Shapefile',
-        config_options 'SHAPE_ENCODING=LATIN1' );
+		CREATE SERVER myserver_latin1
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource '/tmp/test',
+				format 'ESRI Shapefile',
+				config_options 'SHAPE_ENCODING=LATIN1' );
 
 Multiple config options can be passed at one time by supplying a **space-separated** list of options.
 
 If you are using GDAL 2.0 or higher, you can also pass "open options" to your OGR foreign data wrapper, using the `open_options` parameter. In GDAL 2.0, the global `SHAPE_ENCODING` option has been superceded by a driver-specific `ENCODING` option, which can be called like this:
 
-    CREATE SERVER myserver_latin1
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource '/tmp/test',
-        format 'ESRI Shapefile',
-        open_options 'ENCODING=LATIN1' );
+		CREATE SERVER myserver_latin1
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource '/tmp/test',
+				format 'ESRI Shapefile',
+				open_options 'ENCODING=LATIN1' );
 
 ### GDAL Debugging
 
 If you are getting odd behavior and you want to see what GDAL is doing behind the scenes, enable debug logging in your server:
 
-    CREATE SERVER myserver_latin1
-      FOREIGN DATA WRAPPER ogr_fdw
-      OPTIONS (
-        datasource '/tmp/test',
-        format 'ESRI Shapefile',
-        config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON'
-        );
+		CREATE SERVER myserver_latin1
+			FOREIGN DATA WRAPPER ogr_fdw
+			OPTIONS (
+				datasource '/tmp/test',
+				format 'ESRI Shapefile',
+				config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON'
+				);
 
 GDAL-level messages will be logged at the PostgreSQL **DEBUG2** level, so to see them when running a query, alter your `client_min_messages` setting.
 
-    SET client_min_messages = debug2;
+		SET client_min_messages = debug2;
 
 Once you've figured out your issue, don't forget to remove the `CPL_DEBUG` option from your server definition, and set your messages back to **NOTICE** level.
 
-    SET client_min_messages = notice;
-    ALTER SERVER myserver_latin1 OPTIONS (SET config_options 'SHAPE_ENCODING=LATIN1');
+		SET client_min_messages = notice;
+		ALTER SERVER myserver_latin1 OPTIONS (SET config_options 'SHAPE_ENCODING=LATIN1');
 
 
