@@ -978,7 +978,7 @@ ogrGetForeignPlan(PlannerInfo* root,
 	if (attribute_filter)
 		elog(DEBUG1, "OGR SQL: %s", attribute_filter);
 	if (spatial_filter)
-		elog(DEBUG1, "OGR spatial filter (%.3g %.3g, %.3g %.3g)",
+		elog(DEBUG1, "OGR spatial filter (%g %g, %g %g)",
 		             spatial_filter->minx, spatial_filter->miny,
 		             spatial_filter->maxx, spatial_filter->maxy);
 	/*
