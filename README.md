@@ -256,10 +256,10 @@ For file-backed drivers, the user under which `postgres` runs will need read/wri
 By default, servers and tables are updateable if the OGR driver supports it, but you can turn off updateability at a server or table level using the `updateable` option:
 
 		ALTER SERVER myserver
-			OPTIONS (ADD updatable 'false');
+			OPTIONS (ADD updateable 'false');
 
 		ALTER FOREIGN TABLE mytable
-			OPTIONS (ADD updatable 'false');
+			OPTIONS (ADD updateable 'false');
 
 Writeable tables only work if you have included a `fid` column in your table definition. By default, tables imported by `IMPORT FOREIGN SCHEMA` or using the example SQL code from `ogr_fdw_info` include a `fid` column.
 
