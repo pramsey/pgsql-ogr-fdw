@@ -25,8 +25,8 @@
 /* Re-write a string in place with laundering rules */
 void ogrStringLaunder(char *str);
 
-OGRErr ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fwd_server,
-                      int launder_table_names, int launder_column_names,
+OGRErr ogrLayerToSQL (const OGRLayerH ogr_lyr,
+                      const char *fwd_server, const char *fwd_table_name, int launder_table_names, int launder_column_names,
                       int use_postgis_geometry, stringbuffer_t *buf);
 
 #endif /* _OGR_FDW_COMMON_H */

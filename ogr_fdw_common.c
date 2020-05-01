@@ -246,9 +246,8 @@ ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_colu
 	return OGRERR_NONE;
 }
 
-
 OGRErr
-ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
+ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server, const char *fdw_table_name,
 			   int launder_table_names, int launder_column_names,
 			   int use_postgis_geometry, stringbuffer_t *buf)
 {
@@ -272,12 +271,19 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 #endif
 
 	/* Process table name */
-	strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
-	if (launder_table_names)
-		ogrStringLaunder(table_name);
+
+	if (fdw_table_name == NULL) {
+		strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
+
+		if (launder_table_names)
+			ogrStringLaunder(table_name);
+	}
+	else {
+		strncpy(table_name, fdw_table_name, STR_MAX_LEN);
+	}
 
 	/* Create table */
-	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE %s (\n", quote_identifier(table_name));
+	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE %s (\n", table_name);
 
 	/* For now, every table we auto-create will have a FID */
 	stringbuffer_append(buf, "  fid bigint");
@@ -361,17 +367,19 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	/* Write out attribute fields */
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
-		char pgtype[128];
+		char field_type[64];
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		ogrTypeToPgType(ogr_fld, pgtype, 128);
-		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld), pgtype, launder_column_names, buf);
+		 ogrTypeToPgType(ogr_fld, field_type, sizeof(field_type));
+		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld),
+		                   field_type,
+		                   launder_column_names, buf);
 	}
 
 	/*
 	 * Add server name and layer-level options.  We specify remote
 	 * layer name as option
 	 */
-	stringbuffer_aprintf(buf, "\n) SERVER \"%s\"\nOPTIONS (", quote_identifier(fdw_server));
+	stringbuffer_aprintf(buf, "\n) SERVER %s\nOPTIONS (", quote_identifier(fdw_server));
 	stringbuffer_append(buf, "layer ");
 	ogrDeparseStringLiteral(buf, OGR_L_GetName(ogr_lyr));
 	stringbuffer_append(buf, ");\n");

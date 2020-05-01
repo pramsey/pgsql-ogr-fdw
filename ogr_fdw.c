@@ -2959,6 +2959,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid)
 
 			err = ogrLayerToSQL(ogr_lyr,
 			                    quote_identifier(server->servername),
+								NULL,
 			                    launder_table_names,
 			                    launder_column_names,
 			                    ogrGetGeometryOid() != BYTEAOID,
