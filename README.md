@@ -163,7 +163,8 @@ CREATE FOREIGN TABLE topp_states (
   p_male double precision,
   p_female double precision,
   samp_pop double precision
-) SERVER "geoserver"
+  )
+  SERVER "geoserver"
   OPTIONS (layer 'topp:states');
 ```
 
@@ -189,7 +190,8 @@ CREATE FOREIGN TABLE cities (
   capital varchar,
   elevation integer,
   pop1990 integer,
-  popcat integer )
+  popcat integer
+  )
   SERVER fgdbtest
   OPTIONS (layer 'Cities');
 ```
@@ -300,7 +302,7 @@ CREATE SCHEMA fgdball;
 
 IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER fgdbtest
-      INTO fgdball;
+  INTO fgdball;
 ```
 #### Import a Subset of Tables
 
@@ -312,7 +314,7 @@ CREATE SCHEMA fgdbcityinf;
 
 IMPORT FOREIGN SCHEMA "CitiesIn"
   FROM SERVER fgdbtest
-      INTO fgdbcityinf;
+  INTO fgdbcityinf;
 ```
 You can also use PostgreSQL clauses `LIMIT TO` and `EXCEPT` to restrict the tables you are importing.
 ```sql
@@ -320,25 +322,25 @@ CREATE SCHEMA fgdbcitysub;
 
 -- import only layer called Cities
 IMPORT FOREIGN SCHEMA ogr_all
-      LIMIT TO(cities)
+  LIMIT TO(cities)
   FROM server fgdbtest
-      INTO fgdbcitysub ;
+  INTO fgdbcitysub ;
 
 -- import only layers not called Cities or Countries
 IMPORT FOREIGN SCHEMA ogr_all
-      EXCEPT (cities, countries)
+  EXCEPT (cities, countries)
   FROM server fgdbtest
-      INTO fgdbcitysub;
+  INTO fgdbcitysub;
 
 -- With table laundering turned off, need to use exact layer names
 DROP SCHEMA IF EXISTS fgdbcitysub CASCADE;
 
   -- import with un-laundered table name
 IMPORT FOREIGN SCHEMA ogr_all
-    LIMIT TO("Cities")
+  LIMIT TO("Cities")
   FROM server fgdbtest
-      INTO fgdbcitysub
-      OPTIONS (launder_table_names 'false') ;
+  INTO fgdbcitysub
+  OPTIONS (launder_table_names 'false') ;
 ```
 
 #### Mixed Case and Special Characters
@@ -355,11 +357,11 @@ CREATE SCHEMA fgdbcitypreserve;
 
 IMPORT FOREIGN SCHEMA ogr_all
   FROM SERVER fgdbtest
-      INTO fgdbpreserve
+  INTO fgdbpreserve
   OPTIONS (
-          launder_table_names 'false',
-          launder_column_names 'false'
-          ) ;
+    launder_table_names 'false',
+    launder_column_names 'false'
+  );
 ```
 
 ###  GDAL Options
@@ -367,29 +369,35 @@ IMPORT FOREIGN SCHEMA ogr_all
 The behavior of your GDAL/OGR connection can be altered by passing GDAL `config_options` to the connection when you set up the server. Most GDAL/OGR drivers have some specific behaviours that are controlled by configuration options. For example, the "[ESRI Shapefile](http://www.gdal.org/drv_shapefile.html)" driver includes a `SHAPE_ENCODING` option that controls the character encoding applied to text data.
 
 Since many Shapefiles are encoded using LATIN1, and most PostgreSQL databases are encoded in UTF-8, it is useful to specify the encoding to get proper handling of special characters like accents.
+
 ```sql
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
     datasource '/tmp/test',
     format 'ESRI Shapefile',
-    config_options 'SHAPE_ENCODING=LATIN1' );
+    config_options 'SHAPE_ENCODING=LATIN1'
+  );
 ```
+
 Multiple config options can be passed at one time by supplying a **space-separated** list of options.
 
 If you are using GDAL 2.0 or higher, you can also pass "open options" to your OGR foreign data wrapper, using the `open_options` parameter. In GDAL 2.0, the global `SHAPE_ENCODING` option has been superceded by a driver-specific `ENCODING` option, which can be called like this:
+
 ```sql
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
     datasource '/tmp/test',
     format 'ESRI Shapefile',
-    open_options 'ENCODING=LATIN1' );
+    open_options 'ENCODING=LATIN1'
+  );
 ```
 
 ### GDAL Debugging
 
 If you are getting odd behavior and you want to see what GDAL is doing behind the scenes, enable debug logging in your server:
+
 ```sql
 CREATE SERVER myserver_latin1
   FOREIGN DATA WRAPPER ogr_fdw
@@ -397,15 +405,22 @@ CREATE SERVER myserver_latin1
     datasource '/tmp/test',
     format 'ESRI Shapefile',
     config_options 'SHAPE_ENCODING=LATIN1 CPL_DEBUG=ON'
-    );
+  );
 ```
+
 GDAL-level messages will be logged at the PostgreSQL **DEBUG2** level, so to see them when running a query, alter your `client_min_messages` setting.
+
 ```sql
 SET client_min_messages = debug2;
 ```
+
 Once you've figured out your issue, don't forget to remove the `CPL_DEBUG` option from your server definition, and set your messages back to **NOTICE** level.
+
 ```sql
 SET client_min_messages = notice;
-ALTER SERVER myserver_latin1 OPTIONS (SET config_options 'SHAPE_ENCODING=LATIN1');
+ALTER SERVER myserver_latin1
+  OPTIONS (
+  	SET config_options 'SHAPE_ENCODING=LATIN1'
+  );
 ```
 
