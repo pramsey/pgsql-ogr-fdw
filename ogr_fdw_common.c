@@ -283,7 +283,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server, const char *fdw_
 	}
 
 	/* Create table */
-	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE %s (\n", table_name);
+	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE \"%s\" (\n", table_name);
 
 	/* For now, every table we auto-create will have a FID */
 	stringbuffer_append(buf, "  fid bigint");
