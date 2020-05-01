@@ -34,62 +34,61 @@ To build the wrapper, make sure you have the GDAL library and development packag
 Build the wrapper with `make` and `make install`. Now you are ready to create a foreign table.
 
 First install the `postgis` and `ogr_fdw` extensions in your database.
-
-		-- Install the required extensions
-		CREATE EXTENSION postgis;
-		CREATE EXTENSION ogr_fdw;
-
+```sql
+-- Install the required extensions
+CREATE EXTENSION postgis;
+CREATE EXTENSION ogr_fdw;
+```
 For a test data set, copy the `pt_two` example shape file from the `data` directory to a location where the PostgreSQL server can read it (like `/tmp/test/` for example).
 
 Use the `ogr_fdw_info` tool to read an OGR data source and output a server and table definition for a particular layer. (You can write these manually, but the utility makes it a little more foolproof.)
+```
+# ogr_fdw_info -f
 
-		> ogr_fdw_info -f
+Supported Formats:
+	-> "PCIDSK" (read/write)
+	-> "netCDF" (read/write)
+	...
+	-> "HTTP" (readonly)
 
-		Supported Formats:
-			-> "PCIDSK" (read/write)
-			-> "netCDF" (read/write)
-			...
-			-> "HTTP" (readonly)
+# ogr_fdw_info -s /tmp/test
 
+Layers:
+	pt_two
 
-		> ogr_fdw_info -s /tmp/test
+# ogr_fdw_info -s /tmp/test -l pt_two
 
-		Layers:
-			pt_two
+CREATE SERVER myserver
+	FOREIGN DATA WRAPPER ogr_fdw
+	OPTIONS (
+		datasource '/tmp/test',
+		format 'ESRI Shapefile' );
 
-
-		> ogr_fdw_info -s /tmp/test -l pt_two
-
-		CREATE SERVER myserver
-			FOREIGN DATA WRAPPER ogr_fdw
-			OPTIONS (
-				datasource '/tmp/test',
-				format 'ESRI Shapefile' );
-
-		CREATE FOREIGN TABLE pt_two (
-			fid integer,
-			geom geometry(Point, 4326),
-			name varchar,
-			age integer,
-			height real,
-			birthdate date )
-			SERVER myserver
-			OPTIONS (layer 'pt_two');
+CREATE FOREIGN TABLE pt_two (
+	fid integer,
+	geom geometry(Point, 4326),
+	name varchar,
+	age integer,
+	height real,
+	birthdate date )
+	SERVER myserver
+	OPTIONS (layer 'pt_two');
+```
 
 Copy the `CREATE SERVER` and `CREATE FOREIGN SERVER` SQL commands into the database and you'll have your foreign table definition.
-
-								 Foreign table "public.pt_two"
-			Column  |       Type        | Modifiers | FDW Options
-		----------+-------------------+-----------+-------------
-		 fid      | integer           |           |
-		 geom     | geometry          |           |
-		 name     | character varying |           |
-		 age      | integer           |           |
-		 height   | real              |           |
-		 birthday | date              |           |
-		Server: tmp_shape
-		FDW Options: (layer 'pt_two')
-
+```
+			 Foreign table "public.pt_two"
+  Column  |       Type        | Modifiers | FDW Options
+----------+-------------------+-----------+-------------
+ fid      | integer           |           |
+ geom     | geometry          |           |
+ name     | character varying |           |
+ age      | integer           |           |
+ height   | real              |           |
+ birthday | date              |           |
+Server: tmp_shape
+FDW Options: (layer 'pt_two')
+```
 And you can query the table directly, even though it's really just a shape file.
 
 ```sql
