@@ -2961,6 +2961,7 @@ ogrImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid)
 			                    quote_identifier(server->servername),
 			                    launder_table_names,
 			                    launder_column_names,
+			                    NULL,
 			                    ogrGetGeometryOid() != BYTEAOID,
 			                    &buf
 			                   );
