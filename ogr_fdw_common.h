@@ -15,7 +15,6 @@
 #include <ctype.h>
 #include "stringbuffer.h"
 
-#define MAX_IDENTIFIER_LEN 63+1
 #define STR_MAX_LEN 256
 
 /* Utility macros for string equality */

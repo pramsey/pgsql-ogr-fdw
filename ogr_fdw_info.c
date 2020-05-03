@@ -9,6 +9,9 @@
  *-------------------------------------------------------------------------
  */
 
+/* postgresql */
+#include "pg_config_manual.h"
+
 /* getopt */
 #include <unistd.h>
 
@@ -22,6 +25,7 @@ static void usage();
 static OGRErr ogrListLayers(const char* source);
 static OGRErr ogrFindLayer(const char* source, int layerno, const char** layer);
 static OGRErr ogrGenerateSQL(const char* server, const char* layer, const char* table, const char* source, const char* options);
+static int reserved_word(const char* pgcolumn);
 
 static char *
 strupr(char* str)
@@ -37,12 +41,19 @@ strupr(char* str)
 /* in the ogr_fdw_common module works */
 const char* quote_identifier(const char* ident);
 
-char identifier[MAX_IDENTIFIER_LEN+3];
+char identifier[NAMEDATALEN+3];
 
 const char*
 quote_identifier(const char* ident)
 {
-  sprintf(identifier,"\"%*s\"", (int)MIN(strlen(ident), MAX_IDENTIFIER_LEN), ident);
+	if (reserved_word(ident))
+	{
+		sprintf(identifier,"\"%*s\"", (int)MIN(strlen(ident), NAMEDATALEN), ident);
+	}
+	else
+	{
+		sprintf(identifier,"%*s", (int)MIN(strlen(ident), NAMEDATALEN), ident);
+	}
   return identifier;
 }
 char config_options[STR_MAX_LEN] = {0};
@@ -181,11 +192,11 @@ main(int argc, char** argv)
 	if (err != OGRERR_NONE)
 	{
 		printf("OGR Error: %s\n\n", CPLGetLastErrorMsg());
-    exit(2);
+		exit(1);
 	}
 
 	OGRCleanupAll();
-	exit(1);
+	exit(0);
 }
 
 static OGRErr
@@ -234,7 +245,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	GDALDatasetH ogr_ds = NULL;
 	GDALDriverH ogr_dr = NULL;
 	OGRLayerH ogr_lyr = NULL;
-	char server_name[MAX_IDENTIFIER_LEN];
+	char server_name[NAMEDATALEN];
 	stringbuffer_t buf;
 
 	char **option_iter;
@@ -261,16 +272,16 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 
 	strcpy(server_name, server == NULL ? "myserver" : server);
 
-  if (options != NULL) {
-    char *p = strtok((char*)options, ",");
-    char option[MAX_IDENTIFIER_LEN];
+	if (options != NULL) {
+		char *p = strtok((char*)options, ",");
+		char option[NAMEDATALEN];
 
-    while (p != NULL) {
-      while( isspace((unsigned char) *p) ) { ++p; }
-      sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), strupr(p));
-      strcat(config_options, option);
-      p = strtok(NULL, ",");
-    }
+		while (p != NULL) {
+			while( isspace((unsigned char) *p) ) { ++p; }
+			sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), strupr(p));
+			strcat(config_options, option);
+			p = strtok(NULL, ",");
+		}
   }
 
 	option_list = CSLTokenizeString(config_options);
@@ -299,7 +310,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	       "  FOREIGN DATA WRAPPER ogr_fdw\n"
 	       "  OPTIONS (\n"
 	       "    datasource '%s',\n"
-	       "    format '%s', );\n"
+	       "    format '%s',\n"
 	       "    config_options '%s');\n",
 	       quote_identifier(server_name), source, GDALGetDriverShortName(ogr_dr), config_options);
 
@@ -379,4 +390,40 @@ ogrFindLayer(const char *source, int layerno, const char** layer)
 	GDALClose(ogr_ds);
 
 	return OGRERR_FAILURE;
+}
+
+static int
+reserved_word(const char * pgcolumn)
+{
+	char* reserved[] = {
+	"all", "analyse", "analyze", "and", "any", "array", "as", "asc", "asymmetric", "authorization",
+	"binary", "both",
+	"case", "cast", "check", "collate", "collation", "column", "concurrently", "constraint", "create", "cross", "current_catalog", "current_date", "current_role",
+	"current_schema", "current_time", "current_timestamp", "current_user",
+	"default", "deferrable", "desc", "distinct", "do",
+	"else", "end", "except",
+	"false", "fetch", "for", "foreign", "freeze", "from", "full",
+	"grant", "group",
+	"having",
+	"ilike", "in", "initially", "inner", "intersect", "into", "is", "isnull",
+	"join",
+	"lateral", "leading", "left", "like", "limit", "localtime", "localtimestamp",
+	"natural", "not", "notnull", "null",
+	"offset", "on", "only", "or", "order", "outer", "overlaps",
+	"placing", "primary",
+	"references", "returning", "right",
+	"select", "session_user", "similar", "some", "symmetric",
+	"table", "tablesample", "then", "to", "trailing", "true",
+	"union", "unique", "user", "using",
+	"variadic", "verbose",
+	"when", "where", "window", "with"
+	};
+
+	for (int i = 0; i < sizeof(reserved)/sizeof(reserved[0]); i++)
+	{
+		if (strcmp(pgcolumn, reserved[i]) == 0)
+			return 1;
+	}
+
+	return 0;
 }
