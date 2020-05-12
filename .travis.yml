@@ -17,8 +17,8 @@ env:
   - PG_VERSION=9.6 GDAL_VERSION=1.11
   - PG_VERSION=9.6 GDAL_VERSION=2.2.4
   - PG_VERSION=10 GDAL_VERSION=2.3.3
-  - PG_VERSION=11 GDAL_VERSION=2.4.3
-  - PG_VERSION=12 GDAL_VERSION=3.0.4
+  - PG_VERSION=11 GDAL_VERSION=2.4.4
+  - PG_VERSION=12 GDAL_VERSION=2.4.4
 
 before_script:
   - sudo /etc/init.d/postgresql stop
@@ -43,6 +43,7 @@ before_script:
   - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1i libgdal-dev; fi
   - if [[ $GDAL_VERSION == 2* ]]; then bash ci/gdal_build.sh $GDAL_VERSION; fi
   - if [[ $GDAL_VERSION == 3* ]]; then bash ci/gdal_build.sh $GDAL_VERSION; fi
+  # needs proj6
 
 
 script:
