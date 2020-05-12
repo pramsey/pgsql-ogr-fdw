@@ -120,6 +120,27 @@ DEBUG:  OGR SQL: ((name = 'Jim') OR (name IS NULL))
 (2 rows)
 
 ----------------------------------------------------------------------
+-- Cached query case, exercised by statement handles or
+-- functions.
+CREATE OR REPLACE FUNCTION get_names()
+  RETURNS varchar AS
+  $$
+  BEGIN
+    RETURN (SELECT string_agg(name,',')
+    FROM bytea_fdw
+    WHERE name = 'Jim' OR name IS NULL);
+  END;
+  $$
+  LANGUAGE 'plpgsql';
+SELECT get_names();
+DEBUG:  OGR SQL: ((name = 'Jim') OR (name IS NULL))
+ get_names 
+-----------
+ Jim
+(1 row)
+
+DROP FUNCTION get_names;
+----------------------------------------------------------------------
 -- Remote Update
 INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)
 VALUES ('Margaret', '2222'::bytea, 12, 5, 1.4, 19.13, '2001-11-23'::date, '9:12:34'::time, '2001-02-11 09:23:11'::timestamp, 'them', 'y' )

@@ -1047,6 +1047,9 @@ ogrGetForeignPlan(PlannerInfo* root,
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
 	/* Pack the data we want to pass to the execution stage into a List. */
+	/* The members of this list must by copyable by PgSQL, which means */
+	/* they need to be Lists themselves, or Value nodes, otherwise when */
+	/* the plan gets copied the copy might fail. */
 	fdw_private = list_make3(makeString(attribute_filter), params_list, ogrSpatialFilterToList(spatial_filter));
 
 	/* Clean up our connection */
