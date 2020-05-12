@@ -18,8 +18,7 @@ env:
   - PG_VERSION=9.6 GDAL_VERSION=2.2.4
   - PG_VERSION=10 GDAL_VERSION=2.3.3
   - PG_VERSION=11 GDAL_VERSION=2.4.3
-  - PG_VERSION=12 GDAL_VERSION=2.4.3
-  # TODO: add gdal 3 support
+  - PG_VERSION=12 GDAL_VERSION=3.0.4
 
 before_script:
   - sudo /etc/init.d/postgresql stop
@@ -42,7 +41,8 @@ before_script:
   - sudo /etc/init.d/postgresql reload
 
   - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1i libgdal-dev; fi
-  - if [[ $GDAL_VERSION == 2* ]]; then wget http://download.osgeo.org/gdal/$GDAL_VERSION/gdal-$GDAL_VERSION.tar.xz; tar xJf gdal-$GDAL_VERSION.tar.xz; cd gdal-$GDAL_VERSION; ./configure --prefix=/usr --enable-debug --without-libtool; make -j4; sudo make install; cd ..; gdalinfo --version; fi
+  - if [[ $GDAL_VERSION == 2* ]]; then bash ci/gdal_build.sh $GDAL_VERSION
+  - if [[ $GDAL_VERSION == 3* ]]; then bash ci/gdal_build.sh $GDAL_VERSION
 
 
 script:
