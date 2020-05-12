@@ -955,33 +955,21 @@ ogrSpatialFilterToList(const OgrFdwSpatialFilter* spatial_filter)
  * after passing through fdw_private.
  */
 static OgrFdwSpatialFilter*
-ogrSpatialFilterFromList(const List* sflist)
+ogrSpatialFilterFromList(const List* lst)
 {
-	ListCell* cell;
 	OgrFdwSpatialFilter* spatial_filter;
 
-	if (sflist == NIL)
+	if (lst == NIL)
 		return NULL;
 
-	Assert(list_length(sflist) == 5);
+	Assert(list_length(lst) == 5);
 
 	spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
-
-	cell = list_head(sflist);
-	spatial_filter->ogrfldnum = intVal(lfirst(cell));
-
-	cell = lnext(cell);
-	spatial_filter->minx = floatVal(lfirst(cell));
-
-	cell = lnext(cell);
-	spatial_filter->miny = floatVal(lfirst(cell));
-
-	cell = lnext(cell);
-	spatial_filter->maxx = floatVal(lfirst(cell));
-
-	cell = lnext(cell);
-	spatial_filter->maxy = floatVal(lfirst(cell));
-
+	spatial_filter->ogrfldnum = intVal(linitial(lst));
+	spatial_filter->minx = floatVal(lsecond(lst));
+	spatial_filter->miny = floatVal(lthird(lst));
+	spatial_filter->maxx = floatVal(lfourth(lst));
+	spatial_filter->maxy = floatVal(list_nth(lst, 5));
 	return spatial_filter;
 }
 
