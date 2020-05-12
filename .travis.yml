@@ -41,8 +41,8 @@ before_script:
   - sudo /etc/init.d/postgresql reload
 
   - if [[ $GDAL_VERSION == 1* ]]; then sudo apt-get install libgdal1i libgdal-dev; fi
-  - if [[ $GDAL_VERSION == 2* ]]; then bash ci/gdal_build.sh $GDAL_VERSION
-  - if [[ $GDAL_VERSION == 3* ]]; then bash ci/gdal_build.sh $GDAL_VERSION
+  - if [[ $GDAL_VERSION == 2* ]]; then bash ci/gdal_build.sh $GDAL_VERSION; fi
+  - if [[ $GDAL_VERSION == 3* ]]; then bash ci/gdal_build.sh $GDAL_VERSION; fi
 
 
 script:
