@@ -958,6 +958,7 @@ static OgrFdwSpatialFilter*
 ogrSpatialFilterFromList(const List* sflist)
 {
 	ListCell* cell;
+	OgrFdwSpatialFilter* spatial_filter;
 
 	if (sflist == NIL)
 		return NULL;
@@ -965,7 +966,7 @@ ogrSpatialFilterFromList(const List* sflist)
 	if (list_length(sflist) != 5)
 		elog(ERROR, "%s received list with length != 5", __func__);
 
-	OgrFdwSpatialFilter* spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
+	spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
 
 	cell = list_head(sflist);
 	spatial_filter->ogrfldnum = intVal(lfirst(cell));

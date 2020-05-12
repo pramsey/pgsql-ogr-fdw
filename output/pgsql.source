@@ -139,7 +139,7 @@ DEBUG:  OGR SQL: ((name = 'Jim') OR (name IS NULL))
  Jim
 (1 row)
 
-DROP FUNCTION get_names;
+DROP FUNCTION get_names();
 ----------------------------------------------------------------------
 -- Remote Update
 INSERT INTO bytea_fdw (name, geom, age, size, value, num, dt, tm, dttm, varch, yn)

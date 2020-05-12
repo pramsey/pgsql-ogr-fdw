@@ -102,7 +102,7 @@ CREATE OR REPLACE FUNCTION get_names()
   LANGUAGE 'plpgsql';
 
 SELECT get_names();
-DROP FUNCTION get_names;
+DROP FUNCTION get_names();
 
 ----------------------------------------------------------------------
 -- Remote Update
