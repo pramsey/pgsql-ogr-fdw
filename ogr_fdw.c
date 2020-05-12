@@ -942,10 +942,10 @@ ogrSpatialFilterToList(const OgrFdwSpatialFilter* spatial_filter)
 	if (spatial_filter)
 	{
 		l = lappend(l, makeInteger(spatial_filter->ogrfldnum));
-		l = lappend(l, makeFloat(psprintf("%g", spatial_filter->minx)));
-		l = lappend(l, makeFloat(psprintf("%g", spatial_filter->miny)));
-		l = lappend(l, makeFloat(psprintf("%g", spatial_filter->maxx)));
-		l = lappend(l, makeFloat(psprintf("%g", spatial_filter->maxy)));
+		l = lappend(l, makeFloat(psprintf("%.17g", spatial_filter->minx)));
+		l = lappend(l, makeFloat(psprintf("%.17g", spatial_filter->miny)));
+		l = lappend(l, makeFloat(psprintf("%.17g", spatial_filter->maxx)));
+		l = lappend(l, makeFloat(psprintf("%.17g", spatial_filter->maxy)));
 	}
 	return l;
 }
