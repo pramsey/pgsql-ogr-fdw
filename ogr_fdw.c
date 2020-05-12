@@ -963,8 +963,7 @@ ogrSpatialFilterFromList(const List* sflist)
 	if (sflist == NIL)
 		return NULL;
 
-	if (list_length(sflist) != 5)
-		elog(ERROR, "%s received list with length != 5", __func__);
+	Assert(list_length(sflist) == 5);
 
 	spatial_filter = palloc(sizeof(OgrFdwSpatialFilter));
 
