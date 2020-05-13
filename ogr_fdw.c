@@ -969,7 +969,7 @@ ogrSpatialFilterFromList(const List* lst)
 	spatial_filter->minx = floatVal(lsecond(lst));
 	spatial_filter->miny = floatVal(lthird(lst));
 	spatial_filter->maxx = floatVal(lfourth(lst));
-	spatial_filter->maxy = floatVal(list_nth(lst, 5));
+	spatial_filter->maxy = floatVal(list_nth(lst, 4)); /* list_nth counts from zero */
 	return spatial_filter;
 }
 
