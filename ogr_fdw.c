@@ -1333,16 +1333,21 @@ ogrReadColumnData(OgrFdwState* state)
 	tbl = palloc0(sizeof(OgrFdwTable));
 
 	/* One column for each PgSQL foreign table column */
+#if PG_VERSION_NUM < 120000
 	rel = heap_open(state->foreigntableid, NoLock);
-	tupdesc = rel->rd_att;
-	state->tupdesc = tupdesc;
-	tbl->ncols = tupdesc->natts;
-	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
-	tbl->tblname = pstrdup(tblname);
+#else
+	rel = table_open(state->foreigntableid, NoLock);
+#endif /* PG_VERSION_NUM */
 
-	/* Get OGR metadata ready */
-	dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
-	ogr_ncols = OGR_FD_GetFieldCount(dfn);
+tupdesc = rel->rd_att;
+state->tupdesc = tupdesc;
+tbl->ncols = tupdesc->natts;
+tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
+tbl->tblname = pstrdup(tblname);
+
+/* Get OGR metadata ready */
+dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
+ogr_ncols = OGR_FD_GetFieldCount(dfn);
 #if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
 #else
@@ -1493,7 +1498,12 @@ ogrReadColumnData(OgrFdwState* state)
 		}
 	}
 	pfree(ogr_fields);
+#if PG_VERSION_NUM < 120000
 	heap_close(rel, NoLock);
+#else
+	table_close(rel, NoLock);
+#endif /* PG_VERSION_NUM */
+
 
 	return;
 }
