@@ -1339,15 +1339,15 @@ ogrReadColumnData(OgrFdwState* state)
 	rel = table_open(state->foreigntableid, NoLock);
 #endif /* PG_VERSION_NUM */
 
-tupdesc = rel->rd_att;
-state->tupdesc = tupdesc;
-tbl->ncols = tupdesc->natts;
-tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
-tbl->tblname = pstrdup(tblname);
+	tupdesc = rel->rd_att;
+	state->tupdesc = tupdesc;
+	tbl->ncols = tupdesc->natts;
+	tbl->cols = palloc0(tbl->ncols * sizeof(OgrFdwColumn));
+	tbl->tblname = pstrdup(tblname);
 
-/* Get OGR metadata ready */
-dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
-ogr_ncols = OGR_FD_GetFieldCount(dfn);
+	/* Get OGR metadata ready */
+	dfn = OGR_L_GetLayerDefn(state->ogr.lyr);
+	ogr_ncols = OGR_FD_GetFieldCount(dfn);
 #if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
 	ogr_geom_count = OGR_FD_GetGeomFieldCount(dfn);
 #else
