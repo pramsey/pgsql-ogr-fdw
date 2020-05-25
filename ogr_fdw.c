@@ -1333,7 +1333,12 @@ ogrReadColumnData(OgrFdwState* state)
 	tbl = palloc0(sizeof(OgrFdwTable));
 
 	/* One column for each PgSQL foreign table column */
+#if PG_VERSION_NUM < 120000
 	rel = heap_open(state->foreigntableid, NoLock);
+#else
+	rel = table_open(state->foreigntableid, NoLock);
+#endif /* PG_VERSION_NUM */
+
 	tupdesc = rel->rd_att;
 	state->tupdesc = tupdesc;
 	tbl->ncols = tupdesc->natts;
@@ -1493,7 +1498,12 @@ ogrReadColumnData(OgrFdwState* state)
 		}
 	}
 	pfree(ogr_fields);
+#if PG_VERSION_NUM < 120000
 	heap_close(rel, NoLock);
+#else
+	table_close(rel, NoLock);
+#endif /* PG_VERSION_NUM */
+
 
 	return;
 }
