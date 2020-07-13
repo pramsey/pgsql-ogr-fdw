@@ -80,8 +80,8 @@ ogrStringLaunder(char *str)
 		tmp[j++] = c;
 
 		/* Avoid mucking with data beyond the end of our stack-allocated strings */
-		if ( j >= NAMEDATALEN )
-			j = NAMEDATALEN - 1;
+		if ( j >= NAMEDATALEN - 1)
+			break;
 	}
 	strncpy(str, tmp, NAMEDATALEN);
 

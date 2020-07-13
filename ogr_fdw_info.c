@@ -46,13 +46,15 @@ char identifier[NAMEDATALEN+3];
 const char*
 quote_identifier(const char* ident)
 {
+	int len = (int)MIN(strlen(ident), NAMEDATALEN - 1);
+
 	if (reserved_word(ident))
 	{
-		sprintf(identifier,"\"%*s\"", (int)MIN(strlen(ident), NAMEDATALEN), ident);
+		sprintf(identifier,"\"%*s\"", len, ident);
 	}
 	else
 	{
-		sprintf(identifier,"%*s", (int)MIN(strlen(ident), NAMEDATALEN), ident);
+		sprintf(identifier,"%*s", len, ident);
 	}
   return identifier;
 }
