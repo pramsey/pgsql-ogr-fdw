@@ -371,7 +371,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	 * Add server name and layer-level options.  We specify remote
 	 * layer name as option
 	 */
-	stringbuffer_aprintf(buf, "\n) SERVER \"%s\"\nOPTIONS (", quote_identifier(fdw_server));
+	stringbuffer_aprintf(buf, "\n) SERVER %s \nOPTIONS (", quote_identifier(fdw_server));
 	stringbuffer_append(buf, "layer ");
 	ogrDeparseStringLiteral(buf, OGR_L_GetName(ogr_lyr));
 	stringbuffer_append(buf, ");\n");
