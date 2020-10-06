@@ -667,11 +667,13 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	OgrUpdateable updateable = OGR_UPDATEABLE_FALSE;
 
 	/* Check that the database encoding is UTF8, to match OGR internals */
+	/* TODO: Transcode inputs/outputs to the database encoding, if possibe.
 	if (GetDatabaseEncoding() != PG_UTF8)
 	{
 		elog(ERROR, "OGR FDW only works with UTF-8 databases");
 		PG_RETURN_VOID();
 	}
+	*/
 
 	/* Initialize found state to not found */
 	for (opt = valid_options; opt->optname; opt++)
