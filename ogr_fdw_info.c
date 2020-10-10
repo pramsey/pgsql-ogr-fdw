@@ -168,6 +168,7 @@ ogrListLayers(const char* source)
 		CPLError(CE_Failure, CPLE_AppDefined, "Could not connect to source '%s'", source);
 		return OGRERR_FAILURE;
 	}
+	printf("Format: %s\n\n", GDALGetDriverShortName(GDALGetDatasetDriver(ogr_ds)));
 
 	printf("Layers:\n");
 	for (i = 0; i < GDALDatasetGetLayerCount(ogr_ds); i++)
