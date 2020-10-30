@@ -30,7 +30,7 @@ CREATE SERVER pgserver
     datasource 'PG:dbname=contrib_regression host=localhost',
     format 'PostgreSQL' );
 CREATE FOREIGN TABLE bytea_fdw (
-  fid integer,
+  fid bigint,
   geom bytea,
   name varchar,
   age bigint,
@@ -67,7 +67,7 @@ EXPLAIN VERBOSE
   FROM bytea_fdw;
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Foreign Scan on public.bytea_fdw  (cost=25.00..1025.00 rows=1000 width=166)
+ Foreign Scan on public.bytea_fdw  (cost=25.00..1025.00 rows=1000 width=170)
    Output: fid, name, geom, age, size, value, num, dt, tm, dttm, varch, yn
 (2 rows)
 

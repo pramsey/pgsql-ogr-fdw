@@ -36,7 +36,7 @@ CREATE SERVER pgserver
     format 'PostgreSQL' );
 
 CREATE FOREIGN TABLE bytea_fdw (
-  fid integer,
+  fid bigint,
   geom bytea,
   name varchar,
   age bigint,

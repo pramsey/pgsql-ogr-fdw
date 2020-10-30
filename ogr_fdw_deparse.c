@@ -342,7 +342,7 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 {
 	Expr* r_arg = lfirst(list_head(node->args));
 	Expr* l_arg = lfirst(list_tail(node->args));
-	Expr* constexpr = NULL;
+	Expr* exprconst = NULL;
 	Const* constant = NULL;
 	Var* var = NULL;
 	OgrFdwColumn col;
@@ -363,25 +363,18 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	if (nodeTag(l_arg) == T_Var)
 	{
 		var = (Var*)l_arg;
-		constexpr = r_arg;
+		exprconst = r_arg;
 	}
 	else if (nodeTag(r_arg) == T_Var)
 	{
 		var = (Var*)r_arg;
-		constexpr = l_arg;
+		exprconst = l_arg;
 	}
 	else return false;
 
-	/* It's possible the const value is wrapped in a type cast... */
-	if (nodeTag(constexpr) == T_Const)
+	if (nodeTag(exprconst) == T_Const)
 	{
-		constant = (Const*)constexpr;
-	}
-	else if (nodeTag(constexpr) == T_TypeCast)
-	{
-		TypeCast *tc = (TypeCast*)constexpr;
-		if (nodeTag(tc->arg) == T_Const)
-			constant = (Const*)(tc->arg);
+		constant = (Const*)exprconst;
 	}
 	else return false;
 
