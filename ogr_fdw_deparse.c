@@ -38,6 +38,13 @@ setStringInfoLength(StringInfo str, int len)
 	str->data[len] = '\0';
 }
 
+static void
+stringInfoReverse(StringInfo str, unsigned int len)
+{
+	if (str->len > len)
+		str->len -= len;
+}
+
 static char*
 ogrStringFromDatum(Datum datum, Oid type)
 {
@@ -331,13 +338,13 @@ ogrOperatorIsSupported(const char* opname)
 	return NULL != bsearch(&opname, ogrOperators, 10, sizeof(char*), ogrOperatorCmpFunc);
 }
 
-
 static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 {
 	Expr* r_arg = lfirst(list_head(node->args));
 	Expr* l_arg = lfirst(list_tail(node->args));
-	Const* constant;
-	Var* var;
+	Expr* constexpr = NULL;
+	Const* constant = NULL;
+	Var* var = NULL;
 	OgrFdwColumn col;
 	OGRLayerH lyr;
 	OGRFeatureDefnH fdh;
@@ -353,20 +360,30 @@ static bool ogrDeparseOpExprSpatial(OpExpr* node, OgrDeparseCtx* context)
 	/* column on the other side that is from the FDW relation */
 	/* Both of those implies and OGR spatial filter can be reasonably */
 	/* set. */
-	if (nodeTag(r_arg) == T_Const && nodeTag(l_arg) == T_Var)
+	if (nodeTag(l_arg) == T_Var)
 	{
-		constant = (Const*)r_arg;
 		var = (Var*)l_arg;
+		constexpr = r_arg;
 	}
-	else if (nodeTag(l_arg) == T_Const && nodeTag(r_arg) == T_Var)
+	else if (nodeTag(r_arg) == T_Var)
 	{
-		constant = (Const*)l_arg;
 		var = (Var*)r_arg;
+		constexpr = l_arg;
 	}
-	else
+	else return false;
+
+	/* It's possible the const value is wrapped in a type cast... */
+	if (nodeTag(constexpr) == T_Const)
 	{
-		return false;
+		constant = (Const*)constexpr;
 	}
+	else if (nodeTag(constexpr) == T_TypeCast)
+	{
+		TypeCast *tc = (TypeCast*)constexpr;
+		if (nodeTag(tc->arg) == T_Const)
+			constant = (Const*)(tc->arg);
+	}
+	else return false;
 
 	/* Const isn't a geometry type? Done. */
 	if (constant->consttype != ogrGetGeometryOid() || constant->constisnull || constant->constbyval)
@@ -583,16 +600,20 @@ ogrDeparseNullTest(NullTest* node, OgrDeparseCtx* context)
 	if (nodeTag(node->arg) != T_Var)
 		return false;
 
+	appendStringInfoString(buf, "(");
 	if(!ogrDeparseVar((Var*)(node->arg), context))
+	{
+		stringInfoReverse(buf, 1);
 		return false;
+	}
 
 	if (node->nulltesttype == IS_NULL)
 	{
-		appendStringInfoString(buf, " IS NULL");
+		appendStringInfoString(buf, " IS NULL)");
 	}
 	else
 	{
-		appendStringInfoString(buf, " IS NOT NULL");
+		appendStringInfoString(buf, " IS NOT NULL)");
 	}
 
 	return true;
