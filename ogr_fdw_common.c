@@ -11,6 +11,7 @@
 #include "ogr_fdw_gdal.h"
 #include "ogr_fdw_common.h"
 #include "stringbuffer.h"
+#include "pg_config_manual.h"
 
 /* Prototype for function that must be defined in PostgreSQL (it is) */
 /* and in ogr_fdw_info (it is) */
@@ -52,8 +53,8 @@ void
 ogrStringLaunder(char *str)
 {
 	int i, j = 0;
-	char tmp[STR_MAX_LEN];
-	memset(tmp, 0, STR_MAX_LEN);
+	char tmp[NAMEDATALEN];
+	memset(tmp, 0, NAMEDATALEN);
 
 	for(i = 0; str[i]; i++)
 	{
@@ -79,10 +80,10 @@ ogrStringLaunder(char *str)
 		tmp[j++] = c;
 
 		/* Avoid mucking with data beyond the end of our stack-allocated strings */
-		if ( j >= STR_MAX_LEN )
-			j = STR_MAX_LEN - 1;
+		if ( j >= NAMEDATALEN - 1)
+			break;
 	}
-	strncpy(str, tmp, STR_MAX_LEN);
+	strncpy(str, tmp, NAMEDATALEN);
 
 }
 
@@ -220,9 +221,10 @@ ogrGeomTypeToPgGeomType(stringbuffer_t *buf, OGRwkbGeometryType gtype)
 static OGRErr
 ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_column_names, stringbuffer_t *buf)
 {
-	char pgcolname[STR_MAX_LEN];
-	strncpy(pgcolname, ogrcolname, STR_MAX_LEN);
+	char pgcolname[NAMEDATALEN];
+	strncpy(pgcolname, ogrcolname, NAMEDATALEN);
 	ogrStringLaunder(pgcolname);
+
 
 	if ( launder_column_names )
 	{
@@ -250,10 +252,11 @@ ogrColumnNameToSQL (const char *ogrcolname, const char *pgtype, int launder_colu
 OGRErr
 ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 			   int launder_table_names, int launder_column_names,
+			   const char *fdw_table_name,
 			   int use_postgis_geometry, stringbuffer_t *buf)
 {
 	int geom_field_count, i;
-	char table_name[STR_MAX_LEN];
+	char table_name[NAMEDATALEN];
 	OGRFeatureDefnH ogr_fd = OGR_L_GetLayerDefn(ogr_lyr);
 	stringbuffer_t gbuf;
 
@@ -272,9 +275,15 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 #endif
 
 	/* Process table name */
-	strncpy(table_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
-	if (launder_table_names)
-		ogrStringLaunder(table_name);
+	if (fdw_table_name == NULL) {
+		strncpy(table_name, OGR_L_GetName(ogr_lyr), NAMEDATALEN);
+
+		if (launder_table_names)
+			ogrStringLaunder(table_name);
+	}
+	else {
+		strncpy(table_name, fdw_table_name, NAMEDATALEN);
+	}
 
 	/* Create table */
 	stringbuffer_aprintf(buf, "CREATE FOREIGN TABLE %s (\n", quote_identifier(table_name));
@@ -361,9 +370,9 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	/* Write out attribute fields */
 	for ( i = 0; i < OGR_FD_GetFieldCount(ogr_fd); i++ )
 	{
-		char pgtype[128];
+		char pgtype[NAMEDATALEN];
 		OGRFieldDefnH ogr_fld = OGR_FD_GetFieldDefn(ogr_fd, i);
-		ogrTypeToPgType(ogr_fld, pgtype, 128);
+		ogrTypeToPgType(ogr_fld, pgtype, sizeof(pgtype));
 		ogrColumnNameToSQL(OGR_Fld_GetNameRef(ogr_fld), pgtype, launder_column_names, buf);
 	}
 
@@ -371,7 +380,7 @@ ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fdw_server,
 	 * Add server name and layer-level options.  We specify remote
 	 * layer name as option
 	 */
-	stringbuffer_aprintf(buf, "\n) SERVER %s \nOPTIONS (", quote_identifier(fdw_server));
+	stringbuffer_aprintf(buf, "\n) SERVER %s\nOPTIONS (", quote_identifier(fdw_server));
 	stringbuffer_append(buf, "layer ");
 	ogrDeparseStringLiteral(buf, OGR_L_GetName(ogr_lyr));
 	stringbuffer_append(buf, ");\n");

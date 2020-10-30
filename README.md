@@ -58,20 +58,20 @@ Layers:
 
 # ogr_fdw_info -s /tmp/test -l pt_two
 
-CREATE SERVER myserver
+CREATE SERVER "myserver"
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
     datasource '/tmp/test',
     format 'ESRI Shapefile' );
 
-CREATE FOREIGN TABLE pt_two (
+CREATE FOREIGN TABLE "pt_two" (
   fid integer,
-  geom geometry(Point, 4326),
-  name varchar,
-  age integer,
-  height real,
-  birthdate date )
-  SERVER myserver
+  "geom" geometry(Point, 4326),
+  "name" varchar,
+  "age" integer,
+  "height" real,
+  "birthdate" date )
+  SERVER "myserver"
   OPTIONS (layer 'pt_two');
 ```
 
