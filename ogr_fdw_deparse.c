@@ -579,16 +579,20 @@ static bool
 ogrDeparseNullTest(NullTest* node, OgrDeparseCtx* context)
 {
 	StringInfo buf = context->buf;
+	/* Only push down simple "col IS NULL" tests */
+	if (nodeTag(node->arg) != T_Var)
+		return false;
 
-	appendStringInfoChar(buf, '(');
-	ogrDeparseExpr(node->arg, context);
+	if(!ogrDeparseVar((Var*)(node->arg), context))
+		return false;
+
 	if (node->nulltesttype == IS_NULL)
 	{
-		appendStringInfoString(buf, " IS NULL)");
+		appendStringInfoString(buf, " IS NULL");
 	}
 	else
 	{
-		appendStringInfoString(buf, " IS NOT NULL)");
+		appendStringInfoString(buf, " IS NOT NULL");
 	}
 
 	return true;

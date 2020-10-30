@@ -11,7 +11,7 @@ OGR is the **vector** half of the [GDAL](http://www.gdal.org/) spatial data acce
 This implementation currently has the following limitations:
 
 * **PostgreSQL 9.3 or higher.** This wrapper does not support the FDW implementations in older versions of PostgreSQL.
-* **Limited non-spatial query restrictions are pushed down to OGR.** OGR only supports a minimal set of SQL operators (>, <, <=, >=, =).
+* **Limited non-spatial query restrictions are pushed down to OGR.** OGR only supports a [minimal set](https://gdal.org/user/ogr_sql_dialect.html) of SQL operators (>, <, <=, >=, =).
 * **Only bounding box filters (&&) are pushed down.** Spatial filtering is possible, but only bounding boxes, and only using the && operator.
 * **OGR connections every time** Rather than pooling OGR connections, each query makes (and disposes of) **two** new ones, which seems to be the largest performance drag at the moment for restricted (small) queries.
 * **All columns are retrieved every time.** PostgreSQL foreign data wrappers don't require all columns all the time, and some efficiencies can be gained by only requesting the columns needed to fulfill a query. This would be a minimal efficiency improvement, but can be removed given some development time, since the OGR API supports returning a subset of columns.
