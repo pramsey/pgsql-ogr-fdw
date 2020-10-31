@@ -53,7 +53,7 @@ Datum ogr_fdw_drivers(PG_FUNCTION_ARGS)
     get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
 	for (int i = 0; i < num_drivers; i++) {
-#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(1,11,0))
+#if GDAL_VERSION_MAJOR < 2
 		GDALDriverH hDriver = GDALGetDriver(i);
 		if (GDALGetMetadataItem(hDriver, GDAL_DCAP_VECTOR, NULL) != NULL) {
 			const char *strName = OGR_Dr_GetName(hDriver);
