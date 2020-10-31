@@ -11,6 +11,8 @@
 #ifndef _OGR_FDW_H
 #define _OGR_FDW_H 1
 
+#define OGR_FDW_RELEASE_NAME "1.1"
+
 /*
  * PostgreSQL
  */

@@ -1,5 +1,5 @@
 # ogr_fdw extension
 comment = 'foreign-data wrapper for GIS data access'
-default_version = '1.0'
+default_version = '1.1'
 module_pathname = '$libdir/ogr_fdw'
 relocatable = true

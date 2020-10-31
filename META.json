@@ -2,7 +2,7 @@
    "name": "ogr_fdw",
    "abstract": "OGR foreign data wrapper",
    "description": "OGR FDW allows you to connect to any OGR supported data source.",
-   "version": "1.0.9",
+   "version": "1.1.0",
    "maintainer": [
       "Paul Ramsey <pramsey@cleverelephant.ca>"
    ],
@@ -21,9 +21,9 @@
    },
    "provides": {
      "ogr_fdw": {
-       "file": "ogr_fdw--1.0.sql",
+       "file": "ogr_fdw--1.1.sql",
        "docfile": "README.md",
-       "version": "1.0.9",
+       "version": "1.1.0",
        "abstract": "OGR FDW wrapper"
      }
    },

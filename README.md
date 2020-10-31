@@ -424,3 +424,16 @@ ALTER SERVER myserver_latin1
   );
 ```
 
+### Utility Functions
+
+To view the current FDW and GDAL version.
+
+```sql
+SELECT ogr_fdw_version();
+```
+
+To view the drivers supported by this GDAL.
+
+```sql
+SELECT unnest(ogr_fdw_drivers());
+```
