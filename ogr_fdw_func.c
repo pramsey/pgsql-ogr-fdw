@@ -15,7 +15,7 @@
 #include <postgres.h>
 #include <fmgr.h>
 #include <funcapi.h>
-#include <catalog/pg_type_d.h>
+// #include <catalog/pg_type_d.h>
 #include <utils/array.h>
 #include <utils/builtins.h>
 
