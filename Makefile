@@ -10,7 +10,9 @@ OBJS = \
 	stringbuffer_pg.o
 
 EXTENSION = ogr_fdw
-DATA = ogr_fdw--1.0.sql
+DATA = \
+	ogr_fdw--1.0--1.1.sql \
+	ogr_fdw--1.1.sql
 
 REGRESS = ogr_fdw
 
