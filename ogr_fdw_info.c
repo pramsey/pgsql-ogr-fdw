@@ -28,7 +28,7 @@ static OGRErr ogrGenerateSQL(const char* server, const char* layer, const char* 
 static int reserved_word(const char* pgcolumn);
 
 static char *
-strupr(char* str)
+ogr_fdw_strupr(char* str)
 {
   for (int i = 0; i < strlen(str); i++) {
     str[i] = toupper(str[i]);
@@ -281,11 +281,11 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 
 		while (p != NULL) {
 			while( isspace((unsigned char) *p) ) { ++p; }
-			sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), strupr(p));
+			sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), ogr_fdw_strupr(p));
 			strcat(config_options, option);
 			p = strtok(NULL, ",");
 		}
-  }
+	}
 
 	option_list = CSLTokenizeString(config_options);
 	for ( option_iter = option_list; option_iter && *option_iter; option_iter++ )

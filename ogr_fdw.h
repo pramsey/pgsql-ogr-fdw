@@ -139,7 +139,7 @@ typedef struct OgrConnection
 	const char* open_options;   /* GDAL open options */
 	OgrUpdateable ds_updateable;
 	OgrUpdateable lyr_updateable;
-	bool lyr_utf8;        /* OGR layer will return UTF8 strings */
+	int char_encoding;   /* Is OGR layer UTF? Has user provided encoding open option? */
 	GDALDatasetH ds;      /* GDAL datasource handle */
 	OGRLayerH lyr;        /* OGR layer handle */
 } OgrConnection;

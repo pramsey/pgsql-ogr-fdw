@@ -437,3 +437,25 @@ To view the drivers supported by this GDAL.
 ```sql
 SELECT unnest(ogr_fdw_drivers());
 ```
+
+
+### Character Encoding
+
+To access sources that have a non-UTF-8 encoding, you may need to specify the character encoding in your server creation line. OGR FDW uses the transcoding built into PostgreSQL, and thus supports all the [encodings that PostgreSQL does](https://www.postgresql.org/docs/current/multibyte.html#CHARSET-TABLE).
+
+```sql
+CREATE SERVER odbc_latin1
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource 'ODBC:username@servicename',
+    format 'ODBC',
+    character_encoding 'WIN1250'
+  );
+
+CREATE FOREIGN TABLE featuretable_fdw (
+  name text,
+  geom geometry(Point, 4326)
+)
+SERVER odbc_latin1
+  OPTIONS (layer 'featuretable');
+```

@@ -56,6 +56,7 @@ struct OgrFdwOption
 #define OPT_CONFIG_OPTIONS "config_options"
 #define OPT_OPEN_OPTIONS "open_options"
 #define OPT_UPDATEABLE "updateable"
+#define OPT_CHAR_ENCODING "character_encoding"
 
 #define OGR_FDW_FRMT_INT64	 "%lld"
 #define OGR_FDW_CAST_INT64(x)	 (long long)(x)
@@ -66,6 +67,8 @@ struct OgrFdwOption
  * ForeignServerRelationId (CREATE SERVER options)
  * UserMappingRelationId (CREATE USER MAPPING options)
  * ForeignTableRelationId (CREATE FOREIGN TABLE options)
+ *
+ * {optname, optcontext, optrequired, optfound}
  */
 static struct OgrFdwOption valid_options[] =
 {
@@ -78,6 +81,7 @@ static struct OgrFdwOption valid_options[] =
 	{OPT_DRIVER, ForeignServerRelationId, false, false},
 	{OPT_UPDATEABLE, ForeignServerRelationId, false, false},
 	{OPT_CONFIG_OPTIONS, ForeignServerRelationId, false, false},
+	{OPT_CHAR_ENCODING, ForeignServerRelationId, false, false},
 #if GDAL_VERSION_MAJOR >= 2
 	{OPT_OPEN_OPTIONS, ForeignServerRelationId, false, false},
 #endif
@@ -542,6 +546,10 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 		{
 			ogr.open_options = defGetString(def);
 		}
+		if (streq(def->defname, OPT_CHAR_ENCODING))
+		{
+			ogr.char_encoding = pg_char_to_encoding(defGetString(def));
+		}
 		if (streq(def->defname, OPT_UPDATEABLE))
 		{
 			if (defGetBoolean(def))
@@ -644,10 +652,15 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 		        : errhint("Does the layer exist?")
 		    ));
 	}
-	ogr.lyr_utf8 = OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8);
+
+	if (OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8))
+	{
+		ogr.char_encoding = PG_UTF8;
+	}
 
 	return ogr;
 }
+
 
 /*
  * Validate the options given to a FOREIGN DATA WRAPPER, SERVER,
@@ -665,15 +678,6 @@ ogr_fdw_validator(PG_FUNCTION_ARGS)
 	const char* source = NULL, *driver = NULL;
 	const char* config_options = NULL, *open_options = NULL;
 	OgrUpdateable updateable = OGR_UPDATEABLE_FALSE;
-
-	/* Check that the database encoding is UTF8, to match OGR internals */
-	/* TODO: Transcode inputs/outputs to the database encoding, if possibe.
-	if (GetDatabaseEncoding() != PG_UTF8)
-	{
-		elog(ERROR, "OGR FDW only works with UTF-8 databases");
-		PG_RETURN_VOID();
-	}
-	*/
 
 	/* Initialize found state to not found */
 	for (opt = valid_options; opt->optname; opt++)
@@ -1890,9 +1894,9 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 					if (cstr_in && cstr_len > 0)
 					{
 						char* cstr_decoded;
-						if (execstate->ogr.lyr_utf8)
+						if (execstate->ogr.char_encoding)
 						{
-							cstr_decoded = pg_any_to_server(cstr_in, cstr_len, PG_UTF8);
+							cstr_decoded = pg_any_to_server(cstr_in, cstr_len, execstate->ogr.char_encoding);
 						}
 						else
 						{
@@ -1900,6 +1904,9 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 						}
 						nulls[i] = false;
 						values[i] = pgDatumFromCString(cstr_decoded, pgtype, pgtypmod, pginputfunc);
+						/* Free cstr_decoded if it is a copy */
+						if (cstr_in != cstr_decoded)
+							pfree(cstr_decoded);
 					}
 					else
 					{

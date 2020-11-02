@@ -91,8 +91,27 @@ CREATE FOREIGN TABLE e_1 (
   OPTIONS ( layer 'enc' );
 
 SET client_min_messages = debug1;
-SELECT * FROM e_1 WHERE fid = 1;
+SELECT fid, name FROM e_1 WHERE fid = 1;
 SET client_min_messages = notice;
+
+------------------------------------------------
+-- Using encoding option directly
+
+CREATE SERVER myserver_latin1_direct
+  FOREIGN DATA WRAPPER ogr_fdw
+  OPTIONS (
+    datasource '@abs_srcdir@/data',
+    format 'ESRI Shapefile',
+    character_encoding 'LATIN1'
+    );
+
+CREATE FOREIGN TABLE e_2 (
+  fid integer,
+  name varchar )
+  SERVER myserver_latin1_direct
+  OPTIONS ( layer 'enc' );
+
+SELECT fid, name FROM e_2 WHERE fid = 1;
 
 ------------------------------------------------
 -- Geometryless test
@@ -143,7 +162,7 @@ CREATE FOREIGN TABLE cities (
 ) SERVER "fgdbserver"
 OPTIONS (layer 'Cities');
 
-SET client_min_messages = DEBUG1;
+SET client_min_messages = LOG;
 
 SELECT fid, city_name, pop1990 FROM cities WHERE pop1990 = 17710;
 SELECT fid, city_name, pop1990 FROM cities WHERE city_name = 'Williston';
