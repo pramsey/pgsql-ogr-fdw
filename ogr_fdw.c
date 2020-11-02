@@ -661,9 +661,6 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 	return ogr;
 }
 
-//extern int  pg_char_to_encoding(const char *name);
-//extern char *pg_server_to_any(const char *s, int len, int encoding);
-
 
 /*
  * Validate the options given to a FOREIGN DATA WRAPPER, SERVER,
