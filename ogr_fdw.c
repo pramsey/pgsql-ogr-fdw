@@ -653,7 +653,7 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 		    ));
 	}
 
-	if (OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8) && !ogr.char_encoding)
+	if (OGR_L_TestCapability(ogr.lyr, OLCStringsAsUTF8))
 	{
 		ogr.char_encoding = PG_UTF8;
 	}
@@ -1907,7 +1907,9 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 						}
 						nulls[i] = false;
 						values[i] = pgDatumFromCString(cstr_decoded, pgtype, pgtypmod, pginputfunc);
-						pfree(cstr_decoded);
+						/* Free cstr_decoded if it is a copy */
+						if (cstr_in != cstr_decoded)
+							pfree(cstr_decoded);
 					}
 					else
 					{
