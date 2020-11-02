@@ -53,17 +53,17 @@ Datum ogr_fdw_drivers(PG_FUNCTION_ARGS)
     get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
 	for (int i = 0; i < num_drivers; i++) {
-#if GDAL_VERSION_MAJOR < 2
+#if GDAL_VERSION_MAJOR <= 1
+		OGRSFDriverH hDriver = OGRGetDriver(i);
+		text *txtName = cstring_to_text(OGR_Dr_GetName(hDriver));
+		arr_elems[arr_nelems++] = PointerGetDatum(txtName);
+#else
 		GDALDriverH hDriver = GDALGetDriver(i);
 		if (GDALGetMetadataItem(hDriver, GDAL_DCAP_VECTOR, NULL) != NULL) {
 			const char *strName = OGR_Dr_GetName(hDriver);
 			text *txtName = cstring_to_text(strName);
 			arr_elems[arr_nelems++] = PointerGetDatum(txtName);
 		}
-#else
-		OGRSFDriverH hDriver = OGRGetDriver(i);
-		text *txtName = cstring_to_text(OGR_Dr_GetName(hDriver));
-		arr_elems[arr_nelems++] = PointerGetDatum(txtName);
 #endif
 	}
 
