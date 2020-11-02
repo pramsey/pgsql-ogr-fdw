@@ -459,19 +459,3 @@ CREATE FOREIGN TABLE featuretable_fdw (
 SERVER odbc_latin1
   OPTIONS (layer 'featuretable');
 ```
-
-
-CREATE SERVER server_latin1
-  FOREIGN DATA WRAPPER ogr_fdw
-  OPTIONS (
-    datasource 'Pg:dbname=latin1 user=pramsey client_encoding=sql_ascii',
-    format 'PostgreSQL',
-    character_encoding 'LXXTIN1'
-  );
-
-CREATE FOREIGN TABLE foo (
-  name text,
-  geom geometry(Point, 4326)
-)
-SERVER server_latin1
-  OPTIONS (layer 'foo');

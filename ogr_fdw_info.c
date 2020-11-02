@@ -285,7 +285,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 			strcat(config_options, option);
 			p = strtok(NULL, ",");
 		}
-  }
+	}
 
 	option_list = CSLTokenizeString(config_options);
 	for ( option_iter = option_list; option_iter && *option_iter; option_iter++ )
