@@ -52,7 +52,8 @@ Datum ogr_fdw_drivers(PG_FUNCTION_ARGS)
  	arr_elems = palloc0(num_drivers * sizeof(Datum));
     get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
-	for (int i = 0; i < num_drivers; i++) {
+	int i;
+	for (i = 0; i < num_drivers; i++) {
 #if GDAL_VERSION_MAJOR <= 1
 		OGRSFDriverH hDriver = OGRGetDriver(i);
 		text *txtName = cstring_to_text(OGR_Dr_GetName(hDriver));
