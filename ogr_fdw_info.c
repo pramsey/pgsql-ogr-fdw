@@ -30,7 +30,8 @@ static int reserved_word(const char* pgcolumn);
 static char *
 ogr_fdw_strupr(char* str)
 {
-  for (int i = 0; i < strlen(str); i++) {
+	int i;
+  for (i = 0; i < strlen(str); i++) {
     str[i] = toupper(str[i]);
   }
 
@@ -422,7 +423,8 @@ reserved_word(const char * pgcolumn)
 	"when", "where", "window", "with"
 	};
 
-	for (int i = 0; i < sizeof(reserved)/sizeof(reserved[0]); i++)
+	int i;
+	for (i = 0; i < sizeof(reserved)/sizeof(reserved[0]); i++)
 	{
 		if (strcmp(pgcolumn, reserved[i]) == 0)
 			return 1;
