@@ -297,13 +297,23 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 		char *p;
 		char stripped_config_options[STR_MAX_LEN] = {0};
 		char option[NAMEDATALEN];
+		char *short_name = GDALGetDriverShortName(ogr_dr);
 
 		strncpy(stripped_config_options, options, STR_MAX_LEN - 1);
 		p = strtok(strip_spaces(stripped_config_options), ",");
 
 		while (p != NULL) {
-			while( isspace((unsigned char) *p) ) { ++p; }
-			sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), ogr_fdw_strupr(p));
+			if (strcmp(short_name, "XLSX") == 0 || strcmp(short_name, "XLSX") == 0 || strcmp(short_name, "ODS") == 0)
+			{
+				/* Unify the handling of the options of spreadsheet file options as they are all the same except they have their
+				 * Driver Short Name included in the option
+				 */
+				sprintf(option, "OGR_%s_%s ", short_name, ogr_fdw_strupr(p));
+			}
+			else {
+				sprintf(option, "%s ", ogr_fdw_strupr(p));
+			}
+
 			strcat(config_options, option);
 			p = strtok(NULL, ",");
 		}
