@@ -38,6 +38,23 @@ ogr_fdw_strupr(char* str)
   return str;
 }
 
+static char *
+strip_spaces(char* str)
+{
+	unsigned char *cur = (unsigned char *)str;
+	unsigned char *head = cur;
+	while (*head != '\0') {
+		if (*head != ' ') {
+			*cur = *head;
+			++cur;
+		}
+		++head;
+	}
+	*cur = '\0';
+
+	return str;
+}
+
 /* Define this no-op here, so that code */
 /* in the ogr_fdw_common module works */
 const char* quote_identifier(const char* ident);
@@ -277,12 +294,26 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	strcpy(server_name, server == NULL ? "myserver" : server);
 
 	if (options != NULL) {
-		char *p = strtok((char*)options, ",");
+		char *p;
+		char stripped_config_options[STR_MAX_LEN] = {0};
 		char option[NAMEDATALEN];
+		char *short_name = GDALGetDriverShortName(ogr_dr);
+
+		strncpy(stripped_config_options, options, STR_MAX_LEN - 1);
+		p = strtok(strip_spaces(stripped_config_options), ",");
 
 		while (p != NULL) {
-			while( isspace((unsigned char) *p) ) { ++p; }
-			sprintf(option, "OGR_%s_%s ", GDALGetDriverShortName(ogr_dr), ogr_fdw_strupr(p));
+			if (strcmp(short_name, "XLSX") == 0 || strcmp(short_name, "XLSX") == 0 || strcmp(short_name, "ODS") == 0)
+			{
+				/* Unify the handling of the options of spreadsheet file options as they are all the same except they have their
+				 * Driver Short Name included in the option
+				 */
+				sprintf(option, "OGR_%s_%s ", short_name, ogr_fdw_strupr(p));
+			}
+			else {
+				sprintf(option, "%s ", ogr_fdw_strupr(p));
+			}
+
 			strcat(config_options, option);
 			p = strtok(NULL, ",");
 		}
@@ -314,9 +345,17 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	       "  FOREIGN DATA WRAPPER ogr_fdw\n"
 	       "  OPTIONS (\n"
 	       "    datasource '%s',\n"
-	       "    format '%s',\n"
-	       "    config_options '%s');\n",
-	       quote_identifier(server_name), source, GDALGetDriverShortName(ogr_dr), config_options);
+	       "    format '%s'",
+	       quote_identifier(server_name), source, GDALGetDriverShortName(ogr_dr));
+
+	if (strlen(config_options) > 0)
+	{
+		printf(",\n    config_options '%s');\n", config_options);
+	}
+	else
+	{
+		printf(");\n");
+	}
 
 	stringbuffer_init(&buf);
 	err = ogrLayerToSQL(ogr_lyr,
