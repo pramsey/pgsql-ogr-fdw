@@ -200,6 +200,8 @@ Query away!
 ### PostgreSQL FDW
 
 Wraparound action! Handy for testing. Connect your database back to your database and watch the fur fly.
+This is only for testing, for best performance you should use postgres_fdw foreign data wrapper even when querying a PostGIS enabled database.
+
 ```sql
 CREATE TABLE apostles (
   fid serial primary key,
