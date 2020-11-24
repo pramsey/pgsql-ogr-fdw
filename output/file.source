@@ -117,7 +117,7 @@ SET client_min_messages = notice;
 CREATE SERVER myserver_latin1_direct
   FOREIGN DATA WRAPPER ogr_fdw
   OPTIONS (
-    datasource '/Users/pramsey/Code/pgsql-ogr-fdw/data',
+    datasource '@abs_srcdir@/data',
     format 'ESRI Shapefile',
     character_encoding 'LATIN1'
     );
