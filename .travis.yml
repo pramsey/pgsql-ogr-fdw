@@ -3,6 +3,10 @@ sudo: required
 language: cpp
 compiler: gcc
 
+arch:
+    - AMD64
+    - ppc64le
+
 addons:
   apt:
     packages:
