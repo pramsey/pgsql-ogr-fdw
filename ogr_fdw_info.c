@@ -297,7 +297,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 		char *p;
 		char stripped_config_options[STR_MAX_LEN] = {0};
 		char option[NAMEDATALEN];
-		char *short_name = GDALGetDriverShortName(ogr_dr);
+		const char *short_name = GDALGetDriverShortName(ogr_dr);
 
 		strncpy(stripped_config_options, options, STR_MAX_LEN - 1);
 		p = strtok(strip_spaces(stripped_config_options), ",");
