@@ -7,6 +7,10 @@
  *
  *-------------------------------------------------------------------------
  */
+/*
+* PostgreSQL
+*/
+#include "postgres.h"
 
 /*
  * System
@@ -14,7 +18,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "postgres.h"
 
 /*
  * Require PostgreSQL >= 9.3
