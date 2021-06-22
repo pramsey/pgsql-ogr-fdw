@@ -22,7 +22,7 @@ This implementation currently has the following limitations:
 * Linux
   * [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
   * [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
-  * [Red Hat](https://yum.postgresql.org/news-packagelist.php)
+  * [Red Hat](https://yum.postgresql.org/)
 * OSX
 
 ## Basic Operation
