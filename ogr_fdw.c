@@ -130,9 +130,17 @@ static void ogrEndForeignScan(ForeignScanState* node);
 /*
  * FDW modify callback routines
  */
+#if PG_VERSION_NUM >= 140000
+static void ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
+                                       unsigned int rte_index,
+                                       RangeTblEntry* target_rte,
+                                       Relation target_relation);
+#else
 static void ogrAddForeignUpdateTargets(Query* parsetree,
                                        RangeTblEntry* target_rte,
                                        Relation target_relation);
+#endif
+
 static void ogrBeginForeignModify(ModifyTableState* mtstate,
                                   ResultRelInfo* rinfo,
                                   List* fdw_private,
@@ -1535,8 +1543,10 @@ ogrLookupGeometryFunctionOid(const char* proname)
 	names = stringToQualifiedNameList(proname);
 #if PG_VERSION_NUM < 90400
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false);
-#else
+#elif PG_VERSION_NUM < 140000
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
+#else
+	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false, false);
 #endif
 	if (streq(proname, "st_setsrid"))
 	{
@@ -2454,11 +2464,22 @@ ogrGetFidColumn(const TupleDesc td)
  * there could always be a virtual fid travelling with the queries,
  * and the FDW table itself wouldn't need such a column?
  */
+#if PG_VERSION_NUM >= 140000
+static void
+ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
+                           unsigned int rte_index,
+                           RangeTblEntry* target_rte,
+                           Relation target_relation)
+{
+	Query* parsetree = planinfo->parse;
+#else
+
 static void
 ogrAddForeignUpdateTargets(Query* parsetree,
                            RangeTblEntry* target_rte,
                            Relation target_relation)
 {
+#endif
 	ListCell* cell;
 	Form_pg_attribute att;
 	Var* var;
