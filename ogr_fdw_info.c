@@ -133,9 +133,11 @@ usage()
 		"       Show what input file formats are supported.\n"
 		"\n");
 	printf(
-		"note (1): You can specify either -l (layer name) or -i (layer index) if you specify both -l will be used\n"
+		"note (1): You can specify either -l (layer name) or -i (layer index)\n"
+		"          if you specify both -l will be used\n"
 		"note (2): config options are specified as a comma deliminated list without the OGR_<driver>_ prefix\n"
-		"so OGR_XLSX_HEADERS = FORCE OGR_XLSX_FIELD_TYPES = STRING would become:\n\"HEADERS = FORCE,FIELD_TYPES = STRING\""
+		"          so OGR_XLSX_HEADERS = FORCE OGR_XLSX_FIELD_TYPES = STRING would become:\n"
+		"          \"HEADERS = FORCE,FIELD_TYPES = STRING\""
 		"\n");
 	exit(0);
 }
@@ -155,7 +157,7 @@ main(int argc, char** argv)
 		usage();
 	}
 
-	while ((ch = getopt(argc, argv, "h?s:l:f:t:n:i:o:")) != -1)
+	while ((ch = getopt(argc, argv, "hfs:l:t:n:i:o:")) != -1)
 	{
 		switch (ch)
 		{
