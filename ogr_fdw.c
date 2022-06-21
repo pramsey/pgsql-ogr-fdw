@@ -531,6 +531,8 @@ ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 	ListCell* cell;
 	OGRErr err;
 
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	/* Null all values */
 	memset(&ogr, 0, sizeof(OgrConnection));
 	ogr.ds_updateable = OGR_UPDATEABLE_UNSET;
@@ -611,11 +613,15 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 	ListCell* cell;
 	OgrConnection ogr;
 
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	/* Gather all data for the foreign table. */
 	table = GetForeignTable(foreigntableid);
 	/* mapping = GetUserMapping(GetUserId(), table->serverid); */
 
 	ogr = ogrGetConnectionFromServer(table->serverid, updateable);
+
+	elog(DEBUG3, "%s: ogr.ds_str = %s", __func__, ogr.ds_str);
 
 	foreach (cell, table->options)
 	{
@@ -649,6 +655,8 @@ ogrGetConnectionFromTable(Oid foreigntableid, OgrUpdateable updateable)
 	{
 		elog(ERROR, "FDW table '%s' option is missing", OPT_LAYER);
 	}
+
+	elog(DEBUG3, "%s: ogr.lyr_str = %s", __func__, ogr.lyr_str);
 
 	/* Does the layer exist in the data source? */
 	ogr.lyr = GDALDatasetGetLayerByName(ogr.ds, ogr.lyr_str);
@@ -2877,7 +2885,7 @@ ogrIsForeignRelUpdatable(Relation rel)
 	OgrConnection ogr;
 	Oid foreigntableid = RelationGetRelid(rel);
 
-	elog(DEBUG2, "ogrIsForeignRelUpdatable");
+	elog(DEBUG2, "%s", __func__);
 
 	/* Before we say "yes"... */
 	/*  Does the foreign relation have a "fid" column? */
@@ -2895,7 +2903,7 @@ ogrIsForeignRelUpdatable(Relation rel)
 	/* Something in the open process set the readonly flags */
 	/* Perhaps user has manually set the foreign table option to readonly */
 	if (ogr.ds_updateable == OGR_UPDATEABLE_FALSE ||
-	        ogr.lyr_updateable == OGR_UPDATEABLE_FALSE)
+	    ogr.lyr_updateable == OGR_UPDATEABLE_FALSE)
 	{
 		return readonly;
 	}
