@@ -36,6 +36,7 @@ Datum ogr_fdw_drivers(PG_FUNCTION_ARGS)
 	bool elem_byval;
 	char elem_align;
 	int num_drivers;
+	int i;
 
 	if (GDALGetDriverCount() <= 0)
 		GDALAllRegister();
@@ -52,7 +53,6 @@ Datum ogr_fdw_drivers(PG_FUNCTION_ARGS)
  	arr_elems = palloc0(num_drivers * sizeof(Datum));
     get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
-	int i;
 	for (i = 0; i < num_drivers; i++) {
 #if GDAL_VERSION_MAJOR <= 1
 		OGRSFDriverH hDriver = OGRGetDriver(i);
@@ -82,8 +82,7 @@ Datum ogr_fdw_version(PG_FUNCTION_ARGS)
 	const char *ogr_fdw_ver = OGR_FDW_RELEASE_NAME;
 	char ver_str[256];
 	snprintf(ver_str, sizeof(ver_str), "OGR_FDW=\"%s\" GDAL=\"%s\"", ogr_fdw_ver, gdal_ver);
-	text* ver_txt = cstring_to_text(ver_str);
-	PG_RETURN_TEXT_P(ver_txt);
+	PG_RETURN_TEXT_P(cstring_to_text(ver_str));
 }
 
 

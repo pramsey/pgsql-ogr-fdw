@@ -64,6 +64,10 @@
 #include "executor/tuptable.h"
 #endif
 
+#ifdef PACKAGE_URL
+#undef PACKAGE_URL
+#endif
+
 /* GDAL/OGR includes and compat */
 #include "ogr_fdw_gdal.h"
 #include "ogr_fdw_common.h"

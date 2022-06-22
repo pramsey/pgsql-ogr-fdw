@@ -1,0 +1,54 @@
+# GitHub Actions for OGR-FDW
+#
+# Paul Ramsey <pramsey at cleverelephant dot ca>
+
+name: "CI"
+on:
+  push:
+    branches-ignore:
+      - 'master'
+  pull_request: ~
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+
+    env:
+      PGVER: 14
+
+    steps:
+
+    - name: 'Check Out'
+      uses: actions/checkout@v2
+
+    - name: 'Install GDAL'
+      run: |
+        sudo add-apt-repository ppa:ubuntugis/ppa
+        sudo apt-get update
+        sudo apt-get install libgdal-dev
+
+    - name: 'Install PostgreSQL'
+      run: |
+        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        sudo apt-get update
+        sudo apt-get -y install postgresql-$PGVER postgresql-server-dev-$PGVER
+
+    - name: 'Start PostgreSQL'
+      run: |
+        export PGDATA=/var/lib/postgresql/$PGVER/main
+        export PGETC=/etc/postgresql/$PGVER/main
+        export PGBIN=/usr/lib/postgresql/$PGVER/bin
+        # sudo su postgres -c "$PGBIN/pg_ctl --pgdata $PGDATA stop"
+        # sudo $PGBIN/pg_ctlcluster $PGVER main stop
+        sudo cp ./ci/pg_hba.conf $PGETC/pg_hba.conf
+        sudo su postgres -c "$PGBIN/pg_ctl --pgdata $PGDATA start -o '-c config_file=$PGETC/postgresql.conf -p 5432'"
+
+    - name: 'Build & Test'
+      run: |
+        export PATH=/usr/lib/postgresql/$PGVER/bin/:$PATH
+        make
+        sudo make install
+        PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
+
+
