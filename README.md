@@ -20,9 +20,9 @@ This implementation currently has the following limitations:
 * Windows
 	* Via [Stackbuilder](https://www.postgresql.org/download/windows/) (part of PostGIS Bundle)
 * Linux
-	* [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
-	* [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw)
-	* [Red Hat](https://yum.postgresql.org/)
+  * [Arch Linux](https://aur.archlinux.org/packages/pgsql-ogr-fdw/)
+  * [Ubuntu](https://launchpad.net/ubuntu/+source/pgsql-ogr-fdw), [PGDG Apt: Debian / Ubuntu](https://apt.postgresql.org)
+  * [PGDG Yum: Redhat EL, CentOS, Rocky](https://yum.postgresql.org/)
 * OSX
 
 ## Basic Operation
