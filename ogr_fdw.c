@@ -2489,6 +2489,7 @@ ogrGetFidColumn(const TupleDesc td)
  * there could always be a virtual fid travelling with the queries,
  * and the FDW table itself wouldn't need such a column?
  */
+
 #if PG_VERSION_NUM >= 140000
 static void
 ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
@@ -2497,14 +2498,36 @@ ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
                            Relation target_relation)
 {
 	Query* parsetree = planinfo->parse;
-#else
+	Form_pg_attribute att;
+	Var* var;
+	TupleDesc tupdesc = target_relation->rd_att;
+	int fid_column = ogrGetFidColumn(tupdesc);
+
+	elog(DEBUG3, "%s: entered function", __func__);
+
+	if (fid_column < 0)
+	{
+		elog(ERROR, "table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
+	}
+
+	att = &tupdesc->attrs[fid_column];
+	/* Make a Var representing the desired value */
+	var = makeVar(parsetree->resultRelation,
+	              att->attnum,
+	              att->atttypid,
+	              att->atttypmod,
+	              att->attcollation,
+	              0);
+
+	add_row_identity_var(planinfo, var, rte_index, "fid");
+}
+#else /* PG_VERSION_NUM < 140000 */
 
 static void
 ogrAddForeignUpdateTargets(Query* parsetree,
                            RangeTblEntry* target_rte,
                            Relation target_relation)
 {
-#endif
 	ListCell* cell;
 	Form_pg_attribute att;
 	Var* var;
@@ -2545,10 +2568,10 @@ ogrAddForeignUpdateTargets(Query* parsetree,
 		TargetEntry* target = (TargetEntry*) lfirst(cell);
 		elog(DEBUG4, "parsetree->targetList %s:%d", target->resname, target->resno);
 	}
-
-	return;
-
 }
+#endif
+
+
 
 /*
  * ogrBeginForeignModify
