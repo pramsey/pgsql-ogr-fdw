@@ -40,6 +40,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/appendinfo.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
@@ -61,6 +62,10 @@
 #include "optimizer/var.h"
 #else
 #include "executor/tuptable.h"
+#endif
+
+#ifdef PACKAGE_URL
+#undef PACKAGE_URL
 #endif
 
 /* GDAL/OGR includes and compat */

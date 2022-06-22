@@ -199,6 +199,7 @@ ogrGeomTypeToPgGeomType(stringbuffer_t *buf, OGRwkbGeometryType gtype)
 #endif
 		case wkbNone:
 			CPLError(CE_Failure, CPLE_AssertionFailed, "Cannot handle OGR geometry type wkbNone");
+			break;
 		default:
 			CPLError(CE_Failure, CPLE_AssertionFailed, "Cannot handle OGR geometry type '%d'", gtype);
 	}

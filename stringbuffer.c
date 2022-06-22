@@ -11,6 +11,11 @@
 
 #include "stringbuffer.h"
 
+#pragma GCC diagnostic push
+#ifndef __clang__
+#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+#endif
+
 /**
 * Allocate a new stringbuffer_t. Use stringbuffer_destroy to free.
 */

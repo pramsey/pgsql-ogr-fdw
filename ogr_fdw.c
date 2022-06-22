@@ -510,6 +510,8 @@ ogrEreportError(const char* errstr)
 static void
 ogrFinishConnection(OgrConnection* ogr)
 {
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	if (ogr->lyr && OGR_L_SyncToDisk(ogr->lyr) != OGRERR_NONE)
 	{
 		elog(NOTICE, "failed to flush writes to OGR data source");
@@ -866,6 +868,8 @@ ogrGetForeignRelSize(PlannerInfo* root,
 	OgrFdwPlanState* planstate = (OgrFdwPlanState*)state;
 	List* scan_clauses = baserel->baserestrictinfo;
 
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	/* Set to NULL to clear the restriction clauses in OGR */
 	OGR_L_SetIgnoredFields(planstate->ogr.lyr, NULL);
 	OGR_L_SetSpatialFilter(planstate->ogr.lyr, NULL);
@@ -923,6 +927,8 @@ ogrGetForeignPaths(PlannerInfo* root,
                    Oid foreigntableid)
 {
 	OgrFdwPlanState* planstate = (OgrFdwPlanState*)(baserel->fdw_private);
+
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* TODO: replace this with something that looks at the OGRDriver and */
 	/* makes a determination based on that? Better: add connection caching */
@@ -1023,6 +1029,8 @@ ogrGetForeignPlan(PlannerInfo* root,
 	OgrFdwState* state = (OgrFdwState*)(baserel->fdw_private);
 	OgrFdwSpatialFilter* spatial_filter = NULL;
 	char* attribute_filter = NULL;
+
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* Add in column mapping data to build SQL with the right OGR column names */
 	ogrReadColumnData(state);
@@ -1593,6 +1601,8 @@ ogrBeginForeignScan(ForeignScanState* node, int eflags)
 	OgrFdwSpatialFilter* spatial_filter;
 	Oid foreigntableid = RelationGetRelid(node->ss.ss_currentRelation);
 	ForeignScan* fsplan = (ForeignScan*)node->ss.ps.plan;
+
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* Do nothing in EXPLAIN (no ANALYZE) case */
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
@@ -2348,6 +2358,8 @@ ogrIterateForeignScan(ForeignScanState* node)
 	TupleTableSlot* slot = node->ss.ss_ScanTupleSlot;
 	OGRFeatureH feat;
 
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	/*
 	 * Clear the slot. If it gets through w/o being filled up, that means
 	 * we're all done.
@@ -2395,6 +2407,7 @@ static void
 ogrReScanForeignScan(ForeignScanState* node)
 {
 	OgrFdwExecState* execstate = (OgrFdwExecState*) node->fdw_state;
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	OGR_L_ResetReading(execstate->ogr.lyr);
 	execstate->rownum = 0;
@@ -2410,6 +2423,7 @@ static void
 ogrEndForeignScan(ForeignScanState* node)
 {
 	OgrFdwExecState* execstate = (OgrFdwExecState*) node->fdw_state;
+	elog(DEBUG3, "%s: entered function", __func__);
 	if (execstate)
 	{
 		elog(DEBUG2, "OGR FDW processed %d rows from OGR", execstate->rownum);
@@ -2475,6 +2489,7 @@ ogrGetFidColumn(const TupleDesc td)
  * there could always be a virtual fid travelling with the queries,
  * and the FDW table itself wouldn't need such a column?
  */
+
 #if PG_VERSION_NUM >= 140000
 static void
 ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
@@ -2483,14 +2498,36 @@ ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
                            Relation target_relation)
 {
 	Query* parsetree = planinfo->parse;
-#else
+	Form_pg_attribute att;
+	Var* var;
+	TupleDesc tupdesc = target_relation->rd_att;
+	int fid_column = ogrGetFidColumn(tupdesc);
+
+	elog(DEBUG3, "%s: entered function", __func__);
+
+	if (fid_column < 0)
+	{
+		elog(ERROR, "table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
+	}
+
+	att = &tupdesc->attrs[fid_column];
+	/* Make a Var representing the desired value */
+	var = makeVar(parsetree->resultRelation,
+	              att->attnum,
+	              att->atttypid,
+	              att->atttypmod,
+	              att->attcollation,
+	              0);
+
+	add_row_identity_var(planinfo, var, rte_index, "fid");
+}
+#else /* PG_VERSION_NUM < 140000 */
 
 static void
 ogrAddForeignUpdateTargets(Query* parsetree,
                            RangeTblEntry* target_rte,
                            Relation target_relation)
 {
-#endif
 	ListCell* cell;
 	Form_pg_attribute att;
 	Var* var;
@@ -2498,7 +2535,7 @@ ogrAddForeignUpdateTargets(Query* parsetree,
 	TupleDesc tupdesc = target_relation->rd_att;
 	int fid_column = ogrGetFidColumn(tupdesc);
 
-	elog(DEBUG2, "ogrAddForeignUpdateTargets");
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	if (fid_column < 0)
 	{
@@ -2531,10 +2568,10 @@ ogrAddForeignUpdateTargets(Query* parsetree,
 		TargetEntry* target = (TargetEntry*) lfirst(cell);
 		elog(DEBUG4, "parsetree->targetList %s:%d", target->resname, target->resno);
 	}
-
-	return;
-
 }
+#endif
+
+
 
 /*
  * ogrBeginForeignModify
@@ -2551,7 +2588,7 @@ ogrBeginForeignModify(ModifyTableState* mtstate,
 	Oid foreigntableid;
 	OgrFdwState* state;
 
-	elog(DEBUG2, "ogrBeginForeignModify");
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	foreigntableid = RelationGetRelid(rinfo->ri_RelationDesc);
 	state = getOgrFdwState(foreigntableid, OGR_MODIFY_STATE);
@@ -2585,6 +2622,8 @@ ogrExecForeignUpdate(EState* estate,
 	int64 fid;
 	OGRFeatureH feat;
 	OGRErr err;
+
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* Is there a fid column? */
 	fid_column = ogrGetFidColumn(td);
@@ -2758,7 +2797,7 @@ ogrExecForeignInsert(EState* estate,
 	OGRErr err;
 	GIntBig fid;
 
-	elog(DEBUG2, "ogrExecForeignInsert");
+	elog(DEBUG3, "%s: entered function", __func__);
 
 #if PG_VERSION_NUM >= 120000
 	/*
@@ -2821,6 +2860,8 @@ ogrExecForeignDelete(EState* estate,
 	int64 fid;
 	OGRErr err;
 
+	elog(DEBUG3, "%s: entered function", __func__);
+
 	/* Is there a fid column? */
 	fid_column = ogrGetFidColumn(td);
 	if (fid_column < 0)
@@ -2869,7 +2910,7 @@ ogrEndForeignModify(EState* estate, ResultRelInfo* rinfo)
 {
 	OgrFdwModifyState* modstate = rinfo->ri_FdwState;
 
-	elog(DEBUG2, "ogrEndForeignModify");
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	ogrFinishConnection(&(modstate->ogr));
 
@@ -2885,7 +2926,7 @@ ogrIsForeignRelUpdatable(Relation rel)
 	OgrConnection ogr;
 	Oid foreigntableid = RelationGetRelid(rel);
 
-	elog(DEBUG2, "%s", __func__);
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* Before we say "yes"... */
 	/*  Does the foreign relation have a "fid" column? */
@@ -2951,6 +2992,8 @@ ogrImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid)
 	int i;
 	char layer_name[STR_MAX_LEN];
 	char table_name[STR_MAX_LEN];
+
+	elog(DEBUG3, "%s: entered function", __func__);
 
 	/* Are we importing all layers in the OGR datasource? */
 	import_all = streq(stmt->remote_schema, "ogr_all");
