@@ -40,7 +40,6 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "optimizer/appendinfo.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
@@ -62,6 +61,7 @@
 #include "optimizer/var.h"
 #else
 #include "executor/tuptable.h"
+#include "optimizer/appendinfo.h"
 #endif
 
 #ifdef PACKAGE_URL
