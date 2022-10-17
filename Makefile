@@ -41,6 +41,26 @@ ifeq ($(HAS_IMPORT_SCHEMA),yes)
 REGRESS += import
 endif
 
+# work around pg15 change to regression file variable
+# substitution for @abs_srcdir@ until we can drop older
+# version support
+# https://github.com/postgres/postgres/commit/d1029bb5a26cb84b116b0dee4dde312291359f2a
+PG15 := $(shell [ $(PG_VERSION_NUM) -ge 90500 ] && echo yes)
+ifeq ($(PG15),yes)
+
+sql/%.sql: input/%.source
+	perl -pe 's#\@abs_srcdir\@#$(PWD)#g' < $< > $@
+
+expected/%.out: output/%.source
+	perl -pe 's#\@abs_srcdir\@#$(PWD)#g' < $< > $@
+
+SQLFILES := sql/file.sql sql/import.sql sql/pgsql.sql sql/postgis.sql
+OUTFILES := expected/file.out expected/import.out expected/pgsql.out expected/postgis.out
+
+installcheck: $(SQLFILES) $(OUTFILES)
+
+endif
+
 ###############################################################
 # Build the utility program after PGXS to override the
 # PGXS environment
