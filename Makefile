@@ -45,7 +45,7 @@ endif
 # substitution for @abs_srcdir@ until we can drop older
 # version support
 # https://github.com/postgres/postgres/commit/d1029bb5a26cb84b116b0dee4dde312291359f2a
-PG15 := $(shell [ $(PG_VERSION_NUM) -ge 90500 ] && echo yes)
+PG15 := $(shell [ $(PG_VERSION_NUM) -ge 150000 ] && echo yes)
 ifeq ($(PG15),yes)
 
 sql/%.sql: input/%.source
