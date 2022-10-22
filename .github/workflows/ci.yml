@@ -6,21 +6,21 @@ name: "CI"
 on:
   push:
     branches-ignore:
-      - 'none'
+      - 'master'
   pull_request: ~
 
 jobs:
   linux:
+    name: "CI"
+    strategy:
+        fail-fast: false
+        matrix:
+          ci:
+          - { PGVER: 14 }
+          - { PGVER: 15 }
+          - { PGVER: 16 }
+
     runs-on: ubuntu-latest
-
-  strategy:
-      fail-fast: false
-      matrix:
-        ci:
-        - { PGVER: 14 }
-        - { PGVER: 15 }
-        - { PGVER: 16 }
-
     steps:
 
     - name: 'Check Out'
