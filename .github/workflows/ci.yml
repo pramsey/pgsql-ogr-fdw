@@ -52,7 +52,7 @@ jobs:
     - name: 'Build & Test'
       run: |
         export PATH=/usr/lib/postgresql/${{ matrix.ci.PGVER }}/bin/:$PATH
-        make
+        PG_CFLAGS=-Werror make
         sudo make install
         PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
 
