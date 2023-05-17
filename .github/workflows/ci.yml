@@ -16,9 +16,10 @@ jobs:
         fail-fast: false
         matrix:
           ci:
+          - { PGVER: 13 }
           - { PGVER: 14 }
           - { PGVER: 15 }
-          - { PGVER: 16 }
+          # - { PGVER: 16 }
 
     runs-on: ubuntu-latest
     steps:
