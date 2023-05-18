@@ -29,8 +29,6 @@ jobs:
 
     - name: 'Install GDAL'
       run: |
-        sudo add-apt-repository ppa:ubuntugis/ppa
-        sudo apt-get update
         sudo apt-get install libgdal-dev
 
     - name: 'Install PostgreSQL'
@@ -45,6 +43,8 @@ jobs:
         export PGDATA=/var/lib/postgresql/${{ matrix.ci.PGVER }}/main
         export PGETC=/etc/postgresql/${{ matrix.ci.PGVER }}/main
         export PGBIN=/usr/lib/postgresql/${{ matrix.ci.PGVER }}/bin
+        export RUNNER_USER=`whoami`
+        sudo chmod -R 755 /home/${RUNNER_USER}
         # sudo su postgres -c "$PGBIN/pg_ctl --pgdata $PGDATA stop"
         # sudo $PGBIN/pg_ctlcluster ${{ matrix.ci.PGVER }} main stop
         sudo cp ./ci/pg_hba.conf $PGETC/pg_hba.conf
