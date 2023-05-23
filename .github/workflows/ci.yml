@@ -27,14 +27,14 @@ jobs:
     - name: 'Check Out'
       uses: actions/checkout@v3
 
-    - name: 'Force apt.postgresql.org to have higher priority'
+    - name: 'Raise Priority for apt.postgresql.org'
       run: |
         cat << EOF >> ./pgdg.pref
         Package: *
         Pin: release o=apt.postgresql.org
         Pin-Priority: 600
         EOF
-        sudo cp ./pgdg.pref  /etc/apt/preferences.d/
+        sudo mv ./pgdg.pref /etc/apt/preferences.d/
         sudo apt update
 
     - name: 'Install GDAL'
@@ -51,19 +51,17 @@ jobs:
 
     - name: 'Start PostgreSQL'
       run: |
-        export PGDATA=/var/lib/postgresql/${{ matrix.ci.PGVER }}/main
-        export PGETC=/etc/postgresql/${{ matrix.ci.PGVER }}/main
-        export PGBIN=/usr/lib/postgresql/${{ matrix.ci.PGVER }}/bin
+        export PGVER=${{ matrix.ci.PGVER }}
+        export PGDATA=/var/lib/postgresql/$PGVER/main
+        export PGETC=/etc/postgresql/$PGVER/main
+        export PGBIN=/usr/lib/postgresql/$PGVER/bin
         export RUNNER_USER=`whoami`
+        # make sure postgres user can access data files
         sudo chmod -R 755 /home/${RUNNER_USER}
-        # sudo su postgres -c "$PGBIN/pg_ctl --pgdata $PGDATA stop"
-        # sudo $PGBIN/pg_ctlcluster ${{ matrix.ci.PGVER }} main stop
         sudo cp ./ci/pg_hba.conf $PGETC/pg_hba.conf
         sudo systemctl stop postgresql
-        sudo pg_ctlcluster ${{ matrix.ci.PGVER }} main start
+        sudo pg_ctlcluster $PGVER main start
         sudo pg_lsclusters
-        #sudo systemctl restart postgresql
-        #sudo su postgres -c "$PGBIN/pg_ctl --pgdata $PGDATA start -o '-c config_file=$PGETC/postgresql.conf -p 5432'"
 
     - name: 'Build & Test'
       run: |
