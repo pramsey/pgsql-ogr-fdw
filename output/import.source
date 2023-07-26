@@ -84,13 +84,21 @@ ORDER BY c.ordinal_position;
  person_s_value | character varying | {"column_name=person's value"}
 (4 rows)
 
-SELECT * FROM imp3.no_geom_apost;
- fid |  name   | age | person_s_value 
------+---------+-----+----------------
-   1 | Peter   | 34  | 10.2
-   2 | John    | 77  | 3.4
-   3 | Paul    | 45  | 19.2
-   4 | Matthew | 35  | 18.2
-(4 rows)
+SELECT name,age FROM imp3.no_geom_apost WHERE name = 'Paul';
+ name | age 
+------+-----
+ Paul | 45
+(1 row)
+
+SELECT name,age FROM imp3.no_geom_apost WHERE name IS NULL;
+ name | age 
+------+-----
+(0 rows)
+
+SELECT name,age FROM imp3.no_geom_apost WHERE name = '';
+ name | age 
+------+-----
+      | 44
+(1 row)
 
 ------------------------------------------------

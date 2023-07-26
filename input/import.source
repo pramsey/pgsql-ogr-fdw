@@ -60,6 +60,8 @@ FROM information_schema._pg_foreign_table_columns  AS fc
 WHERE fc.nspname = 'imp3' and fc.relname = 'no_geom_apost'
 ORDER BY c.ordinal_position;
 
-SELECT * FROM imp3.no_geom_apost;
+SELECT name,age FROM imp3.no_geom_apost WHERE name = 'Paul';
+SELECT name,age FROM imp3.no_geom_apost WHERE name IS NULL;
+SELECT name,age FROM imp3.no_geom_apost WHERE name = '';
 
 ------------------------------------------------
