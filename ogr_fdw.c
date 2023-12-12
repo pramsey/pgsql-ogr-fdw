@@ -1974,7 +1974,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 					}
 					else
 					{
-#if (GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,7,0))
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,7,0))
 						const char* tmp = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
 						strncpy(cstr, tmp, 256);
 #else
