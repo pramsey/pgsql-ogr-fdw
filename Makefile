@@ -28,6 +28,7 @@ REGRESS_OPTS = --encoding=UTF8
 PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
 SHLIB_LINK := $(LIBS)
+SHLIB_LINK += -rpath /usr/local/lib
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)

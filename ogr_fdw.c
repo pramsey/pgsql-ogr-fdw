@@ -1953,7 +1953,6 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 				case OFTTime:
 				case OFTDateTime:
 				{
-#if (GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,7,0))
 					/*
 					 * OGR date/times have a weird access method, so we use that to pull
 					 * out the raw data and turn it into a string for PgSQL's (very
@@ -1975,11 +1974,13 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 					}
 					else
 					{
-						snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
-					}
+#if (GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,7,0))
+						const char* tmp = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
+						strncpy(cstr, tmp, 256);
 #else
-					const char* cstr = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
+						snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
 #endif
+					}
 					nulls[i] = false;
 					values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
 					break;
