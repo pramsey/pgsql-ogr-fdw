@@ -34,8 +34,9 @@ SHLIB_LINK := $(LIBS)
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
-PG_VERSION_NUM = $(shell awk '/PG_VERSION_NUM/ { print $$3 }' $(shell $(PG_CONFIG) --includedir-server)/pg_config.h)
+PG_VERSION_NUM = $(shell pg_config --version | cut -f2 -d' ' | awk -F. '{printf "%d%04d", $$1, $$2}')
 HAS_IMPORT_SCHEMA = $(shell [ $(PG_VERSION_NUM) -ge 90500 ] && echo yes)
+
 
 # order matters, file first, import last
 REGRESS = file pgsql

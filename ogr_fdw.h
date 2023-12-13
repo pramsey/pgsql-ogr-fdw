@@ -98,22 +98,25 @@ typedef enum {
 typedef struct OgrFdwColumn
 {
 	/* PgSQL metadata */
-	int   pgattnum;          /* PostgreSQL attribute number */
-	int   pgattisdropped;    /* PostgreSQL attribute dropped? */
-	char* pgname;            /* PostgreSQL column name */
-	Oid   pgtype;            /* PostgreSQL data type */
-	int   pgtypmod;          /* PostgreSQL type modifier */
+	int   pgattnum;          /* PgSQL attribute number */
+	int   pgattisdropped;    /* PgSQL attribute dropped? */
+	char* pgname;            /* PgSQL column name */
+	Oid   pgtype;            /* PgQL data type */
+	int   pgtypmod;          /* PgSQL type modifier */
 
-	/* For reading */
-	Oid pginputfunc;         /* PostgreSQL function to convert cstring to type */
+	bool  pgisarray;
+	Oid   pgelmtype;         /* If column is array then this is nonzero */
+
+	/* For reading. If array, for array element type. */
+	Oid pginputfunc;         /* PgSQL convert cstring to type */
 	Oid pginputioparam;
-	Oid pgrecvfunc;          /* PostgreSQL function to convert binary to type */
+	Oid pgrecvfunc;          /* PgSQL convert binary to type */
 	Oid pgrecvioparam;
 
-	/* For writing */
-	Oid  pgoutputfunc;       /* PostgreSQL function to convert type to cstring */
+	/* For writing. If array, for array element type. */
+	Oid  pgoutputfunc;       /* PgSQL convert type to cstring */
 	bool pgoutputvarlena;
-	Oid  pgsendfunc;         /* PostgreSQL function to convert type to binary */
+	Oid  pgsendfunc;         /* PgSQL convert type to binary */
 	bool pgsendvarlena;
 
 	/* OGR metadata */

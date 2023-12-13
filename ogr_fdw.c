@@ -1092,175 +1092,137 @@ ogrGetForeignPlan(PlannerInfo* root,
 
 }
 
-static void
-pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char* colname, const char* tblname)
+static bool
+pgCanConvertToOgr(Oid pg_type, OGRFieldType ogr_type)
 {
-	if (pg_type == BOOLOID && ogr_type == OFTInteger)
+	struct PgOgrMap
 	{
-		return;
-	}
-	else if (pg_type == INT2OID && ogr_type == OFTInteger)
-	{
-		return;
-	}
-	else if (pg_type == INT4OID && ogr_type == OFTInteger)
-	{
-		return;
-	}
-	else if (pg_type == INT8OID)
-	{
+		Oid pg;
+		OGRFieldType ogr;
+	};
+
+	static struct PgOgrMap data[] = {
+		{BOOLOID, OFTInteger}, /* 16 */
+		{BYTEAOID, OFTBinary}, /* 17 */
+		{CHAROID, OFTString},  /* 18 */
+		{NAMEOID, OFTString},  /* 19 */
 #if GDAL_VERSION_MAJOR >= 2
-		if (ogr_type == OFTInteger64)
-		{
-			return;
-		}
+		{INT8OID, OFTInteger64}, /* 20 */
 #else
-		if (ogr_type == OFTInteger)
-		{
-			return;
-		}
+		{INT8OID, OFTInteger}, /* 20 */
 #endif
-	}
-	else if (pg_type == NUMERICOID && ogr_type == OFTReal)
+		{INT2OID, OFTInteger}, /* 21 */
+		{INT4OID, OFTInteger}, /* 23 */
+		{TEXTOID, OFTString},  /* 25 */
+		{FLOAT4OID, OFTReal},  /* 700 */
+		{FLOAT8OID, OFTReal},  /* 701 */
+		{BOOLARRAYOID, OFTIntegerList}, /* 1000 */
+		{CHARARRAYOID, OFTStringList}, /* 1002 */
+		{NAMEARRAYOID, OFTStringList}, /* 1003 */
+		{INT2ARRAYOID, OFTIntegerList}, /* 1005 */
+		{INT4ARRAYOID, OFTIntegerList}, /* 1007 */
+		{TEXTARRAYOID, OFTStringList}, /* 1009 */
+		{VARCHARARRAYOID, OFTStringList}, /* 1015 */
+#if GDAL_VERSION_MAJOR >= 2
+		{INT8ARRAYOID, OFTInteger64List}, /* 1016 */
+#endif
+		{FLOAT4ARRAYOID, OFTRealList}, /* 1021 */
+		{FLOAT8ARRAYOID, OFTRealList}, /* 1022 */
+		{BPCHAROID, OFTString}, /* 1042 */
+		{VARCHAROID, OFTString}, /* 1043 */
+		{DATEOID, OFTDate}, /* 1082 */
+		{TIMEOID, OFTTime}, /* 1083 */
+		{TIMESTAMPOID, OFTDateTime}, /* 1114 */
+		{NUMERICOID, OFTReal}, /* 1700 */
+		{0, 0}};
+
+	struct PgOgrMap* map = data;
+	while (map->pg)
 	{
-		return;
+		if (ogr_type == map->ogr) return true;
+		else map++;
 	}
-	else if (pg_type == FLOAT4OID && ogr_type == OFTReal)
-	{
+	return false;
+
+}
+
+
+static void
+pgCheckConvertToOgr(Oid pg_type, OGRFieldType ogr_type, const char *colname, const char *tblname)
+{
+	if (pgCanConvertToOgr(pg_type, ogr_type))
 		return;
-	}
-	else if (pg_type == FLOAT8OID && ogr_type == OFTReal)
-	{
-		return;
-	}
-	else if (pg_type == TEXTOID && ogr_type == OFTString)
-	{
-		return;
-	}
-	else if (pg_type == VARCHAROID && ogr_type == OFTString)
-	{
-		return;
-	}
-	else if (pg_type == CHAROID && ogr_type == OFTString)
-	{
-		return;
-	}
-	else if (pg_type == BPCHAROID && ogr_type == OFTString)
-	{
-		return;
-	}
-	else if (pg_type == NAMEOID && ogr_type == OFTString)
-	{
-		return;
-	}
-	else if (pg_type == BYTEAOID && ogr_type == OFTBinary)
-	{
-		return;
-	}
-	else if (pg_type == DATEOID && ogr_type == OFTDate)
-	{
-		return;
-	}
-	else if (pg_type == TIMEOID && ogr_type == OFTTime)
-	{
-		return;
-	}
-	else if (pg_type == TIMESTAMPOID && ogr_type == OFTDateTime)
-	{
-		return;
-	}
 
 	ereport(ERROR, (
-	            errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-	            errmsg("column \"%s\" of foreign table \"%s\" converts \"%s\" to OGR \"%s\"",
-	                   colname, tblname,
-	                   format_type_be(pg_type), OGR_GetFieldTypeName(ogr_type))
-	        ));
+	    errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+	    errmsg("column \"%s\" of foreign table \"%s\" converts \"%s\" to OGR \"%s\"",
+	        colname, tblname,
+	        format_type_be(pg_type), OGR_GetFieldTypeName(ogr_type))
+	    ));
+}
+
+
+static bool
+ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type)
+{
+	struct OgrPgMap
+	{
+		OGRFieldType ogr;
+		Oid pg[16];
+	};
+
+	static struct OgrPgMap data[] =
+	{
+		{OFTInteger, {BOOLOID, INT4OID, INT8OID, NUMERICOID, FLOAT4OID, FLOAT8OID, TEXTOID, VARCHAROID, 0}},
+		{OFTReal, {NUMERICOID, FLOAT4OID, FLOAT8OID, TEXTOID, VARCHAROID, 0}},
+		{OFTBinary, {BYTEAOID, 0}},
+		{OFTString, {TEXTOID, VARCHAROID, CHAROID, BPCHAROID, 0}},
+		{OFTDate, {DATEOID, TIMESTAMPOID, TEXTOID, VARCHAROID, 0}},
+		{OFTTime, {TIMEOID, TEXTOID, VARCHAROID, 0}},
+		{OFTDateTime, {TIMESTAMPOID, TEXTOID, VARCHAROID, 0}},
+	#if GDAL_VERSION_MAJOR >= 2
+		{OFTInteger64, {INT8OID, NUMERICOID, FLOAT8OID, TEXTOID, VARCHAROID, 0}},
+		{OFTInteger64List, {INT8ARRAYOID, FLOAT8ARRAYOID, TEXTARRAYOID, VARCHARARRAYOID, 0}},
+	#endif
+		{OFTRealList, {FLOAT4ARRAYOID, FLOAT8ARRAYOID, TEXTARRAYOID, VARCHARARRAYOID, 0}},
+		{OFTStringList, {TEXTARRAYOID, VARCHARARRAYOID, NAMEARRAYOID, CHARARRAYOID, 0}},
+		{OFTIntegerList, {BOOLARRAYOID, INT2ARRAYOID, INT4ARRAYOID, INT8ARRAYOID, TEXTARRAYOID, VARCHARARRAYOID, 0}},
+		{256, {0}} /* Zero terminate list */
+	};
+
+	struct OgrPgMap* map = data;
+	while (map->ogr <= OFTMaxType)
+	{
+		if (ogr_type == map->ogr)
+		{
+			Oid *typ = map->pg;
+			while (*typ)
+			{
+				if (pg_type == *typ) return true;
+				else typ++;
+			}
+		}
+		map++;
+	}
+
+	return false;
 }
 
 static void
-ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char* colname, const char* tblname)
+ogrCheckConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char *colname, const char *tblname)
 {
-	switch (ogr_type)
-	{
-	case OFTInteger:
-		if (pg_type == BOOLOID ||  pg_type == INT4OID || pg_type == INT8OID ||
-		    pg_type == NUMERICOID || pg_type == FLOAT4OID ||
-		    pg_type == FLOAT8OID || pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
+	if (ogrCanConvertToPg(ogr_type, pg_type))
+		return;
 
-	case OFTReal:
-		if (pg_type == NUMERICOID || pg_type == FLOAT4OID || pg_type == FLOAT8OID ||
-		    pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
-
-	case OFTBinary:
-		if (pg_type == BYTEAOID)
-		{
-			return;
-		}
-		break;
-
-	case OFTString:
-		if (pg_type == TEXTOID || pg_type == VARCHAROID || pg_type == CHAROID || pg_type == BPCHAROID)
-		{
-			return;
-		}
-		break;
-
-	case OFTDate:
-		if (pg_type == DATEOID || pg_type == TIMESTAMPOID || pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
-
-	case OFTTime:
-		if (pg_type == TIMEOID || pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
-
-	case OFTDateTime:
-		if (pg_type == TIMESTAMPOID || pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
-
-#if GDAL_VERSION_MAJOR >= 2
-	case OFTInteger64:
-		if (pg_type == INT8OID || pg_type == NUMERICOID || pg_type == FLOAT8OID ||
-		    pg_type == TEXTOID || pg_type == VARCHAROID)
-		{
-			return;
-		}
-		break;
-#endif
-
-	case OFTWideString:
-	case OFTIntegerList:
-#if GDAL_VERSION_MAJOR >= 2
-	case OFTInteger64List:
-#endif
-	case OFTRealList:
-	case OFTStringList:
-	case OFTWideStringList:
+	if (ogr_type == OFTWideString || ogr_type == OFTWideStringList)
 	{
 		ereport(ERROR, (
 		    errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-		    errmsg("column \"%s\" of foreign table \"%s\" uses an OGR array, currently unsupported", colname, tblname)
+		    errmsg("column \"%s\" of foreign table \"%s\" uses an OGR OFTWideString, deprecated", colname, tblname)
 		    ));
-		break;
+		return;
 	}
-	}
+
 	ereport(ERROR, (
 	    errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 	    errmsg("column \"%s\" of foreign table \"%s\" converts OGR \"%s\" to \"%s\"",
@@ -1268,6 +1230,7 @@ ogrCanConvertToPg(OGRFieldType ogr_type, Oid pg_type, const char* colname, const
 	           OGR_GetFieldTypeName(ogr_type), format_type_be(pg_type))
 	    ));
 }
+
 
 #ifdef OGR_FDW_HEXWKB
 
@@ -1432,17 +1395,27 @@ ogrReadColumnData(OgrFdwState* state)
 			continue;
 		}
 
+		/* Check for array type */
+		col.pgelmtype = get_element_type(col.pgtype);
+		if (col.pgelmtype)
+		{
+			/* Extra type info needed to form the array */
+			col.pgisarray = true;
+		}
+		else
+			col.pgelmtype = col.pgtype;
+
 		/* Find the appropriate conversion functions */
-		getTypeInputInfo(col.pgtype, &col.pginputfunc, &col.pginputioparam);
-		getTypeBinaryInputInfo(col.pgtype, &col.pgrecvfunc, &col.pgrecvioparam);
-		getTypeOutputInfo(col.pgtype, &col.pgoutputfunc, &col.pgoutputvarlena);
-		getTypeBinaryOutputInfo(col.pgtype, &col.pgsendfunc, &col.pgsendvarlena);
+		getTypeInputInfo(col.pgelmtype, &col.pginputfunc, &col.pginputioparam);
+		getTypeBinaryInputInfo(col.pgelmtype, &col.pgrecvfunc, &col.pgrecvioparam);
+		getTypeOutputInfo(col.pgelmtype, &col.pgoutputfunc, &col.pgoutputvarlena);
+		getTypeBinaryOutputInfo(col.pgelmtype, &col.pgsendfunc, &col.pgsendvarlena);
 
 		/* Get the PgSQL column name */
 #if PG_VERSION_NUM >= 110000
-		col.pgname = get_attname(rel->rd_id, att_tuple->attnum, false);
+		col.pgname = pstrdup(get_attname(rel->rd_id, att_tuple->attnum, false));
 #else
-		col.pgname = get_attname(rel->rd_id, att_tuple->attnum);
+		col.pgname = pstrdup(get_attname(rel->rd_id, att_tuple->attnum));
 #endif
 
 		/* Handle FID first */
@@ -1503,7 +1476,7 @@ ogrReadColumnData(OgrFdwState* state)
 			OGRFieldType fldtype = OGR_Fld_GetType(fld);
 
 			/* Error if types mismatched when column names match */
-			ogrCanConvertToPg(fldtype, col.pgtype, col.pgname, tblname);
+			ogrCheckConvertToPg(fldtype, col.pgtype, col.pgname, tblname);
 
 			col.ogrvariant = OGR_FIELD;
 			col.ogrfldnum = found_entry->fldnum;
@@ -1683,17 +1656,37 @@ ogrBeginForeignScan(ForeignScanState* node, int eflags)
  * each column in the foreign table.
  */
 static Datum
-pgDatumFromCString(const char* cstr, Oid pgtype, int pgtypmod, Oid pginputfunc)
+pgDatumFromCString(const char* cstr, const OgrFdwColumn *col, int char_encoding, bool *is_null)
 {
-	Datum value;
-	Datum cdata = CStringGetDatum(cstr);
+	size_t cstr_len = cstr ? strlen(cstr) : 0;
+	Datum value = (Datum) 0;
+	char *cstr_decoded;
 
-	value = OidFunctionCall3(pginputfunc, cdata,
-	                         ObjectIdGetDatum(InvalidOid),
-	                         Int32GetDatum(pgtypmod));
+	/* Zero length implies NULL for all non-strings */
+	if (cstr_len == 0 && (col->ogrfldtype != OFTString && col->ogrfldtype != OFTStringList))
+	{
+		*is_null = true;
+		return value;
+	}
 
+	cstr_decoded = char_encoding ?
+			pg_any_to_server(cstr, cstr_len, char_encoding) :
+			pstrdup(cstr);
+
+	value = OidFunctionCall3(col->pginputfunc,
+			    CStringGetDatum(cstr_decoded),
+			    ObjectIdGetDatum(InvalidOid),
+			    Int32GetDatum(col->pgtypmod));
+
+	/* Free cstr_decoded if it is a copy */
+	if (cstr != cstr_decoded)
+		pfree(cstr_decoded);
+
+	is_null = false;
 	return value;
 }
+
+
 
 static inline void
 ogrNullSlot(Datum* values, bool* nulls, int i)
@@ -1726,6 +1719,9 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 	TupleDesc tupdesc = slot->tts_tupleDescriptor;
 	int have_typmod_funcs = (execstate->setsridfunc && execstate->typmodsridfunc);
 
+#define CSTR_SZ 256
+	char cstr[CSTR_SZ];
+
 	/* Check our assumption that slot and setup data match */
 	if (tbl->ncols != tupdesc->natts)
 	{
@@ -1739,8 +1735,6 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 		OgrFdwColumn col = tbl->cols[i];
 		const char* pgname = col.pgname;
 		Oid pgtype = col.pgtype;
-		int pgtypmod = col.pgtypmod;
-		Oid pginputfunc = col.pginputfunc;
 		int ogrfldnum = col.ogrfldnum;
 		OGRFieldType ogrfldtype = col.ogrfldtype;
 		OgrColumnVariant ogrvariant = col.ogrvariant;
@@ -1757,6 +1751,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 		if (ogrvariant == OGR_FID)
 		{
 			GIntBig fid = OGR_F_GetFID(feat);
+			bool is_null = false;
 
 			if (fid == OGRNullFID)
 			{
@@ -1767,8 +1762,8 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 				char fidstr[256];
 				snprintf(fidstr, 256, OGR_FDW_FRMT_INT64, OGR_FDW_CAST_INT64(fid));
 
-				nulls[i] = false;
-				values[i] = pgDatumFromCString(fidstr, pgtype, pgtypmod, pginputfunc);
+				values[i] = pgDatumFromCString(fidstr, &col, execstate->ogr.char_encoding, &is_null);
+				nulls[i] = is_null;
 			}
 		}
 		else if (ogrvariant == OGR_GEOMETRY)
@@ -1890,122 +1885,175 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 #endif
 
 			/* Ensure that the OGR data type fits the destination Pg column */
-			ogrCanConvertToPg(ogrfldtype, pgtype, pgname, tbl->tblname);
+			ogrCheckConvertToPg(ogrfldtype, pgtype, pgname, tbl->tblname);
 
 			/* Only convert non-null fields */
-			if (field_not_null)
-			{
-				switch (ogrfldtype)
-				{
-				case OFTBinary:
-				{
-					/*
-					 * Convert binary fields to bytea directly
-					 */
-					int bufsize;
-					GByte* buf = OGR_F_GetFieldAsBinary(feat, ogrfldnum, &bufsize);
-					int varsize = bufsize + VARHDRSZ;
-					bytea* varlena = palloc(varsize);
-					memcpy(VARDATA(varlena), buf, bufsize);
-					SET_VARSIZE(varlena, varsize);
-					nulls[i] = false;
-					values[i] = PointerGetDatum(varlena);
-					break;
-				}
-				case OFTInteger:
-				case OFTReal:
-				case OFTString:
-#if GDAL_VERSION_MAJOR >= 2
-				case OFTInteger64:
-#endif
-				{
-					/*
-					 * Convert numbers and strings via a string representation.
-					 * Handling numbers directly would be faster, but require a lot of extra code.
-					 * For now, we go via text.
-					 */
-					const char* cstr_in = OGR_F_GetFieldAsString(feat, ogrfldnum);
-					size_t cstr_len = cstr_in ? strlen(cstr_in) : 0;
-					if (cstr_in && (cstr_len > 0 || ogrfldtype == OFTString))
-					{
-						char* cstr_decoded;
-						if (execstate->ogr.char_encoding)
-						{
-							cstr_decoded = pg_any_to_server(cstr_in, cstr_len, execstate->ogr.char_encoding);
-						}
-						else
-						{
-							cstr_decoded = pstrdup(cstr_in);
-						}
-						nulls[i] = false;
-						values[i] = pgDatumFromCString(cstr_decoded, pgtype, pgtypmod, pginputfunc);
-						/* Free cstr_decoded if it is a copy */
-						if (cstr_in != cstr_decoded)
-							pfree(cstr_decoded);
-					}
-					else
-					{
-						ogrNullSlot(values, nulls, i);
-					}
-					break;
-				}
-				case OFTDate:
-				case OFTTime:
-				case OFTDateTime:
-				{
-					/*
-					 * OGR date/times have a weird access method, so we use that to pull
-					 * out the raw data and turn it into a string for PgSQL's (very
-					 * sophisticated) date/time parsing routines to handle.
-					 */
-					int year, month, day, hour, minute, second, tz;
-					char cstr[256];
-					OGR_F_GetFieldAsDateTime(feat, ogrfldnum,
-					                         &year, &month, &day,
-					                         &hour, &minute, &second, &tz);
-
-					if (ogrfldtype == OFTDate)
-					{
-						snprintf(cstr, 256, "%d-%02d-%02d", year, month, day);
-					}
-					else if (ogrfldtype == OFTTime)
-					{
-						snprintf(cstr, 256, "%02d:%02d:%02d", hour, minute, second);
-					}
-					else
-					{
-#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,7,0))
-						const char* tmp = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
-						strncpy(cstr, tmp, 256);
-#else
-						snprintf(cstr, 256, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
-#endif
-					}
-					nulls[i] = false;
-					values[i] = pgDatumFromCString(cstr, pgtype, pgtypmod, pginputfunc);
-					break;
-
-				}
-				case OFTIntegerList:
-				case OFTRealList:
-				case OFTStringList:
-				{
-					/* TODO, map these OGR array types into PgSQL arrays (fun!) */
-					elog(ERROR, "unsupported OGR array type \"%s\"", OGR_GetFieldTypeName(ogrfldtype));
-					break;
-				}
-				default:
-				{
-					elog(ERROR, "unsupported OGR type \"%s\"", OGR_GetFieldTypeName(ogrfldtype));
-					break;
-				}
-
-				}
-			}
-			else
+			if (!field_not_null)
 			{
 				ogrNullSlot(values, nulls, i);
+				continue;
 			}
+
+			switch (ogrfldtype)
+			{
+			case OFTBinary:
+			{
+				/*
+				 * Convert binary fields to bytea directly
+				 */
+				int bufsize;
+				GByte* buf = OGR_F_GetFieldAsBinary(feat, ogrfldnum, &bufsize);
+				int varsize = bufsize + VARHDRSZ;
+				bytea* varlena = palloc(varsize);
+				memcpy(VARDATA(varlena), buf, bufsize);
+				SET_VARSIZE(varlena, varsize);
+				nulls[i] = false;
+				values[i] = PointerGetDatum(varlena);
+				break;
+			}
+			case OFTInteger:
+			case OFTReal:
+			case OFTString:
+#if GDAL_VERSION_MAJOR >= 2
+			case OFTInteger64:
+#endif
+			{
+				/*
+				 * Convert numbers and strings via a string representation.
+				 * Handling numbers directly would be faster, but require a lot of extra code.
+				 * For now, we go via text.
+				 */
+				const char* cstr_in = OGR_F_GetFieldAsString(feat, ogrfldnum);
+				bool is_null = false;
+				values[i] = pgDatumFromCString(cstr_in, &col, execstate->ogr.char_encoding, &is_null);
+				nulls[i] = is_null;
+				break;
+			}
+			case OFTDate:
+			case OFTTime:
+			case OFTDateTime:
+			{
+				/*
+				 * OGR date/times have a weird access method, so we use that to pull
+				 * out the raw data and turn it into a string for PgSQL's (very
+				 * sophisticated) date/time parsing routines to handle.
+				 */
+				int year, month, day, hour, minute, second, tz;
+				bool is_null = false;
+				OGR_F_GetFieldAsDateTime(feat, ogrfldnum,
+				                         &year, &month, &day,
+				                         &hour, &minute, &second, &tz);
+
+				if (ogrfldtype == OFTDate)
+				{
+					snprintf(cstr, CSTR_SZ, "%d-%02d-%02d", year, month, day);
+				}
+				else if (ogrfldtype == OFTTime)
+				{
+					snprintf(cstr, CSTR_SZ, "%02d:%02d:%02d", hour, minute, second);
+				}
+				else
+				{
+#if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,7,0))
+					const char* tsstr = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
+					strncpy(cstr, tsstr, CSTR_SZ);
+#else
+					snprintf(cstr, CSTR_SZ, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+#endif
+				}
+				values[i] = pgDatumFromCString(cstr, &col, PG_SQL_ASCII, &is_null);
+				nulls[i] = is_null;
+				break;
+
+			}
+
+#if GDAL_VERSION_MAJOR >= 2
+			case OFTInteger64List:
+			{
+				int ilist_size;
+				const int64 *ilist = (int64*)OGR_F_GetFieldAsInteger64List(feat, ogrfldnum, &ilist_size);
+				ArrayBuildState *abs = initArrayResult(col.pgelmtype, CurrentMemoryContext, false);
+				for (uint32 i = 0; i < ilist_size; i++)
+				{
+					bool is_null = false;
+					snprintf(cstr, CSTR_SZ, "%ld", ilist[i]);
+					abs = accumArrayResult(abs,
+					          pgDatumFromCString(cstr, &col, execstate->ogr.char_encoding, &is_null),
+					          is_null,
+					          col.pgelmtype,
+					          CurrentMemoryContext);
+				}
+				values[i] = makeArrayResult(abs, CurrentMemoryContext);
+				nulls[i] = false;
+				break;
+			}
+#endif
+
+			case OFTIntegerList:
+			{
+				int ilist_size;
+				const int *ilist = OGR_F_GetFieldAsIntegerList(feat, ogrfldnum, &ilist_size);
+				ArrayBuildState *abs = initArrayResult(col.pgelmtype, CurrentMemoryContext, false);
+				for (uint32 i = 0; i < ilist_size; i++)
+				{
+					bool is_null = false;
+					snprintf(cstr, CSTR_SZ, "%d", ilist[i]);
+					abs = accumArrayResult(abs,
+					          pgDatumFromCString(cstr, &col, execstate->ogr.char_encoding, &is_null),
+					          is_null,
+					          col.pgelmtype,
+					          CurrentMemoryContext);
+				}
+				values[i] = makeArrayResult(abs, CurrentMemoryContext);
+				nulls[i] = false;
+				break;
+			}
+
+			case OFTRealList:
+			{
+				int rlist_size;
+				const double *rlist = OGR_F_GetFieldAsDoubleList(feat, ogrfldnum, &rlist_size);
+				ArrayBuildState *abs = initArrayResult(col.pgelmtype, CurrentMemoryContext, false);
+				for (uint32 i = 0; i < rlist_size; i++)
+				{
+					bool is_null = false;
+					snprintf(cstr, CSTR_SZ, "%g", rlist[i]);
+					abs = accumArrayResult(abs,
+					          pgDatumFromCString(cstr, &col, execstate->ogr.char_encoding, &is_null),
+					          is_null,
+					          col.pgelmtype,
+					          CurrentMemoryContext);
+				}
+				values[i] = makeArrayResult(abs, CurrentMemoryContext);
+				nulls[i] = false;
+				break;
+			}
+
+			case OFTStringList:
+			{
+				ArrayBuildState *abs = initArrayResult(col.pgelmtype, CurrentMemoryContext, false);
+				char **cstrs = OGR_F_GetFieldAsStringList(feat, ogrfldnum);
+				while (*cstrs)
+				{
+					bool is_null = false;
+					abs = accumArrayResult(abs,
+					          pgDatumFromCString(*cstrs, &col, execstate->ogr.char_encoding, &is_null),
+					          is_null,
+					          col.pgelmtype,
+					          CurrentMemoryContext);
+					cstrs++;
+				}
+				values[i] = makeArrayResult(abs, CurrentMemoryContext);
+				nulls[i] = false;
+				break;
+			}
+			default:
+			{
+				elog(ERROR, "unsupported OGR type \"%s\"", OGR_GetFieldTypeName(ogrfldtype));
+				break;
+			}
+
+			} /* !switch */
 		}
 		/* Fill in unmatched columns with NULL */
 		else if (ogrvariant == OGR_UNMATCHED)
@@ -2186,7 +2234,7 @@ ogrSlotToFeature(const TupleTableSlot* slot, OGRFeatureH feat, const OgrFdwTable
 		else if (ogrvariant == OGR_FIELD)
 		{
 			/* Ensure that the OGR data type fits the destination Pg column */
-			pgCanConvertToOgr(pgtype, ogrfldtype, pgname, tbl->tblname);
+			pgCheckConvertToOgr(pgtype, ogrfldtype, pgname, tbl->tblname);
 
 			/* Skip NULL case */
 			if (nulls[i])
@@ -2326,6 +2374,70 @@ ogrSlotToFeature(const TupleTableSlot* slot, OGRFeatureH feat, const OgrFdwTable
 				minute = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtminute), d)));
 				second = lround(DatumGetFloat8(DirectFunctionCall2(timestamp_part, PointerGetDatum(txtsecond), d)));
 				OGR_F_SetFieldDateTime(feat, ogrfldnum, year, month, day, hour, minute, second, 0);
+				break;
+			}
+
+			case BOOLARRAYOID:
+			case INT2ARRAYOID:
+			case INT4ARRAYOID:
+			{
+				ArrayType *arr = DatumGetArrayTypeP(values[i]);
+				size_t sz = ArrayGetNItems(ARR_NDIM(arr), ARR_DIMS(arr));
+				Datum d;
+				bool isnull;
+				int *ints = palloc(sizeof(int) * sz);
+				int num_ints = 0;
+				ArrayIterator it = array_create_iterator(arr, 0, NULL);
+				while (array_iterate(it,  &d, &isnull))
+				{
+					if (isnull) continue;
+					ints[num_ints++] = DatumGetInt32(d);
+				}
+				OGR_F_SetFieldIntegerList(feat, ogrfldnum, num_ints, ints);
+				pfree(ints);
+				break;
+			}
+
+			case CHARARRAYOID:
+			case NAMEARRAYOID:
+			case TEXTARRAYOID:
+			case VARCHARARRAYOID:
+			{
+				ArrayType *arr = DatumGetArrayTypeP(values[i]);
+				Datum d;
+				bool isnull;
+				char** papszList = NULL;
+				ArrayIterator it = array_create_iterator(arr, 0, NULL);
+				while (array_iterate(it, &d, &isnull))
+				{
+					char *cstr;
+					if (isnull) continue;
+					cstr = text_to_cstring(DatumGetTextP(d));
+					papszList = CSLAddString(papszList, cstr);
+					pfree(cstr);
+				}
+				OGR_F_SetFieldStringList(feat, ogrfldnum, papszList);
+				CSLDestroy(papszList);
+				break;
+			}
+
+			case FLOAT4ARRAYOID:
+			case FLOAT8ARRAYOID:
+			{
+				ArrayType *arr = DatumGetArrayTypeP(values[i]);
+				size_t sz = ArrayGetNItems(ARR_NDIM(arr), ARR_DIMS(arr));
+				Datum d;
+				bool isnull;
+				double *floats = palloc(sizeof(double) * sz);
+				int num_floats = 0;
+				ArrayIterator it = array_create_iterator(arr, 0, NULL);
+				while (array_iterate(it,  &d, &isnull))
+				{
+					if (isnull) continue;
+					floats[num_floats++] = DatumGetFloat8(d);
+				}
+				OGR_F_SetFieldDoubleList(feat, ogrfldnum, num_floats, floats);
+				pfree(floats);
 				break;
 			}
 

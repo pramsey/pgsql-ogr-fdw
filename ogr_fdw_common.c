@@ -141,6 +141,9 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 		case OFTInteger64:
 			snprintf(pgtype, width, "bigint");
 			break;
+		case OFTInteger64List:
+			snprintf(pgtype, width, "bigint[]");
+			break;
 #endif
 		default:
 			CPLError(CE_Failure, CPLE_AssertionFailed,
