@@ -954,6 +954,9 @@ ogrGetForeignPaths(PlannerInfo* root,
 	                 NIL,     /* no pathkeys */
 	                 NULL,    /* no outer rel either */
 	                 NULL  /* no extra plan */
+#if PG_VERSION_NUM >= 170000
+	                 , NIL /* no fdw_restrictinfo list */
+#endif
 #if PG_VERSION_NUM >= 90500
 	                 , NIL /* no fdw_private list */
 #endif
