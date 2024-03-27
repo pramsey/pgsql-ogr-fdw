@@ -20,6 +20,7 @@ jobs:
           - { PGVER: 14 }
           - { PGVER: 15 }
           - { PGVER: 16 }
+          - { PGVER: 17 }
 
     runs-on: ubuntu-latest
     steps:
