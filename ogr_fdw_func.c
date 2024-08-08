@@ -155,3 +155,42 @@ Datum ogr_fdw_table_sql(PG_FUNCTION_ARGS)
 	}
 }
 
+
+/**
+*/
+Datum ogr_fdw_layers(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(ogr_fdw_layers);
+Datum ogr_fdw_layers(PG_FUNCTION_ARGS)
+{
+	ForeignServer* server = GetForeignServerByName(text_to_cstring(PG_GETARG_TEXT_PP(0)), false);
+	OgrConnection ogr = ogrGetConnectionFromServer(server->serverid, OGR_UPDATEABLE_FALSE);
+
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	InitMaterializedSRF(fcinfo, MAT_SRF_USE_EXPECTED_DESC);
+
+	for (int i = 0; i < GDALDatasetGetLayerCount(ogr.ds); i++)
+	{
+		OGRLayerH ogrLayer = GDALDatasetGetLayer(ogr.ds, i);
+
+		if (!ogrLayer)
+		{
+			ereport(WARNING,
+				(errcode(ERRCODE_FDW_ERROR),
+				errmsg("Skipping OGR layer %d, unable to read layer", i),
+				errhint("GDAL Error %d: %s", CPLGetLastErrorNo(), CPLGetLastErrorMsg())));
+			continue;
+		}
+
+		Datum		values[1];
+		bool		nulls[1];
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		values[0] = CStringGetTextDatum(OGR_L_GetName(ogrLayer));
+		tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
+	}
+	ogrFinishConnection(&ogr);
+
+	return (Datum) 0;
+}

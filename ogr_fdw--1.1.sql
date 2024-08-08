@@ -37,3 +37,10 @@ CREATE OR REPLACE FUNCTION ogr_fdw_table_sql(server_name text, layer_name text, 
 	LANGUAGE 'c'
 	STABLE
 	PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION ogr_fdw_layers(server_name text)
+	RETURNS TABLE (layer_name text)
+	AS 'MODULE_PATHNAME', 'ogr_fdw_layers'
+	LANGUAGE 'c'
+	IMMUTABLE STRICT
+	PARALLEL SAFE;

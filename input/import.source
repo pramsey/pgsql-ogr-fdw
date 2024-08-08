@@ -3,6 +3,8 @@ set client_min_messages=NOTICE;
 
 CREATE SCHEMA imp1;
 
+SELECT ogr_fdw_layers('myserver');
+
 SELECT ogr_fdw_table_sql('myserver', '2launder');
 SELECT ogr_fdw_table_sql('myserver', '2launder', NULL, FALSE, FALSE);
 

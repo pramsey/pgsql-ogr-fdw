@@ -1,6 +1,16 @@
 set client_min_messages=NOTICE;
 ------------------------------------------------
 CREATE SCHEMA imp1;
+SELECT ogr_fdw_layers('myserver');
+ ogr_fdw_layers 
+----------------
+ enc
+ pt_two
+ 2launder
+ poly
+ natural
+(5 rows)
+
 SELECT ogr_fdw_table_sql('myserver', '2launder');
                  ogr_fdw_table_sql                  
 ----------------------------------------------------
