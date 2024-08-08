@@ -30,3 +30,10 @@ CREATE OR REPLACE FUNCTION ogr_fdw_drivers()
 	LANGUAGE 'c'
 	IMMUTABLE STRICT
 	PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION ogr_fdw_table_sql(server_name text, layer_name text, table_name text DEFAULT NULL, launder_column_names boolean DEFAULT TRUE, launder_table_name boolean DEFAULT TRUE)
+	RETURNS text
+	AS 'MODULE_PATHNAME', 'ogr_fdw_table_sql'
+	LANGUAGE 'c'
+	STABLE
+	PARALLEL SAFE;

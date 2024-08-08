@@ -3,6 +3,9 @@ set client_min_messages=NOTICE;
 
 CREATE SCHEMA imp1;
 
+SELECT ogr_fdw_table_sql('myserver', '2launder');
+SELECT ogr_fdw_table_sql('myserver', '2launder', NULL, FALSE, FALSE);
+
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO (n2launder) 
   FROM SERVER myserver 
@@ -22,6 +25,8 @@ SELECT * FROM imp1.n2launder WHERE fid = 0;
 ------------------------------------------------
 
 CREATE SCHEMA imp2;
+
+SELECT ogr_fdw_table_sql('myserver', 'natural', 'naturally');
 
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO ("natural") 
@@ -46,6 +51,8 @@ CREATE SERVER svr_test_apost
     format 'CSV' );
 
 CREATE SCHEMA imp3;
+
+SELECT ogr_fdw_table_sql('svr_test_apost', 'no_geom_apost');
 
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO (no_geom_apost) 

@@ -11,6 +11,7 @@
 
 #include "ogr_fdw.h"
 #include "ogr_fdw_gdal.h"
+#include "ogr_fdw_common.h"
 
 #include <postgres.h>
 #include <fmgr.h>
@@ -85,4 +86,72 @@ Datum ogr_fdw_version(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(ver_str));
 }
 
+/**
+*/
+Datum ogr_fdw_table_sql(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(ogr_fdw_table_sql);
+Datum ogr_fdw_table_sql(PG_FUNCTION_ARGS)
+{
+	char *serverName;
+	char *layerName;
+	char *tableName = NULL;
+	bool launderColumnNames;
+	bool launderTableName;
+
+	ForeignServer* server;
+	OgrConnection ogr;
+	OGRErr err;
+	OGRLayerH ogrLayer;
+	stringbuffer_t buf;
+
+	// because we accept NULL for tableName, we need to make the function
+	// non-STRICT and check all the arguments for NULL
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(3) || PG_ARGISNULL(4))
+	{
+		PG_RETURN_NULL();
+	}
+	if (!PG_ARGISNULL(2))
+	{
+		tableName = text_to_cstring(PG_GETARG_TEXT_PP(2));
+	}
+
+	serverName = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	layerName = text_to_cstring(PG_GETARG_TEXT_PP(1));
+	launderColumnNames = PG_GETARG_BOOL(3);
+	launderTableName = PG_GETARG_BOOL(4);
+
+	server = GetForeignServerByName(serverName, false);
+	ogr = ogrGetConnectionFromServer(server->serverid, OGR_UPDATEABLE_FALSE);
+
+	ogrLayer = GDALDatasetGetLayerByName(ogr.ds, layerName);
+	if (ogrLayer)
+	{
+		stringbuffer_init(&buf);
+		err = ogrLayerToSQL(ogrLayer,
+							serverName,
+							launderTableName,
+							launderColumnNames,
+							tableName,
+							ogrGetGeometryOid() != BYTEAOID,
+							&buf);
+
+		if (err != OGRERR_NONE)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				errmsg("Cannot generate SQL for: %s", layerName),
+				errhint("GDAL Error %d: %s", CPLGetLastErrorNo(), CPLGetLastErrorMsg())));
+		}
+
+		ogrFinishConnection(&ogr);
+
+		PG_RETURN_TEXT_P(cstring_to_text(stringbuffer_getstring(&buf)));
+	}
+	else
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_TABLE_NOT_FOUND),
+			errmsg("Unable to find OGR Layer: %s", layerName)));
+	}
+}
 

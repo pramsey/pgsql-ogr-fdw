@@ -507,7 +507,7 @@ ogrEreportError(const char* errstr)
  * Make sure the datasource is cleaned up when we're done
  * with a connection.
  */
-static void
+void
 ogrFinishConnection(OgrConnection* ogr)
 {
 	elog(DEBUG3, "%s: entered function", __func__);
@@ -525,7 +525,7 @@ ogrFinishConnection(OgrConnection* ogr)
 	ogr->ds = NULL;
 }
 
-static OgrConnection
+OgrConnection
 ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable)
 {
 	ForeignServer* server;
