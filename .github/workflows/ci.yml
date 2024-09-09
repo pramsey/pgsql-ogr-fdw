@@ -16,6 +16,8 @@ jobs:
         fail-fast: false
         matrix:
           ci:
+          - { PGVER: 11 }
+          - { PGVER: 12 }
           - { PGVER: 13 }
           - { PGVER: 14 }
           - { PGVER: 15 }
