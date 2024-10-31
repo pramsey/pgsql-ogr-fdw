@@ -91,11 +91,15 @@ static void
 ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 {
 	OGRFieldType ogr_type = OGR_Fld_GetType(ogr_fld);
+#if GDAL_VERSION_MAJOR >= 2
+	OGRFieldSubType ogr_subtype = OGR_Fld_GetSubType(ogr_fld);
+#endif
+
 	switch(ogr_type)
 	{
 		case OFTInteger:
 #if GDAL_VERSION_MAJOR >= 2
-			if( OGR_Fld_GetSubType(ogr_fld) == OFSTBoolean )
+			if (ogr_subtype == OFSTBoolean)
 			{
 				snprintf(pgtype, width, "boolean");
 				break;
@@ -109,7 +113,15 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 			break;
 		case OFTString:
 		{
-			int ogr_fld_width = OGR_Fld_GetWidth(ogr_fld);
+			int ogr_fld_width;
+#if GDAL_VERSION_MAJOR >= 2
+			if (ogr_subtype == OFSTJSON)
+			{
+				snprintf(pgtype, width, "jsonb");
+				break;
+			}
+#endif
+			ogr_fld_width = OGR_Fld_GetWidth(ogr_fld);
 			if (ogr_fld_width > 0)
 				snprintf(pgtype, width, "varchar(%d)", ogr_fld_width);
 			else
