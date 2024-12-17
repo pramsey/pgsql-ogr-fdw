@@ -1547,6 +1547,9 @@ ogrLookupGeometryFunctionOid(const char* proname)
 #else
 	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false, false);
 #endif
+
+	if (!clist) return InvalidOid;
+
 	if (streq(proname, "st_setsrid"))
 	{
 		do
