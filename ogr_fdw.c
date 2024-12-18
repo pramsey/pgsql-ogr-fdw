@@ -264,26 +264,111 @@ ogr_fdw_exit(int code, Datum arg)
 }
 
 /*
- * Function to get the geometry OID if required
+ * Given extension oid, lookup installation namespace oid.
+ * This side steps search_path issues with
+ * TypenameGetTypid encountered in
+ * https://github.com/pramsey/pgsql-ogr-fdw/issues/263
+ */
+static Oid
+get_extension_nsp_oid(Oid extOid)
+{
+	Oid         result;
+	SysScanDesc scandesc;
+	HeapTuple   tuple;
+	ScanKeyData entry[1];
+
+#if PG_VERSION_NUM < 120000
+	Relation rel = heap_open(ExtensionRelationId, AccessShareLock);
+    ScanKeyInit(&entry[0],
+        ObjectIdAttributeNumber,
+        BTEqualStrategyNumber, F_OIDEQ,
+        ObjectIdGetDatum(extOid));
+#else
+	Relation rel = table_open(ExtensionRelationId, AccessShareLock);
+	ScanKeyInit(&entry[0],
+		Anum_pg_extension_oid,
+		BTEqualStrategyNumber, F_OIDEQ,
+		ObjectIdGetDatum(extOid));
+#endif /* PG_VERSION_NUM */
+
+	scandesc = systable_beginscan(rel, ExtensionOidIndexId, true,
+                                  NULL, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = ((Form_pg_extension) GETSTRUCT(tuple))->extnamespace;
+	else
+		result = InvalidOid;
+
+	systable_endscan(scandesc);
+
+#if PG_VERSION_NUM < 120000
+    heap_close(rel, AccessShareLock);
+#else
+    table_close(rel, AccessShareLock);
+#endif
+
+	return result;
+}
+
+
+/*
+ * Get the geometry OID (if postgis is
+ * installed) and cache it for quick lookup.
  */
 Oid
 ogrGetGeometryOid(void)
 {
+	/* Is value not set yet? */
 	if (GEOMETRYOID == InvalidOid)
 	{
-		Oid typoid = TypenameGetTypid("geometry");
-		if (OidIsValid(typoid) && get_typisdefined(typoid))
+		const char *extName = "postgis";
+		const char *typName = "geometry";
+		bool missing_ok = true;
+		Oid extOid, extNspOid, typOid;
+
+		/* Got postgis extension? */
+		extOid = get_extension_oid(extName, missing_ok);
+		if (!OidIsValid(extOid))
 		{
-			GEOMETRYOID = typoid;
-		}
-		else
-		{
+			elog(DEBUG2, "%s: lookup of extension '%s' failed", __func__, extName);
 			GEOMETRYOID = BYTEAOID;
+			return GEOMETRYOID;
 		}
+
+		/* Got namespace for extension? */
+		extNspOid = get_extension_nsp_oid(extOid);
+		if (!OidIsValid(extNspOid))
+		{
+			elog(DEBUG2, "%s: lookup of namespace for '%s' (%u) failed", __func__, extName, extOid);
+			GEOMETRYOID = BYTEAOID;
+			return GEOMETRYOID;
+		}
+
+		/* Got geometry type in namespace? */
+		typOid = GetSysCacheOid2(TYPENAMENSP,
+#if PG_VERSION_NUM >= 120000
+		            Anum_pg_type_oid,
+#endif
+		            PointerGetDatum(typName),
+		            ObjectIdGetDatum(extNspOid));
+
+
+
+		elog(DEBUG2, "%s: lookup of type id for '%s' got %u", __func__, typName, typOid);
+
+		/* Geometry type is good? */
+		if (OidIsValid(typOid) && get_typisdefined(typOid))
+			GEOMETRYOID = typOid;
+		else
+			GEOMETRYOID = BYTEAOID;
 	}
 
 	return GEOMETRYOID;
 }
+
 
 /*
  * Foreign-data wrapper handler function: return a struct with pointers
