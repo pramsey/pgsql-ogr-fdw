@@ -20,7 +20,10 @@ EXTRA_CLEAN = sql/*.sql expected/*.out
 
 GDAL_CONFIG = gdal-config
 GDAL_CFLAGS = $(shell $(GDAL_CONFIG) --cflags)
-GDAL_LIBS = $(shell $(GDAL_CONFIG) --libs)
+GDAL_LIBS  = $(shell $(GDAL_CONFIG) --libs)
+
+# For MacOS
+# GDAL_LIBS += -rpath $(shell $(GDAL_CONFIG) --prefix)/lib
 
 PG_CONFIG = pg_config
 REGRESS_OPTS = --encoding=UTF8
@@ -28,8 +31,6 @@ REGRESS_OPTS = --encoding=UTF8
 PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)
 SHLIB_LINK := $(LIBS)
-# For MacOS
-#SHLIB_LINK += -rpath /usr/local/lib
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
