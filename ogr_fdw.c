@@ -1602,60 +1602,77 @@ ogrReadColumnData(OgrFdwState* state)
 	return;
 }
 
+
 /*
  * ogrLookupGeometryFunctionOid
  *
  * Find the procedure Oids of useful functions so we can call
- * them later.
+ * them later. In the case where multiple functions have the
+ * same signature, in different namespaces (???) we might have
+ * problems, but that seems very unlikely.
+ *
+ * https://github.com/pramsey/pgsql-ogr-fdw/issues/266
  */
 static Oid
 ogrLookupGeometryFunctionOid(const char* proname)
 {
-	List* names;
-	FuncCandidateList clist;
+	CatCList   *clist;
+	int			i;
+	Oid result = InvalidOid;
 
 	/* This only works if PostGIS is installed */
-	if (ogrGetGeometryOid() == InvalidOid || ogrGetGeometryOid() == BYTEAOID)
+	if (ogrGetGeometryOid() == InvalidOid ||
+	    ogrGetGeometryOid() == BYTEAOID)
 	{
-		return InvalidOid;
+		return result;
 	}
 
-#if PG_VERSION_NUM < 160000
-	names = stringToQualifiedNameList(proname);
-#else
-	names = stringToQualifiedNameList(proname,NULL);
-#endif
-#if PG_VERSION_NUM < 90400
-	clist = FuncnameGetCandidates(names, -1, NIL, false, false);
-#elif PG_VERSION_NUM < 140000
-	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false);
-#else
-	clist = FuncnameGetCandidates(names, -1, NIL, false, false, false, false);
-#endif
+	if (!proname) return result;
+
+	/* Search syscache by name only */
+	clist = SearchSysCacheList1(PROCNAMEARGSNSP,
+	                            CStringGetDatum(proname));
 
 	if (!clist) return InvalidOid;
 
-	if (streq(proname, "st_setsrid"))
+	for (i = 0; i < clist->n_members; i++)
 	{
-		do
+		HeapTuple    proctup = &clist->members[i]->tuple;
+		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Oid         *proargtypes = procform->proargtypes.values;
+		int          pronargs = procform->pronargs;
+
+#if PG_VERSION_NUM >= 120000
+		Oid procoid = procform->oid;
+#else
+		Oid procoid = HeapTupleGetOid(proctup);
+#endif
+
+		/* ST_SetSRID(geometry, integer) */
+		if (streq(proname, "st_setsrid") &&
+		    pronargs == 2 &&
+		    proargtypes[0] == ogrGetGeometryOid())
 		{
-			int i;
-			for (i = 0; i < clist->nargs; i++)
-			{
-				if (clist->args[i] == ogrGetGeometryOid())
-				{
-					return clist->oid;
-				}
-			}
+			result = procoid;
+			break;
 		}
-		while ((clist = clist->next));
-	}
-	else if (streq(proname, "postgis_typmod_srid"))
-	{
-		return clist->oid;
+		/* postgis_typmod_srid(typmod) */
+		else if (streq(proname, "postgis_typmod_srid") &&
+		         pronargs == 1)
+		{
+			/* postgis_typmod_srid(integer) */
+			result = procoid;
+			break;
+		}
+		else
+		{
+			elog(ERROR, "%s could not find function '%s'",
+			     __func__, proname);
+		}
 	}
 
-	return InvalidOid;
+	ReleaseSysCacheList(clist);
+	return result;
 }
 
 /*
