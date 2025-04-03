@@ -22,6 +22,7 @@
 #include "access/reloptions.h"
 #include "access/sysattr.h"
 #include "access/transam.h"
+#include "access/tupdesc.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_collation.h"
@@ -84,6 +85,8 @@
 /* on geometry structure (no unclosed polys, etc) and */
 /* hexwkb is not. */
 #define OGR_FDW_HEXWKB TRUE
+
+extern Oid GEOMETRYOID;
 
 typedef enum
 {

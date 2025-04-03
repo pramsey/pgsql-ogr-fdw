@@ -39,6 +39,7 @@
  */
 #include "ogr_fdw.h"
 
+
 PG_MODULE_MAGIC;
 
 /*
@@ -183,7 +184,7 @@ Oid GEOMETRYOID = InvalidOid;
 
 #if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,1,0)
 
-const char* const gdalErrorTypes[] =
+static const char* const gdalErrorTypes[] =
 {
 	"None",
 	"AppDefined",
@@ -1034,6 +1035,9 @@ ogrGetForeignPaths(PlannerInfo* root,
 	                 NULL, /* PathTarget */
 #endif
 	                 baserel->rows,
+#if PG_VERSION_NUM >= 180000
+	                 0,       /* disabled_nodes */
+#endif
 	                 planstate->startup_cost,
 	                 planstate->total_cost,
 	                 NIL,     /* no pathkeys */
@@ -1048,7 +1052,6 @@ ogrGetForeignPaths(PlannerInfo* root,
 	                                        )
 	        );   /* no fdw_private data */
 }
-
 
 /*
  * Convert an OgrFdwSpatialFilter into a List so it can
@@ -1466,11 +1469,8 @@ ogrReadColumnData(OgrFdwState* state)
 		OgrFieldEntry* found_entry;
 		OgrFieldEntry entry;
 
-#if PG_VERSION_NUM >= 110000
-		Form_pg_attribute att_tuple = &tupdesc->attrs[i];
-#else
-		Form_pg_attribute att_tuple = tupdesc->attrs[i];
-#endif
+		Form_pg_attribute att_tuple = TupleDescAttr(tupdesc, i);
+
 		OgrFdwColumn col = tbl->cols[i];
 		col.pgattnum = att_tuple->attnum;
 		col.pgtype = att_tuple->atttypid;
@@ -2084,7 +2084,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 				for (uint32 i = 0; i < ilist_size; i++)
 				{
 					bool is_null = false;
-					snprintf(cstr, CSTR_SZ, "%ld", ilist[i]);
+					snprintf(cstr, CSTR_SZ, OGR_FDW_FRMT_INT64, OGR_FDW_CAST_INT64(ilist[i]));
 					abs = accumArrayResult(abs,
 					          pgDatumFromCString(cstr, &col, execstate->ogr.char_encoding, &is_null),
 					          is_null,
@@ -2692,13 +2692,10 @@ ogrGetFidColumn(const TupleDesc td)
 	int i;
 	for (i = 0; i < td->natts; i++)
 	{
-#if PG_VERSION_NUM >= 110000
-		NameData attname = td->attrs[i].attname;
-		Oid atttypeid = td->attrs[i].atttypid;
-#else
-		NameData attname = td->attrs[i]->attname;
-		Oid atttypeid = td->attrs[i]->atttypid;
-#endif
+		Form_pg_attribute att_tuple = TupleDescAttr(td, i);
+		NameData attname = att_tuple->attname;
+		Oid atttypeid = att_tuple->atttypid;
+
 		if ((atttypeid == INT4OID || atttypeid == INT8OID) &&
 		        strcaseeq("fid", attname.data))
 		{
@@ -2738,7 +2735,8 @@ ogrAddForeignUpdateTargets(PlannerInfo* planinfo,
 		elog(ERROR, "table '%s' does not have a 'fid' column", RelationGetRelationName(target_relation));
 	}
 
-	att = &tupdesc->attrs[fid_column];
+	att = TupleDescAttr(tupdesc, fid_column);
+
 	/* Make a Var representing the desired value */
 	var = makeVar(parsetree->resultRelation,
 	              att->attnum,
@@ -2850,6 +2848,7 @@ ogrExecForeignUpdate(EState* estate,
 	int64 fid;
 	OGRFeatureH feat;
 	OGRErr err;
+	Form_pg_attribute attrs;
 
 	elog(DEBUG3, "%s: entered function", __func__);
 
@@ -2866,11 +2865,9 @@ ogrExecForeignUpdate(EState* estate,
 
 	/* What is the value of the FID for this record? */
 	fid_datum = slot->tts_values[fid_column];
-#if PG_VERSION_NUM >= 110000
-	fid_type = td->attrs[fid_column].atttypid;
-#else
-	fid_type = td->attrs[fid_column]->atttypid;
-#endif
+	attrs = TupleDescAttr(td, fid_column);
+	fid_type = attrs->atttypid;
+
 	if (fid_type == INT8OID)
 	{
 		fid = DatumGetInt64(fid_datum);
@@ -3087,6 +3084,7 @@ ogrExecForeignDelete(EState* estate,
 	Datum fid_datum;
 	int64 fid;
 	OGRErr err;
+	Form_pg_attribute attrs;
 
 	elog(DEBUG3, "%s: entered function", __func__);
 
@@ -3103,11 +3101,8 @@ ogrExecForeignDelete(EState* estate,
 
 	/* What is the value of the FID for this record? */
 	fid_datum = planSlot->tts_values[fid_column];
-#if PG_VERSION_NUM >= 110000
-	fid_type = td->attrs[fid_column].atttypid;
-#else
-	fid_type = td->attrs[fid_column]->atttypid;
-#endif
+	attrs = TupleDescAttr(td, fid_column);
+	fid_type = attrs->atttypid;
 
 	if (fid_type == INT8OID)
 	{
