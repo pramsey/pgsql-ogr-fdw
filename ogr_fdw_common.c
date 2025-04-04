@@ -122,7 +122,7 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 			}
 #endif
 			ogr_fld_width = OGR_Fld_GetWidth(ogr_fld);
-			if (ogr_fld_width > 0)
+			if (ogr_fld_width > 0 && ogr_fld_width < 10485760)
 				snprintf(pgtype, width, "varchar(%d)", ogr_fld_width);
 			else
 				snprintf(pgtype, width, "varchar");
