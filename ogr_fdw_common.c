@@ -13,6 +13,7 @@
 #include "stringbuffer.h"
 #include "pg_config_manual.h"
 
+
 /* Prototype for function that must be defined in PostgreSQL (it is) */
 /* and in ogr_fdw_info (it is) */
 const char * quote_identifier(const char *ident);
@@ -122,7 +123,9 @@ ogrTypeToPgType(OGRFieldDefnH ogr_fld, char *pgtype, size_t width)
 			}
 #endif
 			ogr_fld_width = OGR_Fld_GetWidth(ogr_fld);
-			if (ogr_fld_width > 0 && ogr_fld_width < 10485760)
+
+			/* MaxAttrSize = 10*1024*1024 */
+			if (ogr_fld_width > 0 && ogr_fld_width < 10*1024*1024)
 				snprintf(pgtype, width, "varchar(%d)", ogr_fld_width);
 			else
 				snprintf(pgtype, width, "varchar");
