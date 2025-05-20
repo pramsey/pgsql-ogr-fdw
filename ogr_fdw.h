@@ -216,4 +216,7 @@ bool ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List*
 Oid ogrGetGeometryOid(void);
 OGRErr pgDatumToOgrGeometry (Datum pg_geometry, Oid pgsendfunc, OGRGeometryH* ogr_geometry);
 
+OgrConnection ogrGetConnectionFromServer(Oid foreignserverid, OgrUpdateable updateable);
+void ogrFinishConnection(OgrConnection* ogr);
+
 #endif /* _OGR_FDW_H */

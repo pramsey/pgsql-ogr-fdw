@@ -426,6 +426,43 @@ ALTER SERVER myserver_latin1
 	);
 ```
 
+### FDW Reflection
+
+To view all GDAL table names available from a FDW server (the SQL equivalent of `ogr_fdw_info -s {datasource}`):
+
+```sql
+SELECT ogr_fdw_layers('myserver');
+```
+```
+ ogr_fdw_layers
+----------------
+ Cities
+ Countries
+
+(2 rows)
+```
+
+To retrieve the `CREATE FOREIGN TABLE` SQL for a particular OGR layer as the SQL equivalent of `ogr_fdw_info -s {datasource} -l {layer}`, use the `ogr_fdw_table_sql(server_name, ogr_layer_name, table_name=NULL, launder_column_names=TRUE, launder_table_name=TRUE)` function. By default the table name will reflect the OGR layer name. `launder_column_names` and `launder_table_name` have the same meaning as described in [Mixed Case and Special Characters](#mixed-case-and-special-characters).
+
+```sql
+SELECT ogr_fdw_table_sql('myserver', 'pt_two');
+```
+```
+        ogr_fdw_table_sql
+---------------------------------
+CREATE FOREIGN TABLE "pt_two" (
+  fid integer,
+  "geom" geometry(Point, 4326),
+  "name" varchar,
+  "age" integer,
+  "height" real,
+  "birthdate" date
+) SERVER "myserver"
+OPTIONS (layer 'pt_two');
+
+(1 row)
+```
+
 ### Utility Functions
 
 To view the current FDW and GDAL version.
