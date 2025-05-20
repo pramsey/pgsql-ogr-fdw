@@ -59,7 +59,7 @@ strip_spaces(char* str)
 /* in the ogr_fdw_common module works */
 const char* quote_identifier(const char* ident);
 
-char identifier[NAMEDATALEN+3];
+static char identifier[NAMEDATALEN+3];
 
 const char*
 quote_identifier(const char* ident)
@@ -76,7 +76,8 @@ quote_identifier(const char* ident)
 	}
   return identifier;
 }
-char config_options[STR_MAX_LEN] = {0};
+
+static char config_options[STR_MAX_LEN] = {0};
 
 
 static void
