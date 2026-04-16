@@ -64,7 +64,11 @@ static char identifier[NAMEDATALEN+3];
 const char*
 quote_identifier(const char* ident)
 {
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3, 13, 0)
+	int len = (int)CPL_MIN(strlen(ident), NAMEDATALEN - 1);
+#else
 	int len = (int)MIN(strlen(ident), NAMEDATALEN - 1);
+#endif
 
 	if (reserved_word(ident))
 	{
