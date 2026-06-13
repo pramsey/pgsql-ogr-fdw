@@ -21,7 +21,7 @@
 #include "ogr_fdw_gdal.h"
 #include "ogr_fdw_common.h"
 
-static void usage();
+static void usage(void);
 static OGRErr ogrListLayers(const char* source);
 static OGRErr ogrFindLayer(const char* source, int layerno, const char** layer);
 static OGRErr ogrGenerateSQL(const char* server, const char* layer, const char* table, const char* source, const char* options);
@@ -85,7 +85,7 @@ static char config_options[STR_MAX_LEN] = {0};
 
 
 static void
-formats()
+formats(void)
 {
 	int i;
 
@@ -129,7 +129,7 @@ formats()
 }
 
 static void
-usage()
+usage(void)
 {
 	printf(
 		"usage: ogr_fdw_info -s <ogr datasource> -l <ogr layer name> -i <ogr layer index (numeric)> -t <output table name> -n <output server name> -o <config options>\n"
