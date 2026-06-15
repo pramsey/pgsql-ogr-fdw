@@ -176,7 +176,7 @@ ogrDeparseConst(Const* constant, OgrDeparseCtx* context)
 		OGR_G_CreateFromWkb((unsigned char*)wkb, NULL, &ogrgeom, wkb_size);
 		OGR_G_ExportToWkt(ogrgeom, &wkt);
 		elog(DEBUG1, "ogrDeparseConst got a geometry: %s", wkt);
-		free(wkt);
+		CPLFree(wkt);
 		OGR_G_DestroyGeometry(ogrgeom);
 
 		/*

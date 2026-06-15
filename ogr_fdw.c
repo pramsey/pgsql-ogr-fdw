@@ -1451,7 +1451,7 @@ ogrReadColumnData(OgrFdwState* state)
 	{
 		char* fldname = pstrdup(OGR_Fld_GetNameRef(OGR_FD_GetFieldDefn(dfn, i)));
 		char* fldname_laundered = palloc(STR_MAX_LEN);
-		strncpy(fldname_laundered, fldname, STR_MAX_LEN);
+		strlcpy(fldname_laundered, fldname, STR_MAX_LEN);
 		ogrStringLaunder(fldname_laundered);
 		ogr_fields[2 * i].fldname = fldname;
 		ogr_fields[2 * i].fldnum = i;
@@ -1790,7 +1790,7 @@ pgDatumFromCString(const char* cstr, const OgrFdwColumn *col, int char_encoding,
 	if (cstr != cstr_decoded)
 		pfree(cstr_decoded);
 
-	is_null = false;
+	*is_null = false;
 	return value;
 }
 
@@ -2064,7 +2064,7 @@ ogrFeatureToSlot(const OGRFeatureH feat, TupleTableSlot* slot, const OgrFdwExecS
 				{
 #if (GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,7,0))
 					const char* tsstr = OGR_F_GetFieldAsISO8601DateTime(feat, ogrfldnum, NULL);
-					strncpy(cstr, tsstr, CSTR_SZ);
+					strlcpy(cstr, tsstr, CSTR_SZ);
 #else
 					snprintf(cstr, CSTR_SZ, "%d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
 #endif
@@ -3260,13 +3260,13 @@ ogrImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid)
 		}
 
 		/* Layer name is never laundered, since it's the link back to OGR */
-		strncpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
+		strlcpy(layer_name, OGR_L_GetName(ogr_lyr), STR_MAX_LEN);
 
 		/*
 		* We need to compare against created table names
 		* because PgSQL does an extra check on CREATE FOREIGN TABLE
 		*/
-		strncpy(table_name, layer_name, STR_MAX_LEN);
+		strlcpy(table_name, layer_name, STR_MAX_LEN);
 		if (launder_table_names)
 		{
 			ogrStringLaunder(table_name);
