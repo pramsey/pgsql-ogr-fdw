@@ -2439,9 +2439,10 @@ ogrSlotToFeature(const TupleTableSlot* slot, OGRFeatureH feat, const OgrFdwTable
 
 			case BYTEAOID:
 			{
-				bytea* varlena = PG_DETOAST_DATUM(values[i]);
-				size_t varsize = VARSIZE_ANY_EXHDR(varlena);
-				OGR_F_SetFieldBinary(feat, ogrfldnum, varsize, (GByte*)VARDATA_ANY(varlena));
+				struct varlena *detoasted_dat = (struct varlena *) PG_DETOAST_DATUM(values[i]);
+				size_t varsize = VARSIZE_ANY_EXHDR(detoasted_dat);
+				OGR_F_SetFieldBinary(feat, ogrfldnum, varsize, (GByte*)VARDATA_ANY(detoasted_dat));
+
 				break;
 			}
 
