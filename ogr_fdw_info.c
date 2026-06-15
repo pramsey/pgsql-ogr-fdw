@@ -72,11 +72,11 @@ quote_identifier(const char* ident)
 
 	if (reserved_word(ident))
 	{
-		sprintf(identifier,"\"%*s\"", len, ident);
+		snprintf(identifier, sizeof(identifier), "\"%.*s\"", len, ident);
 	}
 	else
 	{
-		sprintf(identifier,"%*s", len, ident);
+		snprintf(identifier, sizeof(identifier), "%.*s", len, ident);
 	}
   return identifier;
 }
@@ -298,7 +298,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	if (! ogr_dr)
 		ogr_dr = GDALGetDatasetDriver(ogr_ds);
 
-	strcpy(server_name, server == NULL ? "myserver" : server);
+	strlcpy(server_name, server == NULL ? "myserver" : server, sizeof(server_name));
 
 	if (options != NULL) {
 		char *p;
@@ -306,7 +306,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 		char option[NAMEDATALEN];
 		const char *short_name = GDALGetDriverShortName(ogr_dr);
 
-		strncpy(stripped_config_options, options, STR_MAX_LEN - 1);
+		strlcpy(stripped_config_options, options, STR_MAX_LEN - 1);
 		p = strtok(strip_spaces(stripped_config_options), ",");
 
 		while (p != NULL) {
