@@ -298,7 +298,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 	if (! ogr_dr)
 		ogr_dr = GDALGetDatasetDriver(ogr_ds);
 
-	strlcpy(server_name, server == NULL ? "myserver" : server, sizeof(server_name));
+	strncpy(server_name, server == NULL ? "myserver" : server, sizeof(server_name));
 
 	if (options != NULL) {
 		char *p;
@@ -306,7 +306,7 @@ ogrGenerateSQL(const char* server, const char* layer, const char* table, const c
 		char option[NAMEDATALEN];
 		const char *short_name = GDALGetDriverShortName(ogr_dr);
 
-		strlcpy(stripped_config_options, options, STR_MAX_LEN - 1);
+		strncpy(stripped_config_options, options, STR_MAX_LEN - 1);
 		p = strtok(strip_spaces(stripped_config_options), ",");
 
 		while (p != NULL) {
