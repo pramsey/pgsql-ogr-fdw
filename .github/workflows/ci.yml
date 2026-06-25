@@ -1,72 +1,113 @@
-# GitHub Actions for OGR-FDW
+# GitHub Actions for pgSQL OGR-FDW
 #
 # Paul Ramsey <pramsey at cleverelephant dot ca>
 
 name: "CI"
-on:
-  push:
-#    branches-ignore:
-#      - 'master'
-  pull_request: ~
+on: [push, pull_request]
 
 jobs:
   linux:
-    name: "CI"
-    strategy:
-        fail-fast: false
-        matrix:
-          ci:
-          - { PGVER: 15 }
-          - { PGVER: 16 }
-          - { PGVER: 17 }
-          - { PGVER: 18 }
-          - { PGVER: 19 }
-
+    name: PG ${{ matrix.pg }}
     runs-on: ubuntu-latest
+    container:
+      image: pgxn/pgxn-tools
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [15, 16, 17, 18, 19]
+
     steps:
 
     - name: 'Check Out'
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
-    - name: 'Raise Priority for apt.postgresql.org'
-      run: |
-        cat << EOF >> ./pgdg.pref
-        Package: *
-        Pin: release o=apt.postgresql.org
-        Pin-Priority: 600
-        EOF
-        sudo mv ./pgdg.pref /etc/apt/preferences.d/
-        sudo apt update
+    - name: 'Start PostgreSQL ${{ matrix.pg }}'
+      run: pg-start ${{ matrix.pg }}
 
     - name: 'Install GDAL'
       run: |
-        sudo apt-get install libgdal-dev
+        apt-get update
+        apt-get -y install libgdal-dev
 
-    - name: 'Install PostgreSQL'
-      run: |
-        sudo apt-get purge postgresql-*
-        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main ${{ matrix.ci.PGVER }}" > /etc/apt/sources.list.d/pgdg.list'
-        curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null
-        sudo apt-get update
-        sudo apt-get -y install postgresql-${{ matrix.ci.PGVER }} postgresql-server-dev-${{ matrix.ci.PGVER }}
 
-    - name: 'Start PostgreSQL'
+    - name: 'Build & Install'
       run: |
-        export PGVER=${{ matrix.ci.PGVER }}
-        export PGDATA=/var/lib/postgresql/$PGVER/main
-        export PGETC=/etc/postgresql/$PGVER/main
-        export PGBIN=/usr/lib/postgresql/$PGVER/bin
-        export RUNNER_USER=`whoami`
-        # make sure postgres user can access data files
-        sudo chmod -R 755 /home/${RUNNER_USER}
-        sudo cp ./ci/pg_hba.conf $PGETC/pg_hba.conf
-        sudo systemctl stop postgresql
-        sudo pg_ctlcluster $PGVER main start
-        sudo pg_lsclusters
+        export PG_CFLAGS=-Werror
+        make && make install
 
-    - name: 'Build & Test'
-      run: |
-        export PATH=/usr/lib/postgresql/${{ matrix.ci.PGVER }}/bin/:$PATH
-        PG_CFLAGS=-Werror make
-        sudo make install
-        PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
+    - name: 'Test'
+      run: PGUSER=postgres make installcheck || (cat regression.diffs && false)
+
+
+# GitHub Actions for OGR-FDW
+#
+# Paul Ramsey <pramsey at cleverelephant dot ca>
+
+# name: "CI"
+# on:
+#   push:
+# #    branches-ignore:
+# #      - 'master'
+#   pull_request: ~
+
+# jobs:
+#   linux:
+#     name: "CI"
+#     strategy:
+#         fail-fast: false
+#         matrix:
+#           ci:
+#           - { PGVER: 15 }
+#           - { PGVER: 16 }
+#           - { PGVER: 17 }
+#           - { PGVER: 18 }
+#           - { PGVER: 19 }
+
+#     runs-on: ubuntu-latest
+#     steps:
+
+#     - name: 'Check Out'
+#       uses: actions/checkout@v5
+
+#     - name: 'Raise Priority for apt.postgresql.org'
+#       run: |
+#         cat << EOF >> ./pgdg.pref
+#         Package: *
+#         Pin: release o=apt.postgresql.org
+#         Pin-Priority: 600
+#         EOF
+#         sudo mv ./pgdg.pref /etc/apt/preferences.d/
+#         sudo apt update
+
+#     - name: 'Install GDAL'
+#       run: |
+#         sudo apt-get install libgdal-dev
+
+#     - name: 'Install PostgreSQL'
+#       run: |
+#         sudo apt-get purge postgresql-*
+#         sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main ${{ matrix.ci.PGVER }}" > /etc/apt/sources.list.d/pgdg.list'
+#         curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg >/dev/null
+#         sudo apt-get update
+#         sudo apt-get -y install postgresql-${{ matrix.ci.PGVER }} postgresql-server-dev-${{ matrix.ci.PGVER }}
+
+#     - name: 'Start PostgreSQL'
+#       run: |
+#         export PGVER=${{ matrix.ci.PGVER }}
+#         export PGDATA=/var/lib/postgresql/$PGVER/main
+#         export PGETC=/etc/postgresql/$PGVER/main
+#         export PGBIN=/usr/lib/postgresql/$PGVER/bin
+#         export RUNNER_USER=`whoami`
+#         # make sure postgres user can access data files
+#         sudo chmod -R 755 /home/${RUNNER_USER}
+#         sudo cp ./ci/pg_hba.conf $PGETC/pg_hba.conf
+#         sudo systemctl stop postgresql
+#         sudo pg_ctlcluster $PGVER main start
+#         sudo pg_lsclusters
+
+#     - name: 'Build & Test'
+#       run: |
+#         export PATH=/usr/lib/postgresql/${{ matrix.ci.PGVER }}/bin/:$PATH
+#         PG_CFLAGS=-Werror make
+#         sudo make install
+#         PGUSER=postgres make installcheck || (cat regression.diffs && /bin/false)
