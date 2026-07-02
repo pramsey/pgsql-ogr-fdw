@@ -1,6 +1,46 @@
 set client_min_messages=NOTICE;
 ------------------------------------------------
 CREATE SCHEMA imp1;
+SELECT ogr_fdw_layers('myserver');
+ ogr_fdw_layers 
+----------------
+ enc
+ pt_two
+ 2launder
+ poly
+ natural
+(5 rows)
+
+SELECT ogr_fdw_table_sql('myserver', '2launder');
+                 ogr_fdw_table_sql                  
+----------------------------------------------------
+ CREATE FOREIGN TABLE n2launder (                  +
+   fid bigint,                                     +
+   geom bytea,                                     +
+   n2ame varchar(50) OPTIONS (column_name '2ame'), +
+   age integer,                                    +
+   height double precision,                        +
+   b_rthdate date OPTIONS (column_name 'b-rthdate')+
+ ) SERVER myserver                                 +
+ OPTIONS (layer '2launder');                       +
+ 
+(1 row)
+
+SELECT ogr_fdw_table_sql('myserver', '2launder', NULL, FALSE, FALSE);
+         ogr_fdw_table_sql         
+-----------------------------------
+ CREATE FOREIGN TABLE "2launder" (+
+   fid bigint,                    +
+   geom bytea,                    +
+   "2ame" varchar(50),            +
+   age integer,                   +
+   "Height" double precision,     +
+   "b-rthdate" date               +
+ ) SERVER myserver                +
+ OPTIONS (layer '2launder');      +
+ 
+(1 row)
+
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO (n2launder) 
   FROM SERVER myserver 
@@ -31,6 +71,18 @@ SELECT * FROM imp1.n2launder WHERE fid = 0;
 
 ------------------------------------------------
 CREATE SCHEMA imp2;
+SELECT ogr_fdw_table_sql('myserver', 'natural', 'naturally');
+        ogr_fdw_table_sql         
+----------------------------------
+ CREATE FOREIGN TABLE naturally (+
+   fid bigint,                   +
+   id double precision,          +
+   "natural" varchar(4)          +
+ ) SERVER myserver               +
+ OPTIONS (layer 'natural');      +
+ 
+(1 row)
+
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO ("natural") 
   FROM SERVER myserver 
@@ -64,6 +116,19 @@ CREATE SERVER svr_test_apost
     datasource '@abs_srcdir@/data/no_geom_apost.csv',
     format 'CSV' );
 CREATE SCHEMA imp3;
+SELECT ogr_fdw_table_sql('svr_test_apost', 'no_geom_apost');
+                        ogr_fdw_table_sql                         
+------------------------------------------------------------------
+ CREATE FOREIGN TABLE no_geom_apost (                            +
+   fid bigint,                                                   +
+   name varchar,                                                 +
+   age varchar,                                                  +
+   person_s_value varchar OPTIONS (column_name 'person''s value')+
+ ) SERVER svr_test_apost                                         +
+ OPTIONS (layer 'no_geom_apost');                                +
+ 
+(1 row)
+
 IMPORT FOREIGN SCHEMA ogr_all 
   LIMIT TO (no_geom_apost) 
   FROM SERVER svr_test_apost
