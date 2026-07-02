@@ -40,7 +40,18 @@
 #include "ogr_fdw.h"
 
 
+/*
+ * Set up as a PgSQL module
+ */
+#ifdef PG_MODULE_MAGIC_EXT
+PG_MODULE_MAGIC_EXT(
+    .name = "ogr_fdw",
+    .version = OGR_FDW_RELEASE_NAME
+);
+#else
 PG_MODULE_MAGIC;
+#endif
+
 
 /*
  * Describes the valid options for objects that use this wrapper.
