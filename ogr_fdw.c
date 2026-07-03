@@ -46,7 +46,7 @@
 #ifdef PG_MODULE_MAGIC_EXT
 PG_MODULE_MAGIC_EXT(
     .name = "ogr_fdw",
-    .version = OGR_FDW_RELEASE_NAME
+    .version = OGR_FDW_VERSION
 );
 #else
 PG_MODULE_MAGIC;

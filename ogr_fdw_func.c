@@ -79,7 +79,7 @@ PG_FUNCTION_INFO_V1(ogr_fdw_version);
 Datum ogr_fdw_version(PG_FUNCTION_ARGS)
 {
 	const char *gdal_ver = GDAL_RELEASE_NAME;
-	const char *ogr_fdw_ver = OGR_FDW_RELEASE_NAME;
+	const char *ogr_fdw_ver = OGR_FDW_VERSION;
 	char ver_str[256];
 	snprintf(ver_str, sizeof(ver_str), "OGR_FDW=\"%s\" GDAL=\"%s\"", ogr_fdw_ver, gdal_ver);
 	PG_RETURN_TEXT_P(cstring_to_text(ver_str));

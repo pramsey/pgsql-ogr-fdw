@@ -8,8 +8,7 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef _OGR_FDW_COMMON_H
-#define _OGR_FDW_COMMON_H 1
+#pragma once
 
 #include <string.h>
 #include <ctype.h>
@@ -26,8 +25,7 @@
 void ogrStringLaunder(char *str);
 
 OGRErr ogrLayerToSQL (const OGRLayerH ogr_lyr, const char *fwd_server,
-                      int launder_table_names, int launder_column_names,
-                      const char *fdw_table_name,
-                      int use_postgis_geometry, stringbuffer_t *buf);
+					  int launder_table_names, int launder_column_names,
+					  const char *fdw_table_name,
+					  int use_postgis_geometry, stringbuffer_t *buf);
 
-#endif /* _OGR_FDW_COMMON_H */

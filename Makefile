@@ -14,6 +14,9 @@ DATA = \
 	ogr_fdw--1.0--1.1.sql \
 	ogr_fdw--1.1.sql
 
+EXTVERSION = $(shell grep default_version $(EXTENSION).control | \
+               cut -f2 -d= | tr -d "'" | tr -d " ")
+
 REGRESS = ogr_fdw
 
 EXTRA_CLEAN = sql/*.sql expected/*.out
@@ -27,6 +30,8 @@ GDAL_LIBS  = $(shell $(GDAL_CONFIG) --libs)
 
 PG_CONFIG = pg_config
 REGRESS_OPTS = --encoding=UTF8
+
+PG_CFLAGS += -D OGR_FDW_VERSION_NUM=$(EXTVERSION)
 
 PG_CPPFLAGS += $(GDAL_CFLAGS)
 LIBS += $(GDAL_LIBS)

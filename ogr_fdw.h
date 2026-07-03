@@ -8,10 +8,10 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef _OGR_FDW_H
-#define _OGR_FDW_H 1
+#pragma once
 
-#define OGR_FDW_RELEASE_NAME "1.1"
+#define OGR_FDW_VERSION_STR(x) #x
+#define OGR_FDW_VERSION OGR_FDW_VERSION_STR(OGR_FDW_VERSION_NUM)
 
 /*
  * PostgreSQL
@@ -216,4 +216,3 @@ bool ogrDeparse(StringInfo buf, PlannerInfo* root, RelOptInfo* foreignrel, List*
 Oid ogrGetGeometryOid(void);
 OGRErr pgDatumToOgrGeometry (Datum pg_geometry, Oid pgsendfunc, OGRGeometryH* ogr_geometry);
 
-#endif /* _OGR_FDW_H */

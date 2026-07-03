@@ -1,6 +1,5 @@
 
-#ifndef _OGR_FDW_GDAL_H
-#define _OGR_FDW_GDAL_H 1
+#pragma once
 
 /*
  * Quiet warnings due to double use of
@@ -67,4 +66,3 @@
 
 #endif /* GDAL 1 support */
 
-#endif /* _OGR_FDW_GDAL_H */
