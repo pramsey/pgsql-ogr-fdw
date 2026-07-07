@@ -10,9 +10,6 @@
 
 #pragma once
 
-#define OGR_FDW_VERSION_STR(x) #x
-#define OGR_FDW_VERSION OGR_FDW_VERSION_STR(OGR_FDW_VERSION_NUM)
-
 /*
  * PostgreSQL
  */
