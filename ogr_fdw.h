@@ -76,6 +76,7 @@
 #include "ogr_fdw_common.h"
 
 /* Local configuration defines */
+#define OGR_FDW_VERSION "1.1"
 
 /* Use hexwkb input by default, but have option to use */
 /* the binary recv input instead. Binary input is strict */
