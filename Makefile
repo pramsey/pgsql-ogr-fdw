@@ -83,7 +83,10 @@ ogr_fdw_info$(X): ogr_fdw_info.o ogr_fdw_common.o stringbuffer.o
 clean-exe:
 	rm -f ogr_fdw_info$(X) ogr_fdw_info.o stringbuffer.o
 
-install-exe: all
+$(DESTDIR)$(bindir):
+	mkdir -p $(DESTDIR)$(bindir)
+
+install-exe: all $(DESTDIR)$(bindir)
 	$(INSTALL_PROGRAM) ogr_fdw_info$(X) '$(DESTDIR)$(bindir)'
 
 all: ogr_fdw_info$(X)
